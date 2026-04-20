@@ -1,14 +1,4 @@
-anomaly:
-  cpa_increase_pct: 20
-  ctr_decrease_pct: 15
-  cpm_increase_pct: 25
-  frequency_max: 4.0
-  cv_zero_cost_min: 5000
-
-segment_waste:
-  min_impressions: 100
-  min_cost: 3000
-  max_cpa_ratio: 3.0
+# config/thresholds.yaml - 3媒体対応 v2.0
 
 scoring:
   grades:
@@ -17,3 +7,86 @@ scoring:
     C: 60
     D: 40
     F: 0
+  severity_weights:
+    critical: 5.0
+    high: 3.0
+    medium: 1.5
+    low: 0.5
+
+common:
+  ctr_min: 1.0
+  cv_zero_cost_min: 5000
+  roas_min: 1.0
+  frequency_max: 4.0
+  cost_concentration_pct: 80
+  weekly_cv_min: 50
+  cpa_spike_pct: 20
+  ctr_drop_pct: 15
+  cpm_spike_pct: 25
+
+google:
+  search:
+    ctr_min: 3.0
+    cpa_ratio_max: 2.0
+  shopping:
+    roas_min: 3.0
+  pmax:
+    conversion_min_weekly: 30
+    roas_min: 2.0
+  campaign_structure:
+    max_adgroups_per_campaign: 20
+
+meta:
+  feed:
+    ctr_min: 1.0
+    cpa_ratio_max: 2.5
+    frequency_max: 3.0
+  reels:
+    ctr_min: 0.7
+  creative:
+    fatigue_frequency: 3.5
+  learning_phase:
+    min_weekly_conversions: 50
+  structure:
+    max_adsets_per_campaign: 5
+
+tiktok:
+  in_feed:
+    ctr_min: 0.8
+    cpa_ratio_max: 2.5
+  creative:
+    video_completion_rate_min: 15.0
+  learning_phase:
+    min_weekly_conversions: 50
+  structure:
+    max_adgroups_per_campaign: 5
+
+seo:
+  pagespeed:
+    performance_min: 50
+    lcp_max_ms: 2500
+    inp_max_ms: 200
+    cls_max: 0.1
+  html:
+    title_min_len: 30
+    title_max_len: 60
+    meta_desc_min_len: 70
+    meta_desc_max_len: 160
+
+anomaly:
+  cpa_increase_pct: 20
+  ctr_decrease_pct: 15
+  cpm_increase_pct: 25
+  frequency_max: 4.0
+  cv_zero_cost_min: 5000
+  cost_spike_pct: 30
+  impression_drop_pct: 50
+
+segment_waste:
+  min_impressions: 100
+  min_cost: 3000
+  max_cpa_ratio: 3.0
+
+adtruth:
+  fraud_rate_alert: 20
+  fraud_rate_critical: 40
