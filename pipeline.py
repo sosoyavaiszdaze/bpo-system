@@ -41,10 +41,36 @@ def load_thresholds():
 
 
 def fetch_data(client_id, client_cfg):
-    """データ取得: API -> CSV fallback"""
+    """データ取得: Meta API -> TikTok API -> CSV fallback"""
     log.info(f"[{client_id}] データ取得開始")
 
-    # Phase 1: CSV fallback (API連携は後で追加)
+    ads_cfg = client_cfg.get("ads", {})
+
+    # Meta API
+    meta_cfg = ads_cfg.get("meta", {})
+    if meta_cfg.get("account_id") and meta_cfg.get("account_id") != "act_XXXXXXXXX":
+        try:
+            from adapters.meta_adapter import fetch_meta_ads
+            data = fetch_meta_ads(meta_cfg)
+            if data:
+                log.info(f"[{client_id}] Meta APIからデータ取得成功")
+                return data
+        except Exception as e:
+            log.warning(f"[{client_id}] Meta API失敗: {e}")
+
+    # TikTok API
+    tiktok_cfg = ads_cfg.get("tiktok", {})
+    if tiktok_cfg.get("advertiser_id") and tiktok_cfg.get("advertiser_id") != "XXXXXXXXX":
+        try:
+            from adapters.tiktok_adapter import fetch_tiktok_ads
+            data = fetch_tiktok_ads(tiktok_cfg)
+            if data:
+                log.info(f"[{client_id}] TikTok APIからデータ取得成功")
+                return data
+        except Exception as e:
+            log.warning(f"[{client_id}] TikTok API失敗: {e}")
+
+    # CSV fallback
     csv_pattern = os.path.join(DATA_DIR, f"{client_id}*.csv")
     csv_files = sorted(glob.glob(csv_pattern))
     if csv_files:
