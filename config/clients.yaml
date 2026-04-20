@@ -1,0 +1,32 @@
+defaults:
+  timezone: "Asia/Tokyo"
+  currency: "JPY"
+  schedule: "0 9 * * *"
+  anthropic_model: "claude-sonnet-4-20250514"
+
+clients:
+  yamamoto_demo:
+    name: "山本デモ"
+    active: true
+    ads:
+      meta:
+        account_id: "act_XXXXXXXXX"
+        access_token_env: "META_ACCESS_TOKEN_YAMAMOTO"
+      tiktok:
+        advertiser_id: "XXXXXXXXX"
+        access_token_env: "TIKTOK_ACCESS_TOKEN_YAMAMOTO"
+    seo:
+      site_url: "https://example.com"
+      landing_pages:
+        - "https://example.com/lp1"
+    adtruth:
+      enabled: false
+      api_key_env: "ADTRUTH_API_KEY_YAMAMOTO"
+    notifications:
+      slack:
+        webhook_url: "https://hooks.slack.com/services/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"
+        channel: "#yamamoto-ads"
+    crm:
+      twenty:
+        enabled: true
+        company_id: ""

@@ -1,0 +1,19 @@
+anomaly:
+  cpa_increase_pct: 20
+  ctr_decrease_pct: 15
+  cpm_increase_pct: 25
+  frequency_max: 4.0
+  cv_zero_cost_min: 5000
+
+segment_waste:
+  min_impressions: 100
+  min_cost: 3000
+  max_cpa_ratio: 3.0
+
+scoring:
+  grades:
+    A: 90
+    B: 75
+    C: 60
+    D: 40
+    F: 0
