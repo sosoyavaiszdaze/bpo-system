@@ -116,7 +116,7 @@ def run_waste_detection(client_id, data, thresholds):
         return {"error": str(e)}
 
 
-def run_seo_audit(client_id, client_cfg):
+def run_seo_audit(client_id, client_cfg, thresholds):
     """SEO監査"""
     seo_cfg = client_cfg.get("seo", {})
     if not seo_cfg.get("site_url"):
@@ -125,7 +125,7 @@ def run_seo_audit(client_id, client_cfg):
     log.info(f"[{client_id}] SEO監査開始")
     try:
         from seo.seo_audit import run_seo_audit as seo_run
-        return seo_run(client_id, seo_cfg)
+        return seo_run(client_id, seo_cfg, thresholds)
     except Exception as e:
         log.error(f"[{client_id}] SEO監査エラー: {e}")
         return {"error": str(e)}
@@ -205,7 +205,7 @@ def run_client(client_id, client_cfg, thresholds):
     results["waste"] = run_waste_detection(client_id, data, thresholds)
 
     # 5. SEO監査
-    results["seo_audit"] = run_seo_audit(client_id, client_cfg)
+    results["seo_audit"] = run_seo_audit(client_id, client_cfg, thresholds)
 
     # 6. 出力
     output_results(client_id, client_cfg, results)
