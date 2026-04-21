@@ -116,6 +116,17 @@ def run_waste_detection(client_id, data, thresholds):
         return {"error": str(e)}
 
 
+
+def run_fraud_audit(client_id, data, thresholds):
+    """AdTruth不正検知"""
+    log.info(f"[{client_id}] AdTruth不正検知開始")
+    try:
+        from analyzers.fraud_audit import run_fraud_audit as fraud_run
+        return fraud_run(client_id, data, thresholds)
+    except Exception as e:
+        log.error(f"[{client_id}] AdTruth監査エラー: {e}")
+        return {"error": str(e)}
+
 def run_seo_audit(client_id, client_cfg, thresholds):
     """SEO監査"""
     seo_cfg = client_cfg.get("seo", {})
@@ -205,6 +216,7 @@ def run_client(client_id, client_cfg, thresholds):
     results["waste"] = run_waste_detection(client_id, data, thresholds)
 
     # 5. SEO監査
+    results["fraud_audit"] = run_fraud_audit(client_id, data, thresholds)
     results["seo_audit"] = run_seo_audit(client_id, client_cfg, thresholds)
 
     # 6. 出力
