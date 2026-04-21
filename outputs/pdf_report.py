@@ -1,190 +1,241 @@
-"""PDFレポート生成 - ReportLabで日次レポートを作成"""
+"""PDFレポート生成 v2.1 - Playwright + Jinja2 HTML→PDF"""
 import os
 import logging
 from datetime import datetime
 
 log = logging.getLogger("bpo")
 
-try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import mm
-    from reportlab.lib.colors import HexColor
-    from reportlab.pdfgen import canvas
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    HAS_REPORTLAB = True
-except ImportError:
-    HAS_REPORTLAB = False
-    log.warning("reportlab未インストール: pip3 install reportlab")
+TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+PLATFORM_LABEL = {"google": "Google Ads", "meta": "Meta Ads", "tiktok": "TikTok Ads"}
+PLATFORM_EMOJI = {"google": "🔍", "meta": "📘", "tiktok": "🎵"}
 
-
-# 色定義
-COLOR_BG = HexColor("#1a1a2e") if HAS_REPORTLAB else None
-COLOR_PRIMARY = HexColor("#16213e") if HAS_REPORTLAB else None
-COLOR_ACCENT = HexColor("#0f3460") if HAS_REPORTLAB else None
-COLOR_GREEN = HexColor("#2ecc71") if HAS_REPORTLAB else None
-COLOR_YELLOW = HexColor("#f39c12") if HAS_REPORTLAB else None
-COLOR_RED = HexColor("#e74c3c") if HAS_REPORTLAB else None
-COLOR_WHITE = HexColor("#ffffff") if HAS_REPORTLAB else None
-COLOR_GRAY = HexColor("#95a5a6") if HAS_REPORTLAB else None
-
-GRADE_COLORS = {
-    "A": "#2ecc71", "B": "#3498db", "C": "#f39c12", "D": "#e67e22", "F": "#e74c3c"
+GRADE_CLASS = {"A": "a", "B": "b", "C": "c", "D": "d", "F": "f"}
+GRADE_DESC = {
+    "A": "優秀 — 最適化済み",
+    "B": "良好 — 軽微な改善余地",
+    "C": "要改善 — 構造的問題あり",
+    "D": "要注意 — 複数の重大問題",
+    "F": "危険 — 即時対応が必要",
 }
 
 
 def generate_pdf(client_id, results, pdf_path):
-    if not HAS_REPORTLAB:
-        log.error(f"[{client_id}] reportlab未インストール、PDF生成スキップ")
+    """HTML テンプレートから PDF を生成"""
+    try:
+        from jinja2 import Environment, FileSystemLoader
+    except ImportError:
+        log.error(f"[{client_id}] jinja2未インストール: pip3 install jinja2")
         return
 
     os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
-    c = canvas.Canvas(pdf_path, pagesize=A4)
-    w, h = A4
-    y = h - 20*mm
 
-    # ヘッダー背景
-    c.setFillColor(COLOR_PRIMARY)
-    c.rect(0, h - 50*mm, w, 50*mm, fill=1, stroke=0)
+    # データ準備
+    context = _build_context(client_id, results)
 
-    # タイトル
-    c.setFillColor(COLOR_WHITE)
-    c.setFont("Helvetica-Bold", 24)
-    client_name = results.get("client_name", client_id)
-    c.drawString(20*mm, h - 25*mm, f"BPO System - Daily Report")
-    c.setFont("Helvetica", 14)
-    c.drawString(20*mm, h - 35*mm, f"Client: {client_name}")
-    timestamp = results.get("timestamp", "")[:10]
-    c.drawString(20*mm, h - 43*mm, f"Date: {timestamp}")
+    # Jinja2 レンダリング
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+    template = env.get_template("report.html")
+    html_content = template.render(**context)
 
-    y = h - 65*mm
+    # HTML を一時ファイルに書き出し
+    html_path = pdf_path.replace(".pdf", ".html")
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
 
-    # スコアセクション
+    # Playwright で PDF 生成
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(f"file://{os.path.abspath(html_path)}", wait_until="networkidle")
+            page.pdf(
+                path=pdf_path,
+                format="A4",
+                margin={"top": "15mm", "bottom": "20mm", "left": "15mm", "right": "15mm"},
+                print_background=True,
+                display_header_footer=True,
+                header_template='<span></span>',
+                footer_template='<div style="font-size:9px;font-family:sans-serif;color:#aaa;width:100%;text-align:center;padding:0 20px;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>',
+            )
+            browser.close()
+        log.info(f"[{client_id}] PDF生成完了: {pdf_path}")
+    except Exception as e:
+        log.error(f"[{client_id}] Playwright PDF生成失敗: {e}")
+        log.info(f"[{client_id}] HTMLレポート保存: {html_path}")
+
+
+def _build_context(client_id, results):
+    """テンプレートに渡すコンテキストデータを構築"""
     audit = results.get("ads_audit") or {}
-    score = audit.get("score", "N/A")
-    grade = audit.get("grade", "?")
-    grade_color = HexColor(GRADE_COLORS.get(grade, "#95a5a6"))
-
-    c.setFillColor(grade_color)
-    c.circle(45*mm, y - 5*mm, 15*mm, fill=1, stroke=0)
-    c.setFillColor(COLOR_WHITE)
-    c.setFont("Helvetica-Bold", 28)
-    c.drawCentredString(45*mm, y - 10*mm, str(score))
-    c.setFont("Helvetica", 10)
-    c.drawCentredString(45*mm, y - 16*mm, f"Grade {grade}")
-
-    # サマリー数値
-    c.setFillColor(HexColor("#333333"))
-    c.setFont("Helvetica-Bold", 12)
-    x_start = 80*mm
-    c.drawString(x_start, y, "Summary")
-    c.setFont("Helvetica", 10)
-    metrics = [
-        f"Campaigns: {audit.get('total_campaigns', 0)}",
-        f"Total Cost: Y{audit.get('total_cost', 0):,.0f}",
-        f"Total CV: {audit.get('total_conversions', 0):.0f}",
-        f"Avg CPA: Y{audit.get('avg_cpa', 0):,.0f}",
-        f"Avg CTR: {audit.get('avg_ctr', 0):.2f}%",
-    ]
-    for i, m in enumerate(metrics):
-        c.drawString(x_start, y - (i + 1) * 14, m)
-
-    y -= 90
-
-    # Critical Issues
-    issues = audit.get("issues", [])
-    critical = [i for i in issues if i.get("severity") == "critical"]
-    if critical:
-        c.setFillColor(COLOR_RED)
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(20*mm, y, "Critical Issues")
-        y -= 18
-        c.setFont("Helvetica", 10)
-        c.setFillColor(HexColor("#333333"))
-        for issue in critical[:5]:
-            c.drawString(25*mm, y, f"- [{issue['campaign']}] {issue['issue']}")
-            y -= 14
-            c.setFillColor(COLOR_ACCENT)
-            c.drawString(30*mm, y, f"Action: {issue['action']}")
-            c.setFillColor(HexColor("#333333"))
-            y -= 18
-        y -= 10
-
-    # Anomalies
     anomalies = results.get("anomalies") or {}
-    alerts = anomalies.get("alerts", [])
-    if alerts:
-        c.setFillColor(COLOR_YELLOW)
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(20*mm, y, "Anomaly Alerts")
-        y -= 18
-        c.setFont("Helvetica", 10)
-        c.setFillColor(HexColor("#333333"))
-        for a in alerts[:5]:
-            camp = a.get("campaign", "Overall")
-            c.drawString(25*mm, y, f"- [{camp}] {a['message']}")
-            y -= 14
-            c.drawString(30*mm, y, f"Cause: {a['cause']}")
-            y -= 14
-            c.setFillColor(COLOR_ACCENT)
-            c.drawString(30*mm, y, f"Action: {a['action']}")
-            c.setFillColor(HexColor("#333333"))
-            y -= 18
-        y -= 10
-
-    # Waste
     waste = results.get("waste") or {}
-    waste_items = waste.get("waste_items", [])
-    if waste_items:
-        c.setFillColor(COLOR_RED)
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(20*mm, y, f"Wasted Budget: {waste.get('potential_savings', 'Y0')}")
-        y -= 18
-        c.setFont("Helvetica", 10)
-        c.setFillColor(HexColor("#333333"))
-        for w in waste_items[:5]:
-            c.drawString(25*mm, y, f"- [{w['campaign']}] {w['message']}")
-            y -= 14
-            c.setFillColor(COLOR_ACCENT)
-            c.drawString(30*mm, y, f"Action: {w['action']}")
-            c.setFillColor(HexColor("#333333"))
-            y -= 18
-        y -= 10
 
-    # Quick Wins
+    score = audit.get("score", 0)
+    grade = audit.get("grade", "F")
+    issues = audit.get("issues", [])
     quick_wins = audit.get("quick_wins", [])
-    if quick_wins:
-        c.setFillColor(COLOR_GREEN)
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(20*mm, y, "Quick Wins")
-        y -= 18
-        c.setFont("Helvetica", 10)
-        c.setFillColor(HexColor("#333333"))
-        for q in quick_wins[:5]:
-            c.drawString(25*mm, y, f"- [{q['campaign']}] {q['action']}")
-            y -= 16
-        y -= 10
+    alerts = anomalies.get("alerts", [])
+    waste_items = waste.get("waste_items", [])
+    platform_summary = audit.get("platform_summary", {})
 
-    # SEO
-    seo = results.get("seo_audit") or {}
-    if seo and seo.get("status") != "stub":
-        if y < 100:
-            c.showPage()
-            y = h - 30*mm
-        c.setFillColor(HexColor("#8e44ad"))
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(20*mm, y, "SEO Audit")
-        y -= 18
-        c.setFont("Helvetica", 10)
-        c.setFillColor(HexColor("#333333"))
-        c.drawString(25*mm, y, f"Site: {seo.get('site_url', 'N/A')}")
-        y -= 16
+    platform_count = len(platform_summary)
+    critical_issues = [i for i in issues if i.get("severity") == "critical"]
+    high_issues = [i for i in issues if i.get("severity") == "high"]
+    total_waste = waste.get("total_waste_cost", 0)
 
-    # フッター
-    c.setFillColor(COLOR_GRAY)
-    c.setFont("Helvetica", 8)
-    c.drawString(20*mm, 15*mm, f"BPO System v1.0 | Generated: {datetime.now():%Y-%m-%d %H:%M}")
-    c.drawRightString(w - 20*mm, 15*mm, "Confidential")
+    summary_items = _build_summary_items(critical_issues, high_issues, alerts, waste_items, score)
+    executive_summary = _build_executive_text(score, grade, len(issues), len(alerts), total_waste, platform_summary)
 
-    c.save()
-    log.info(f"[{client_id}] PDF生成完了: {pdf_path}")
+    # 媒体別データ
+    platforms = []
+    for p, summary in platform_summary.items():
+        p_issues = [i for i in issues if _match_platform(i, p)]
+        p_score = _calc_platform_score(summary, p_issues)
+        platforms.append({
+            "key": p,
+            "label": PLATFORM_LABEL.get(p, p),
+            "emoji": PLATFORM_EMOJI.get(p, "📊"),
+            "score": p_score,
+            "campaigns": summary.get("campaigns", 0),
+            "cost_display": f"{summary.get('cost', 0):,.0f}",
+            "cv": f"{summary.get('conversions', 0):.0f}",
+            "roas": f"{summary.get('roas', 0):.1f}",
+            "issues": p_issues,
+        })
+
+    # Quick Wins に媒体ラベルと severity 追加
+    for qw in quick_wins:
+        p = qw.get("platform", "")
+        if not p:
+            campaign = qw.get("campaign", "").lower()
+            if any(k in campaign for k in ["meta", "fb", "ig", "reels"]):
+                p = "meta"
+            elif any(k in campaign for k in ["tiktok", "spark"]):
+                p = "tiktok"
+            else:
+                p = "google"
+            qw["platform"] = p
+        qw["platform_label"] = PLATFORM_LABEL.get(p, p)
+        if "severity" not in qw:
+            qw["severity"] = "medium"
+
+    # Waste items に表示用データ追加
+    for w in waste_items:
+        p = w.get("platform", "unknown")
+        w["platform_label"] = PLATFORM_LABEL.get(p, p)
+        w["waste_display"] = f"{w.get('waste_amount', w.get('cost', 0)):,.0f}"
+
+    return {
+        "client_name": results.get("client_name", client_id),
+        "timestamp": results.get("timestamp", "")[:10],
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M JST"),
+        "platform_count": platform_count,
+        "score": score,
+        "grade": grade,
+        "grade_class": GRADE_CLASS.get(grade, "f"),
+        "grade_description": GRADE_DESC.get(grade, ""),
+        "executive_summary": executive_summary,
+        "summary_items": summary_items,
+        "total_checks": len(issues) + len(alerts) + len(waste_items),
+        "alert_count": len(alerts),
+        "savings_display": f"{total_waste:,.0f}",
+        "total_cost_display": f"{audit.get('total_cost', 0):,.0f}",
+        "avg_cpa_display": f"{audit.get('avg_cpa', 0):,.0f}",
+        "total_cv": f"{audit.get('total_conversions', 0):.0f}",
+        "campaign_count": audit.get("total_campaigns", 0),
+        "issue_count": len(issues),
+        "critical_count": len(critical_issues),
+        "alerts": alerts,
+        "platforms": platforms,
+        "quick_wins": quick_wins,
+        "waste_items": waste_items,
+        "waste_savings": waste.get("potential_savings", "¥0"),
+    }
+
+
+def _build_executive_text(score, grade, issue_count, alert_count, total_waste, platform_summary):
+    parts = []
+    if score >= 80:
+        parts.append(f"全体スコア{score}点（{grade}）。アカウントは良好な状態を維持している。")
+    elif score >= 60:
+        parts.append(f"全体スコア{score}点（{grade}）。基本的な運用は機能しているが、改善余地がある。")
+    elif score >= 40:
+        parts.append(f"全体スコア{score}点（{grade}）。複数の構造的問題が検出された。早期対応を推奨。")
+    else:
+        parts.append(f"全体スコア{score}点（{grade}）。重大な問題が複数検出されており、即時対応が必要。")
+
+    if issue_count > 0:
+        parts.append(f"今回の監査で{issue_count}件の問題を検出。")
+    if alert_count > 0:
+        parts.append(f"異常検知で{alert_count}件のアラートが発生。")
+    if total_waste > 0:
+        parts.append(f"推定¥{total_waste:,.0f}の非効率コストが検出された。")
+
+    for p, summary in platform_summary.items():
+        label = PLATFORM_LABEL.get(p, p)
+        critical = summary.get("critical", 0)
+        if critical > 0:
+            parts.append(f"{label}で重大問題{critical}件 — 優先対応が必要。")
+
+    return "".join(parts)
+
+
+def _build_summary_items(critical_issues, high_issues, alerts, waste_items, score):
+    items = []
+    for issue in critical_issues[:2]:
+        items.append({
+            "bg": "#FCEBEB", "color": "#A32D2D", "icon": "✗",
+            "text": f"{issue['campaign']}: {issue['issue']}",
+        })
+    for issue in high_issues[:2]:
+        items.append({
+            "bg": "#FAEEDA", "color": "#854F0B", "icon": "!",
+            "text": f"{issue['campaign']}: {issue['issue']}",
+        })
+    for alert in alerts[:1]:
+        items.append({
+            "bg": "#FAEEDA", "color": "#854F0B", "icon": "!",
+            "text": alert["message"],
+        })
+    if score >= 60:
+        items.append({
+            "bg": "#EAF3DE", "color": "#27500A", "icon": "✓",
+            "text": "基本的な広告設定は正常に機能中",
+        })
+    if not items:
+        items.append({
+            "bg": "#EAF3DE", "color": "#27500A", "icon": "✓",
+            "text": "重大な問題は検出されませんでした",
+        })
+    return items
+
+
+def _match_platform(issue, platform):
+    p = issue.get("platform", "")
+    if p == platform:
+        return True
+    if not p:
+        campaign = issue.get("campaign", "").lower()
+        if platform == "meta":
+            return any(k in campaign for k in ["meta", "fb", "ig", "facebook", "instagram", "reels"])
+        elif platform == "tiktok":
+            return any(k in campaign for k in ["tiktok", "spark", "pangle"])
+        elif platform == "google":
+            return not any(k in campaign for k in ["meta", "fb", "ig", "tiktok", "spark", "pangle"])
+    return False
+
+
+def _calc_platform_score(summary, issues):
+    base = 80
+    for issue in issues:
+        sev = issue.get("severity", "medium")
+        if sev == "critical":
+            base -= 15
+        elif sev == "high":
+            base -= 8
+        elif sev == "medium":
+            base -= 3
+        else:
+            base -= 1
+    return max(0, min(100, base))

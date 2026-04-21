@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>zynect media agent — Report</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700&family=Syne:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#fff;color:#1a1a1a;font-family:'Noto Sans JP',sans-serif;}
+.w{padding:2rem 1.5rem 3rem;max-width:900px;margin:0 auto;}
+.rh{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:2rem;border-bottom:0.5px solid #e0e0e0;padding-bottom:1.5rem;}
+.rl{font-size:11px;letter-spacing:.1em;color:#666;font-family:'DM Mono',monospace;}
+.rl strong{display:block;font-size:20px;font-weight:500;color:#1a1a1a;letter-spacing:0;font-family:'Syne',sans-serif;margin-bottom:2px;}
+.rl .tagline{font-size:10px;color:#999;margin-top:6px;letter-spacing:.05em;}
+.rm{text-align:right;font-size:11px;color:#666;font-family:'DM Mono',monospace;line-height:1.8;}
+.rm .client{color:#1a1a1a;font-weight:500;font-size:12px;}
+.rm .conf{color:#bbb;font-size:10px;letter-spacing:.1em;}
+.sl{font-size:10px;letter-spacing:.15em;color:#aaa;font-family:'DM Mono',monospace;margin-bottom:.6rem;text-transform:uppercase;}
+.st{font-size:15px;font-weight:500;color:#1a1a1a;margin-bottom:1rem;border-left:2px solid #1a1a1a;padding-left:10px;}
+.sec{margin-bottom:2.5rem;}
+.div{border:none;border-top:0.5px solid #e0e0e0;margin:1.5rem 0;}
+.mg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1.5rem;}
+.mc{background:#f7f7f5;border-radius:8px;padding:12px 14px;}
+.ml{font-size:11px;color:#666;margin-bottom:4px;font-family:'DM Mono',monospace;}
+.mv{font-size:22px;font-weight:500;color:#1a1a1a;font-family:'DM Mono',monospace;line-height:1;}
+.ms{font-size:11px;margin-top:4px;font-family:'DM Mono',monospace;}
+.up{color:#27500A;}.fl{color:#aaa;}.dn{color:#A32D2D;}
+.rank{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:4px;font-size:30px;font-weight:500;font-family:'DM Mono',monospace;margin-bottom:4px;}
+.rank-a{background:#EAF3DE;color:#27500A;border:1.5px solid #97C459;}
+.rank-b{background:#EAF3DE;color:#27500A;border:1.5px solid #97C459;}
+.rank-c{background:#FAEEDA;color:#854F0B;border:1.5px solid #EFB84C;}
+.rank-d{background:#FAEEDA;color:#854F0B;border:1.5px solid #EFB84C;}
+.rank-f{background:#FCEBEB;color:#A32D2D;border:1.5px solid #F09595;}
+.rank-scale{font-size:9px;font-family:'DM Mono',monospace;color:#aaa;text-align:center;line-height:1.4;}
+.es{display:grid;grid-template-columns:auto 1fr;gap:1.5rem;align-items:start;}
+.erc{display:flex;flex-direction:column;align-items:center;}
+.et{font-size:13px;color:#555;line-height:1.8;}
+.et strong{color:#1a1a1a;font-weight:500;}
+.eb{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+.bi{font-size:12px;color:#555;display:flex;gap:8px;line-height:1.5;}
+.bd{width:16px;height:16px;border-radius:2px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:9px;font-family:'DM Mono';font-weight:500;}
+.tg{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
+.tag{font-size:11px;font-family:'DM Mono',monospace;padding:3px 10px;border-radius:4px;border:0.5px solid #e0e0e0;color:#666;}
+.il{display:flex;flex-direction:column;gap:8px;}
+.inc{border:0.5px solid #e0e0e0;border-radius:8px;padding:12px 14px;display:grid;grid-template-columns:80px 1fr auto;gap:10px;align-items:start;background:#fff;}
+.it{font-size:11px;font-family:'DM Mono',monospace;color:#666;padding-top:2px;}
+.in{font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:4px;}
+.id{font-size:12px;color:#555;line-height:1.7;}
+.id strong{color:#1a1a1a;font-weight:500;}
+.sp{font-size:12px;font-family:'DM Mono',monospace;background:#EAF3DE;color:#27500A;padding:3px 10px;border-radius:4px;white-space:nowrap;font-weight:500;border:0.5px solid #97C459;}
+.cp{font-size:11px;font-family:'DM Mono',monospace;background:#FCEBEB;color:#A32D2D;padding:2px 8px;border-radius:4px;}
+.wp{font-size:11px;font-family:'DM Mono',monospace;background:#FAEEDA;color:#854F0B;padding:2px 8px;border-radius:4px;}
+.op{font-size:11px;font-family:'DM Mono',monospace;background:#E1F5EE;color:#085041;padding:2px 8px;border-radius:4px;}
+.ts{background:#EAF3DE;border:0.5px solid #97C459;border-radius:8px;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:12px;}
+.tsl{font-size:12px;color:#27500A;}
+.tsv{font-size:20px;font-weight:500;color:#27500A;font-family:'DM Mono',monospace;}
+.hg{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.hc{border:0.5px solid #e0e0e0;border-radius:12px;padding:14px 16px;background:#fff;}
+.ha{font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;}
+.ha-breakdown{font-size:10px;font-family:'DM Mono',monospace;color:#999;margin-bottom:8px;letter-spacing:.02em;}
+.sbw{height:5px;background:#f7f7f5;border-radius:3px;margin-bottom:10px;overflow:hidden;}
+.sbb{height:100%;border-radius:3px;}
+.dl{display:flex;flex-direction:column;gap:4px;}
+.di{font-size:11px;color:#666;display:flex;gap:6px;align-items:flex-start;line-height:1.6;}
+.di::before{content:'→';color:#A32D2D;flex-shrink:0;}
+.di.ok::before{content:'✓';color:#27500A;}
+.score-legend{background:#fafaf8;border:0.5px solid #e0e0e0;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#666;line-height:1.7;}
+.score-legend .legend-title{font-family:'DM Mono',monospace;font-size:10px;color:#999;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;}
+.score-legend .formula{font-family:'DM Mono',monospace;color:#1a1a1a;font-size:11px;}
+.at{width:100%;border-collapse:collapse;font-size:12px;}
+.at th{font-size:10px;font-family:'DM Mono',monospace;color:#aaa;text-align:left;padding:6px 10px;border-bottom:0.5px solid #e0e0e0;font-weight:400;letter-spacing:.08em;text-transform:uppercase;}
+.at td{padding:10px 10px;border-bottom:0.5px solid #e0e0e0;color:#1a1a1a;vertical-align:top;font-size:12px;}
+.at tr:last-child td{border-bottom:none;}
+.dp{color:#27500A;font-family:'DM Mono',monospace;font-weight:500;}
+.dn2{color:#A32D2D;font-family:'DM Mono',monospace;font-weight:500;}
+.contamination-box{border:0.5px solid #F09595;border-radius:8px;background:#FCEBEB;padding:14px 16px;margin-top:10px;}
+.cb-title{font-size:12px;font-weight:500;color:#791F1F;margin-bottom:6px;font-family:'DM Mono',monospace;letter-spacing:.05em;text-transform:uppercase;}
+.cb-body{font-size:12px;color:#A32D2D;line-height:1.75;}
+.cb-body strong{color:#791F1F;font-weight:500;}
+.labor-note{font-size:11px;font-family:'DM Mono',monospace;color:#666;margin-bottom:10px;padding:8px 12px;background:#fafaf8;border-left:2px solid #97C459;border-radius:0 4px 4px 0;}
+.labor-note strong{color:#1a1a1a;font-weight:500;}
+.causal-legend{font-size:10px;font-family:'DM Mono',monospace;color:#999;margin-top:10px;padding:8px 12px;background:#fafaf8;border-radius:4px;line-height:1.7;}
+.causal-legend strong{color:#666;font-weight:500;}
+.footer{margin-top:3rem;padding-top:1.5rem;border-top:0.5px solid #e0e0e0;font-size:10px;font-family:'DM Mono',monospace;color:#aaa;line-height:1.7;text-align:center;}
+</style>
+</head>
+<body>
+<div class="w">
+
+<!-- HEADER -->
+<div class="rh">
+  <div>
+    <div class="rl">
+      <strong>zynect media agent</strong>
+      DAILY PERFORMANCE REPORT
+      <div class="tagline">Accountability Infrastructure for Digital Advertising</div>
+    </div>
+  </div>
+  <div class="rm">
+    <span class="client">Prepared for: {{ client_name }} 様</span><br>
+    Prepared by: Zynect Media 株式会社<br>
+    対象期間：{{ timestamp }}<br>
+    生成日時：{{ generated_at }}<br>
+    管理媒体数：{{ platform_count }}<br>
+    <span class="conf">CONFIDENTIAL / CLIENT COPY</span>
+  </div>
+</div>
+
+<!-- 01 EXECUTIVE SUMMARY -->
+<div class="sec">
+  <div class="sl">01 — Executive Summary</div>
+  <div class="st">総合評価</div>
+  <div class="es">
+    <div class="erc">
+      <div class="rank rank-{{ grade_class }}">{{ grade }}</div>
+      <div class="rank-scale">Scale: S / A / B / C / D / F<br>{{ grade }} = {{ grade_description }}</div>
+    </div>
+    <div>
+      <div class="et">{{ executive_summary }}</div>
+      <div class="eb">
+        {% for item in summary_items %}
+        <div class="bi">
+          <div class="bd" style="background:{{ item.bg }};color:{{ item.color }};">{{ item.icon }}</div>
+          <span>{{ item.text }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="tg">
+        <div class="tag">管理媒体 ×{{ platform_count }}</div>
+        <div class="tag">チェック項目 {{ total_checks }}件</div>
+        <div class="tag">異常検知 ×{{ alert_count }}件</div>
+        <div class="tag">推定損失回避 ¥{{ savings_display }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KPI CARDS -->
+<div class="mg">
+  <div class="mc">
+    <div class="ml">Health Score</div>
+    <div class="mv">{{ score }}<span style="font-size:14px;color:#aaa;">/100</span></div>
+    <div class="ms {% if score >= 60 %}up{% elif score >= 40 %}fl{% else %}dn{% endif %}">Grade {{ grade }}</div>
+  </div>
+  <div class="mc">
+    <div class="ml">総コスト</div>
+    <div class="mv">¥{{ total_cost_display }}</div>
+    <div class="ms fl">{{ campaign_count }} キャンペーン</div>
+  </div>
+  <div class="mc">
+    <div class="ml">平均CPA</div>
+    <div class="mv">¥{{ avg_cpa_display }}</div>
+    <div class="ms fl">総CV: {{ total_cv }}</div>
+  </div>
+  <div class="mc">
+    <div class="ml">検出問題数</div>
+    <div class="mv">{{ issue_count }}<span style="font-size:14px;color:#aaa;">件</span></div>
+    <div class="ms dn">うち重大 {{ critical_count }}件</div>
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- 02 ANOMALY DETECTION -->
+{% if alerts %}
+<div class="sec">
+  <div class="sl">02 — Anomaly Detection</div>
+  <div class="st">異常検知ログ</div>
+  <div class="il">
+    {% for alert in alerts %}
+    <div class="inc">
+      <div class="it">{{ timestamp }}</div>
+      <div>
+        <div class="in">{{ alert.message }} {% if alert.severity == 'critical' %}<span class="cp">CRITICAL</span>{% elif alert.severity == 'warning' %}<span class="wp">WARNING</span>{% else %}<span class="op">INFO</span>{% endif %}</div>
+        <div class="id">原因: {{ alert.cause }}<br><strong>推奨アクション: {{ alert.action }}</strong></div>
+      </div>
+      {% if alert.severity == 'critical' %}<div class="sp" style="background:#FCEBEB;color:#A32D2D;border-color:#F09595;">要対応</div>{% else %}<div class="sp">確認済</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<hr class="div">
+{% endif %}
+
+<!-- 03 ACCOUNT HEALTH DIAGNOSIS -->
+<div class="sec">
+  <div class="sl">03 — Platform Health Diagnosis</div>
+  <div class="st">媒体別健康診断 — 監査スコアと検出問題</div>
+
+  <div class="score-legend">
+    <div class="legend-title">Scoring Methodology</div>
+    <span class="formula">共通チェック (30点) ＋ 媒体固有チェック (40点) ＋ クロス媒体分析 (15点) ＋ 異常検知 (15点) ＝ 100点満点</span><br>
+    <span style="color:#999;">全{{ total_checks }}項目の自動監査ルールにより判定。</span>
+  </div>
+
+  <div class="hg">
+    {% for platform in platforms %}
+    <div class="hc" {% if platform.score < 40 %}style="border-color:#F09595;"{% elif platform.score < 60 %}style="border-color:#EFB84C;"{% endif %}>
+      <div class="ha">{{ platform.emoji }} {{ platform.label }} {% if platform.score >= 70 %}<span class="op">{{ platform.score }} / 100</span>{% elif platform.score >= 40 %}<span class="wp">{{ platform.score }} / 100</span>{% else %}<span class="cp">{{ platform.score }} / 100</span>{% endif %}</div>
+      <div class="ha-breakdown">CP数: {{ platform.campaigns }} / コスト: ¥{{ platform.cost_display }} / CV: {{ platform.cv }} / ROAS: {{ platform.roas }}</div>
+      <div class="sbw"><div class="sbb" style="width:{{ platform.score }}%;background:{% if platform.score >= 70 %}#3B6D11{% elif platform.score >= 40 %}#BA7517{% else %}#E24B4A{% endif %};"></div></div>
+      <div class="dl">
+        {% for issue in platform.issues[:5] %}
+        <div class="di {% if issue.severity == 'low' %}ok{% endif %}">{{ issue.issue }}</div>
+        {% endfor %}
+        {% if platform.issues|length > 5 %}
+        <div class="di ok">...他 {{ platform.issues|length - 5 }}件</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- 04 QUICK WINS -->
+{% if quick_wins %}
+<div class="sec">
+  <div class="sl">04 — Quick Wins</div>
+  <div class="st">すぐ実行可能な改善アクション</div>
+  <table class="at">
+    <thead>
+      <tr>
+        <th>媒体</th>
+        <th>キャンペーン</th>
+        <th>推奨アクション</th>
+        <th>重要度</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for qw in quick_wins %}
+      <tr>
+        <td><span class="tag">{{ qw.platform_label }}</span></td>
+        <td>{{ qw.campaign }}</td>
+        <td>{{ qw.action }}</td>
+        <td>{% if qw.severity == 'critical' %}<span class="cp">{{ qw.severity }}</span>{% elif qw.severity in ['high', 'warning'] %}<span class="wp">{{ qw.severity }}</span>{% else %}<span class="op">{{ qw.severity }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<hr class="div">
+{% endif %}
+
+<!-- 05 WASTE DETECTION -->
+{% if waste_items %}
+<div class="sec">
+  <div class="sl">05 — Waste Detection</div>
+  <div class="st">無駄コスト検出 — 推定 {{ waste_savings }}</div>
+  <div class="il">
+    {% for w in waste_items %}
+    <div class="inc">
+      <div class="it">{{ w.platform_label }}<br>{{ w.type }}</div>
+      <div>
+        <div class="in">{{ w.campaign }} {% if w.severity == 'critical' %}<span class="cp">CRITICAL</span>{% else %}<span class="wp">WARNING</span>{% endif %}</div>
+        <div class="id">{{ w.message }}<br><strong>→ {{ w.action }}</strong></div>
+      </div>
+      <div><span class="cp">¥{{ w.waste_display }}</span></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="ts">
+    <div class="tsl">推定無駄コスト総額</div>
+    <div class="tsv">{{ waste_savings }}</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- FOOTER -->
+<div class="footer">
+  Generated by Zynect Media Agent v2.0 ／ © 2026 Zynect Media 株式会社<br>
+  本レポートは貴社との機密保持契約に基づき作成されたものです。
+</div>
+
+</div>
+</body>
+</html>
