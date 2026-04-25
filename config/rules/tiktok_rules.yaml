@@ -1,0 +1,131 @@
+# TikTok Ads 監査ルール定義 (35項目)
+# カテゴリ重み: Technical 25%, Creative 30%, Structure 20%, Bidding 25%
+
+version: "1.0"
+category_weights:
+  technical: 0.25
+  creative: 0.30
+  structure: 0.20
+  bidding: 0.25
+
+rules:
+  # === Technical (T-TC1-TC2) ===
+  - id: T-TC1
+    name: Pixel + Events API Gateway
+    category: technical
+    severity: critical
+    weight: 2.0
+  - id: T-TC2
+    name: ttclid パスバック
+    category: technical
+    severity: high
+    weight: 1.5
+
+  # === Creative (T-CR1-CR10) ===
+  - id: T-CR1
+    name: ネイティブ感（縦型9:16）
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: T-CR2
+    name: 冒頭フック（3秒以内）
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: T-CR3
+    name: 動画完視聴率 ≥15%
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: T-CR4
+    name: Spark Ads 活用
+    category: creative
+    severity: medium
+    weight: 1.0
+  - id: T-CR5
+    name: クリエイティブ寿命（7-10日）
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: T-CR6
+    name: サウンド使用
+    category: creative
+    severity: medium
+    weight: 1.0
+  - id: T-CR7
+    name: クリエイティブ本数 ≥5/広告グループ
+    category: creative
+    severity: medium
+    weight: 1.0
+  - id: T-CR8
+    name: CTA設定
+    category: creative
+    severity: medium
+    weight: 1.0
+
+  # === Bidding / Learning (T-BL1-BL3) ===
+  - id: T-BL1
+    name: 学習フェーズ（50CV/7日）
+    category: bidding
+    severity: critical
+    weight: 2.0
+    conflict_group: learning_vs_testing
+  - id: T-BL2
+    name: 予算充足率
+    category: bidding
+    severity: high
+    weight: 1.5
+  - id: T-BL3
+    name: Smart+ キャンペーン評価
+    category: bidding
+    severity: medium
+    weight: 1.0
+
+  # === Structure (T-ST1-ST6) ===
+  - id: T-ST1
+    name: Search Ads Toggle
+    category: structure
+    severity: medium
+    weight: 1.0
+  - id: T-ST2
+    name: GMV Max 活用
+    category: structure
+    severity: low
+    weight: 1.0
+  - id: T-ST3
+    name: Shop連携
+    category: structure
+    severity: low
+    weight: 1.0
+  - id: T-ST4
+    name: キャンペーン構造最適化
+    category: structure
+    severity: medium
+    weight: 1.0
+  - id: T-ST5
+    name: 広告グループ数バランス
+    category: structure
+    severity: medium
+    weight: 1.0
+
+  # === Common Checks ===
+  - id: T-C01
+    name: CTR最低基準
+    category: structure
+    severity: medium
+    weight: 1.0
+  - id: T-C02
+    name: CPA スパイク
+    category: bidding
+    severity: high
+    weight: 1.5
+  - id: T-C03
+    name: ゼロCV コスト超過
+    category: bidding
+    severity: critical
+    weight: 2.0
+  - id: T-C04
+    name: フリークエンシー上限
+    category: creative
+    severity: high
+    weight: 1.5

@@ -1,0 +1,326 @@
+# Google Ads 監査ルール定義 (84項目)
+# カテゴリ重み: Conversion 25%, Wasted Spend 20%, Structure 15%, Creative 15%, Bidding 15%, Technical 10%
+
+version: "1.0"
+category_weights:
+  conversion_tracking: 0.25
+  wasted_spend: 0.20
+  structure: 0.15
+  creative: 0.15
+  bidding: 0.15
+  technical: 0.10
+
+rules:
+  # === Structure (G01-G12) ===
+  - id: G01
+    name: キャンペーン命名規則
+    category: structure
+    severity: low
+    weight: 1.0
+  - id: G03
+    name: STAG構造（1広告グループ≤10KW）
+    category: structure
+    severity: medium
+    weight: 1.0
+  - id: G04
+    name: キャンペーン数/目的の整合性
+    category: structure
+    severity: medium
+    weight: 1.0
+  - id: G05
+    name: ブランド/非ブランド分離
+    category: structure
+    severity: high
+    weight: 1.5
+  - id: G07
+    name: PMax + Search 重複チェック
+    category: structure
+    severity: high
+    weight: 1.5
+  - id: G08
+    name: 予算制限チェック（日予算）
+    category: bidding
+    severity: medium
+    weight: 1.0
+  - id: G09
+    name: 予算配分バランス
+    category: bidding
+    severity: medium
+    weight: 1.0
+  - id: G11
+    name: 地理ターゲティング People in 設定
+    category: structure
+    severity: high
+    weight: 1.5
+  - id: G12
+    name: ネットワーク設定（Search Partners除外）
+    category: structure
+    severity: medium
+    weight: 1.0
+
+  # === Negative KW / Search Terms (G13-G19, G-WS1) ===
+  - id: G13
+    name: 検索語句レビュー日
+    category: wasted_spend
+    severity: medium
+    weight: 1.0
+  - id: G14
+    name: ネガティブキーワードリスト存在
+    category: wasted_spend
+    severity: high
+    weight: 1.5
+  - id: G15
+    name: 共有ネガキーワードリスト
+    category: wasted_spend
+    severity: medium
+    weight: 1.0
+  - id: G16
+    name: 無駄クリック率
+    category: wasted_spend
+    severity: critical
+    weight: 2.0
+  - id: G17
+    name: Broad Match + Manual CPC 組合せ
+    category: wasted_spend
+    severity: high
+    weight: 1.5
+  - id: G-WS1
+    name: ゼロCV キーワード（コスト発生）
+    category: wasted_spend
+    severity: high
+    weight: 1.5
+
+  # === KW / QS (G20-G25, G-KW1-KW2) ===
+  - id: G20
+    name: Quality Score 平均
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: G21
+    name: QS≤3 比率
+    category: creative
+    severity: critical
+    weight: 2.0
+  - id: G22
+    name: Expected CTR Below Average 比率
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: G23
+    name: Ad Relevance Below Average 比率
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: G24
+    name: LP Experience Below Average 比率
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: G-KW1
+    name: ゼロインプレッション KW
+    category: wasted_spend
+    severity: medium
+    weight: 1.0
+
+  # === Ads / Assets (G26-G35, G-AD1-AD2) ===
+  - id: G26
+    name: RSA数チェック（広告グループあたり）
+    category: creative
+    severity: medium
+    weight: 1.0
+  - id: G27
+    name: RSA ヘッドライン数（≥8推奨）
+    category: creative
+    severity: medium
+    weight: 1.0
+  - id: G28
+    name: RSA 説明文数（≥4推奨）
+    category: creative
+    severity: medium
+    weight: 1.0
+  - id: G29
+    name: Ad Strength チェック
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: G31
+    name: PMax アセット密度（≥20画像/≥5ロゴ/≥5動画）
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: G32
+    name: ネイティブ動画有無
+    category: creative
+    severity: medium
+    weight: 1.0
+
+  # === Bidding / Budget (G36-G41) ===
+  - id: G36
+    name: Smart Bidding 設定
+    category: bidding
+    severity: medium
+    weight: 1.0
+  - id: G37
+    name: 目標CPA/ROAS 妥当性
+    category: bidding
+    severity: high
+    weight: 1.5
+  - id: G38
+    name: 学習フェーズ率
+    category: bidding
+    severity: high
+    weight: 1.5
+  - id: G39
+    name: 予算制約（Limited by budget）
+    category: bidding
+    severity: critical
+    weight: 2.0
+  - id: G40
+    name: Manual CPC 正当性
+    category: bidding
+    severity: medium
+    weight: 1.0
+  - id: G41
+    name: ポートフォリオ入札設定
+    category: bidding
+    severity: low
+    weight: 1.0
+
+  # === Conversion Tracking (G42-G49, G-CT1-CT3) ===
+  - id: G43
+    name: Enhanced Conversions 有効
+    category: conversion_tracking
+    severity: critical
+    weight: 2.0
+  - id: G45
+    name: Consent Mode v2 実装
+    category: conversion_tracking
+    severity: high
+    weight: 1.5
+  - id: G47
+    name: マクロ/マイクロ コンバージョン分離
+    category: conversion_tracking
+    severity: high
+    weight: 1.5
+  - id: G48
+    name: DDA（Data-Driven Attribution）設定
+    category: conversion_tracking
+    severity: critical
+    weight: 2.0
+  - id: G49
+    name: コンバージョン値割当
+    category: conversion_tracking
+    severity: medium
+    weight: 1.0
+  - id: G-CT2
+    name: GA4連携
+    category: conversion_tracking
+    severity: high
+    weight: 1.5
+
+  # === Extensions (G50-G61) ===
+  - id: G50
+    name: サイトリンク拡張
+    category: creative
+    severity: medium
+    weight: 1.0
+  - id: G51
+    name: コールアウト拡張
+    category: creative
+    severity: low
+    weight: 1.0
+  - id: G52
+    name: 構造化スニペット
+    category: creative
+    severity: low
+    weight: 1.0
+  - id: G53
+    name: 画像拡張
+    category: creative
+    severity: medium
+    weight: 1.0
+  - id: G56
+    name: オーディエンスセグメント
+    category: structure
+    severity: medium
+    weight: 1.0
+  - id: G57
+    name: Customer Match
+    category: structure
+    severity: medium
+    weight: 1.0
+  - id: G58
+    name: プレースメント除外
+    category: wasted_spend
+    severity: medium
+    weight: 1.0
+  - id: G59
+    name: LP速度
+    category: technical
+    severity: high
+    weight: 1.5
+  - id: G60
+    name: LP関連性
+    category: technical
+    severity: medium
+    weight: 1.0
+
+  # === PMax Extended (G-PM1-PM6) ===
+  - id: G-PM1
+    name: PMax オーディエンスシグナル
+    category: structure
+    severity: high
+    weight: 1.5
+  - id: G-PM2
+    name: PMax Ad Strength
+    category: creative
+    severity: high
+    weight: 1.5
+  - id: G-PM3
+    name: PMax ブランドカニバリゼーション
+    category: wasted_spend
+    severity: critical
+    weight: 2.0
+    conflict_group: exclude_vs_opportunity
+  - id: G-PM4
+    name: PMax 検索テーマ
+    category: structure
+    severity: medium
+    weight: 1.0
+  - id: G-PM5
+    name: PMax ネガティブKW（アカウントレベル）
+    category: wasted_spend
+    severity: high
+    weight: 1.5
+  - id: G-PM6
+    name: PMax ブランドKW除外
+    category: wasted_spend
+    severity: high
+    weight: 1.5
+
+  # === AI Max / Demand Gen / CTV ===
+  - id: G-AI1
+    name: AI Max 評価
+    category: technical
+    severity: medium
+    weight: 1.0
+  - id: G-DG1
+    name: Demand Gen 画像+動画
+    category: creative
+    severity: medium
+    weight: 1.0
+  - id: G-DG2
+    name: VAC→Demand Gen 移行
+    category: technical
+    severity: medium
+    weight: 1.0
+  - id: G-DG3
+    name: フリークエンシーキャップ
+    category: wasted_spend
+    severity: medium
+    weight: 1.0
+  - id: G-CTV1
+    name: CTV Floodlight制限
+    category: technical
+    severity: low
+    weight: 1.0

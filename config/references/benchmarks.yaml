@@ -1,0 +1,62 @@
+# BPO System ベンチマーク / 参照データ
+# 業界平均値 (2026 Q1 日本市場)
+
+industry_benchmarks:
+  google:
+    search:
+      ctr_avg: 3.17
+      cpa_avg: 4850
+      cvr_avg: 3.75
+      roas_avg: 4.2
+      quality_score_avg: 5.5
+    display:
+      ctr_avg: 0.46
+      cpa_avg: 7560
+      cvr_avg: 0.77
+      roas_avg: 1.8
+    shopping:
+      ctr_avg: 0.86
+      cpa_avg: 3200
+      roas_avg: 5.5
+    pmax:
+      ctr_avg: 1.2
+      cpa_avg: 5100
+      roas_avg: 3.8
+    demand_gen:
+      ctr_avg: 0.65
+      cpa_avg: 6200
+      roas_avg: 2.5
+
+  meta:
+    conversions:
+      ctr_avg: 1.1
+      cpa_avg: 3500
+      roas_avg: 3.5
+      frequency_avg: 2.8
+    lead_gen:
+      ctr_avg: 0.9
+      cpa_avg: 2200
+    awareness:
+      ctr_avg: 0.5
+      cpm_avg: 850
+    traffic:
+      ctr_avg: 1.5
+      cpc_avg: 120
+
+  tiktok:
+    in_feed:
+      ctr_avg: 0.8
+      cpa_avg: 4200
+      video_completion_rate_avg: 15.0
+      roas_avg: 2.5
+    spark_ads:
+      ctr_avg: 1.2
+      cpa_avg: 3100
+      roas_avg: 3.2
+
+  seo:
+    lcp_target: 2.5
+    fid_target: 100
+    cls_target: 0.1
+    mobile_score_target: 50
+    desktop_score_target: 80

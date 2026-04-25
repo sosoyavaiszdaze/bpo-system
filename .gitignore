@@ -1,6 +1,36 @@
-logs/
-reports/
-data/*.json
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+.venv/
+
+# Environment
 .env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs & Reports (generated)
+logs/
+reports/
+
+# Data (JSON snapshots)
+data/*.json
+data/*_previous.json
+
+# Outputs (generated)
+outputs/*.pdf
+outputs/*.html
+
+# OS
+.DS_Store
+Thumbs.db

@@ -8,6 +8,13 @@ import logging
 import glob
 from datetime import datetime
 
+# .env ファイルから環境変数を読み込み
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv 未インストール時はスキップ
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_DIR = os.path.join(BASE_DIR, "config")
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -41,10 +48,22 @@ def load_thresholds():
 
 
 def fetch_data(client_id, client_cfg):
-    """データ取得: Meta API -> TikTok API -> CSV fallback"""
+    """データ取得: Google Ads -> Meta API -> TikTok API -> CSV fallback"""
     log.info(f"[{client_id}] データ取得開始")
 
     ads_cfg = client_cfg.get("ads", {})
+
+    # Google Ads API
+    google_cfg = ads_cfg.get("google", {})
+    if google_cfg.get("customer_id") and google_cfg.get("customer_id") != "XXX-XXX-XXXX":
+        try:
+            from adapters.google_adapter import fetch_google_ads
+            data = fetch_google_ads(google_cfg)
+            if data:
+                log.info(f"[{client_id}] Google Ads APIからデータ取得成功")
+                return _validate(data)
+        except Exception as e:
+            log.warning(f"[{client_id}] Google Ads API失敗: {e}")
 
     # Meta API
     meta_cfg = ads_cfg.get("meta", {})
@@ -54,7 +73,7 @@ def fetch_data(client_id, client_cfg):
             data = fetch_meta_ads(meta_cfg)
             if data:
                 log.info(f"[{client_id}] Meta APIからデータ取得成功")
-                return data
+                return _validate(data)
         except Exception as e:
             log.warning(f"[{client_id}] Meta API失敗: {e}")
 
@@ -66,7 +85,7 @@ def fetch_data(client_id, client_cfg):
             data = fetch_tiktok_ads(tiktok_cfg)
             if data:
                 log.info(f"[{client_id}] TikTok APIからデータ取得成功")
-                return data
+                return _validate(data)
         except Exception as e:
             log.warning(f"[{client_id}] TikTok API失敗: {e}")
 
@@ -77,10 +96,20 @@ def fetch_data(client_id, client_cfg):
         from adapters.csv_adapter import load_csv
         latest = csv_files[-1]
         log.info(f"[{client_id}] CSV読込: {latest}")
-        return load_csv(latest)
+        return _validate(load_csv(latest))
 
     log.warning(f"[{client_id}] データなし")
     return None
+
+
+def _validate(data):
+    """データバリデーション"""
+    try:
+        from adapters.validator import validate_data
+        return validate_data(data)
+    except Exception as e:
+        log.warning(f"バリデーションエラー: {e}")
+        return data
 
 
 def run_ads_audit(client_id, data, thresholds):
@@ -195,6 +224,10 @@ def run_client(client_id, client_cfg, thresholds):
         "ads_audit": None,
         "anomalies": None,
         "waste": None,
+        "fraud_audit": None,
+        "fraud_action": None,
+        "conflicts": None,
+        "claude_analysis": None,
         "seo_audit": None,
     }
 
@@ -215,8 +248,35 @@ def run_client(client_id, client_cfg, thresholds):
     # 4. 低効率セグメント検出
     results["waste"] = run_waste_detection(client_id, data, thresholds)
 
-    # 5. SEO監査
+    # 5. Fraud 監査 + アクション
     results["fraud_audit"] = run_fraud_audit(client_id, data, thresholds)
+    if results["fraud_audit"] and not results["fraud_audit"].get("error"):
+        try:
+            from analyzers.fraud_action import run_fraud_action as fraud_action_run
+            results["fraud_action"] = fraud_action_run(client_id, results["fraud_audit"], client_cfg, thresholds)
+        except Exception as e:
+            log.error(f"[{client_id}] Fraud Action エラー: {e}")
+
+    # 6. トレードオフ検出
+    if results["ads_audit"] and not results["ads_audit"].get("error"):
+        try:
+            from engine.conflict_detector import detect_conflicts, resolve_conflicts
+            conflicts = detect_conflicts(results["ads_audit"], client_cfg)
+            if conflicts:
+                results["conflicts"] = resolve_conflicts(conflicts, client_cfg)
+                log.info(f"[{client_id}] トレードオフ検出: {len(conflicts)}件")
+        except Exception as e:
+            log.error(f"[{client_id}] トレードオフ検出エラー: {e}")
+
+    # 7. Claude API 分析
+    if results["ads_audit"] and not results["ads_audit"].get("error"):
+        try:
+            from engine.claude_analyzer import run_claude_analysis
+            results["claude_analysis"] = run_claude_analysis(client_id, data, results["ads_audit"])
+        except Exception as e:
+            log.error(f"[{client_id}] Claude分析エラー: {e}")
+
+    # 8. SEO監査
     results["seo_audit"] = run_seo_audit(client_id, client_cfg, thresholds)
 
     # 6. 出力

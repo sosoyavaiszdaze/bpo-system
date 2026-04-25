@@ -6,8 +6,8 @@ import urllib.request
 
 log = logging.getLogger("bpo")
 
-TWENTY_API_URL = "http://204.168.139.193:3000/rest"
-TWENTY_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4ZGE5ZTZiZS02M2QyLTQ5ZDEtYjk2ZC0wM2VjYzczYjU4MDkiLCJ0eXBlIjoiQVBJX0tFWSIsIndvcmtzcGFjZUlkIjoiOGRhOWU2YmUtNjNkMi00OWQxLWI5NmQtMDNlY2M3M2I1ODA5IiwiaWF0IjoxNzc0Njg3MjY5LCJleHAiOjQ5MjgyODcyNjgsImp0aSI6IjA1MDZmZjkyLWNkODEtNDE5Yy05ZjhiLWQyMTkzMjM2Njk0ZSJ9.oxdS0JdomEHFdNwIpm64YYfyLC4R_F1SgkNKNMfWzME"
+TWENTY_API_URL = os.environ.get("TWENTY_API_URL", "")
+TWENTY_API_KEY = os.environ.get("TWENTY_API_KEY", "")
 
 
 def save_to_crm(client_id, results, config):

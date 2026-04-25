@@ -1,0 +1,8 @@
+# Google Ads API 認証設定
+# 実際の値は .env ファイルから環境変数で設定してください
+
+developer_token: ${GOOGLE_ADS_DEVELOPER_TOKEN}
+client_id: ${GOOGLE_ADS_CLIENT_ID}
+client_secret: ${GOOGLE_ADS_CLIENT_SECRET}
+refresh_token: ${GOOGLE_ADS_REFRESH_TOKEN}
+use_proto_plus: true

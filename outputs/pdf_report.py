@@ -126,6 +126,12 @@ def _build_context(client_id, results):
         w["platform_label"] = PLATFORM_LABEL.get(p, p)
         w["waste_display"] = f"{w.get('waste_amount', w.get('cost', 0)):,.0f}"
 
+    # Fraud action display
+    fraud_audit_data = results.get("fraud_audit") or {}
+    fraud_action_data = results.get("fraud_action") or {}
+    if fraud_action_data:
+        fraud_action_data["estimated_savings_display"] = f"{fraud_action_data.get('estimated_savings', 0):,.0f}"
+
     return {
         "client_name": results.get("client_name", client_id),
         "timestamp": results.get("timestamp", "")[:10],
@@ -151,6 +157,11 @@ def _build_context(client_id, results):
         "quick_wins": quick_wins,
         "waste_items": waste_items,
         "waste_savings": waste.get("potential_savings", "¥0"),
+        # Phase 3-4: 新セクション
+        "fraud_audit": fraud_audit_data if fraud_audit_data else None,
+        "fraud_action": fraud_action_data if fraud_action_data else None,
+        "conflicts": results.get("conflicts"),
+        "claude_analysis": results.get("claude_analysis") if results.get("claude_analysis") and not results.get("claude_analysis", {}).get("skipped") else None,
     }
 
 

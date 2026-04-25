@@ -1,0 +1,14 @@
+# Claude API 設定
+model:
+  primary: claude-sonnet-4-6
+  fallback: claude-sonnet-4-5
+  cache:
+    min_cacheable_tokens: 1024
+    type: ephemeral
+  pricing:
+    input: 3.00
+    output: 15.00
+    cache_read: 0.30
+  retry:
+    max_attempts: 3
+    backoff_base: 2

@@ -214,12 +214,56 @@ def _build_blocks(client_id, results):
                 seo_text += f"　...他 {len(seo_items) - 3}件\n"
             blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": seo_text}})
 
+    # ===== Fraud Detection =====
+    fraud = results.get("fraud_audit")
+    fraud_action = results.get("fraud_action")
+    if fraud and not fraud.get("error"):
+        fraud_rate = fraud.get("fraud_rate", 0)
+        if fraud_rate > 0 or (fraud_action and fraud_action.get("actions_taken")):
+            blocks.append({"type": "divider"})
+            fraud_emoji = "🔴" if fraud_rate >= 40 else "🟠" if fraud_rate >= 20 else "🟢"
+            fraud_text = f"*🛡️ 不正検知: {fraud_emoji} 不正率 {fraud_rate:.1f}%*\n"
+            if fraud_action:
+                blocked = fraud_action.get("blocked_ips", 0)
+                savings = fraud_action.get("estimated_savings", 0)
+                quota = fraud_action.get("ip_quota_used", "0/500")
+                fraud_text += f"├ ブロック件数: *{blocked}件*\n"
+                fraud_text += f"├ 推定節約額: *¥{savings:,.0f}*\n"
+                fraud_text += f"└ IP枠使用率: {quota}\n"
+                for action in (fraud_action.get("actions_taken") or [])[:3]:
+                    fraud_text += f"　• {action['platform']}: {action['message']}\n"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": fraud_text}})
+
+    # ===== トレードオフ検出 =====
+    conflicts = results.get("conflicts")
+    if conflicts:
+        blocks.append({"type": "divider"})
+        conflict_text = f"*🔄 トレードオフ検出 ({len(conflicts)}件)*\n\n"
+        for c in conflicts[:3]:
+            resolved = "✅ 自動解決" if c.get("auto_resolved") else "⏳ 確認待ち"
+            conflict_text += f"• *{c.get('name', '')}* [{resolved}]\n"
+            conflict_text += f"　→ {c.get('resolution', '')}\n"
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": conflict_text}})
+
+    # ===== Claude 分析 =====
+    claude = results.get("claude_analysis")
+    if claude and not claude.get("skipped"):
+        blocks.append({"type": "divider"})
+        claude_text = f"*🧠 AI分析 ({claude.get('model', 'Claude')})*\n\n"
+        summary = claude.get("summary", "")
+        # 最初の3行のみ表示
+        lines = summary.strip().split("\n")[:3]
+        claude_text += "\n".join(lines)
+        if len(summary.strip().split("\n")) > 3:
+            claude_text += "\n_...詳細はPDFレポートを参照_"
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": claude_text}})
+
     # ===== フッター =====
     blocks.append({"type": "divider"})
     blocks.append({
         "type": "context",
         "elements": [{"type": "mrkdwn", "text": (
-            "🤖 *BPO System v2.0* | "
+            "🤖 *BPO System v3.0* | "
             f"チェック項目: 広告{len(issues)}件 + 異常{len(alerts)}件 + 無駄{len(waste_items)}件 | "
             "詳細はPDFレポートを確認"
         )}]

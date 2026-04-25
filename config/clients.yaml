@@ -2,12 +2,13 @@ defaults:
   timezone: "Asia/Tokyo"
   currency: "JPY"
   schedule: "0 9 * * *"
-  anthropic_model: "claude-sonnet-4-20250514"
+  anthropic_model: "claude-sonnet-4-6"
 
 clients:
   yamamoto_demo:
     name: "山本デモ"
     active: true
+    objective: balanced  # cpa_minimize | cv_maximize | roas_target | balanced
     ads:
       meta:
         account_id: "act_XXXXXXXXX"
@@ -15,6 +16,10 @@ clients:
       tiktok:
         advertiser_id: "XXXXXXXXX"
         access_token_env: "TIKTOK_ACCESS_TOKEN_YAMAMOTO"
+      google:
+        customer_id: "XXX-XXX-XXXX"
+        developer_token_env: "GOOGLE_ADS_DEVELOPER_TOKEN"
+        credentials_path: "config/google-ads.yaml"
     seo:
       site_url: "https://example.com"
       landing_pages:
@@ -24,7 +29,7 @@ clients:
       api_key_env: "ADTRUTH_API_KEY_YAMAMOTO"
     notifications:
       slack:
-        webhook_url: "https://hooks.slack.com/services/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"
+        webhook_env: "SLACK_WEBHOOK_YAMAMOTO"
         channel: "#yamamoto-ads"
     crm:
       twenty:
