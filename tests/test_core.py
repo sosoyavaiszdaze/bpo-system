@@ -901,12 +901,22 @@ class TestV2Enabled:
     def test_disabled_rule_skipped(self):
         """enabled:false のルールはスコアに影響しない"""
         from engine.yaml_evaluator import evaluate_checks
-        # enabled=true のルールが正常にスコアリングされることを確認
-        checks = [{"id": "G25", "passed": False, "platform": "google", "campaign": "Test"}]
+        # G26-NEW2 は Phase 2 で enabled:false
+        checks = [
+            {"id": "G26-NEW2", "passed": False, "platform": "google", "campaign": "Test"},
+            {"id": "G25", "passed": False, "platform": "google", "campaign": "Test"},
+        ]
         result = evaluate_checks(checks, "google")
+        g26new2 = [d for d in result["details"] if d["id"] == "G26-NEW2"]
         g25 = [d for d in result["details"] if d["id"] == "G25"]
+        # G26-NEW2 は enabled:false → weight=0, スコア除外
+        assert len(g26new2) == 1
+        assert g26new2[0]["enabled"] is False
+        assert g26new2[0]["weight"] == 0
+        # G25 は enabled:true → 正常スコアリング
         assert len(g25) == 1
         assert g25[0]["enabled"] is True
+        assert g25[0]["weight"] > 0
 
 
 class TestV2AxisConflict:

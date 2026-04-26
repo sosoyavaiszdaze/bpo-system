@@ -1748,7 +1748,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 新設
   redesign_note: '新設: 品質スコア構成要素の推定CTR低KW群から視認性課題の文字列を特定'
-  enabled: true
+  enabled: false
 - id: G45-NEW
   name: ページ最上部/上部IS推移 (新設)
   category: 計測
@@ -1812,4 +1812,4 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 新設
   redesign_note: '新設: 競合の入札強化/参入を月次で切り分け'
-  enabled: true
+  enabled: false
