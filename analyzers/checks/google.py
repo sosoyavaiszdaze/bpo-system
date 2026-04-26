@@ -555,9 +555,11 @@ def _check_advanced(camps, g_t):
 # ========================================
 # Helper
 # ========================================
-def _r(check_id, passed, campaign, message, conflict_group=None):
+def _r(check_id, passed, campaign, message, conflict_group=None, context=None):
     """チェック結果 dict を構築"""
     r = {"id": check_id, "passed": passed, "campaign": campaign, "platform": "google", "message": message}
     if conflict_group:
         r["conflict_group"] = conflict_group
+    if context:
+        r["context"] = context
     return r

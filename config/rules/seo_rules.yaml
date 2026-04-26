@@ -1,228 +1,956 @@
-# SEO 監査ルール定義
-name: SEO Audit Rules
-version: "1.0"
-
+name: SEO Audit Rules v2.0
+version: '2.0'
 category_weights:
-  core_web_vitals: 1.4
-  performance: 1.2
-  seo_basics: 1.0
-  mobile: 1.1
-  security: 1.3
-
+  構造_設定: 0.2
+  メタ情報: 0.11
+  コンテンツ: 0.11
+  Core_Web_Vitals: 0.07
+  構造化データ: 0.07
+  内部リンク: 0.07
+  画像最適化: 0.07
+  UX: 0.07
+  モバイル: 0.04
+  サイト速度: 0.04
+  見出し構造: 0.04
+  OGP: 0.04
+  外部リンク: 0.04
+  国際SEO: 0.02
 rules:
-  # --- Core Web Vitals ---
-  - id: SEO-CWV1
-    name: Largest Contentful Paint
-    category: core_web_vitals
-    severity: critical
-    description: LCP ≤ 2.5秒
-    threshold: 2.5
-    unit: seconds
-  - id: SEO-CWV2
-    name: First Input Delay
-    category: core_web_vitals
-    severity: high
-    description: FID ≤ 100ms
-    threshold: 100
-    unit: ms
-  - id: SEO-CWV3
-    name: Cumulative Layout Shift
-    category: core_web_vitals
-    severity: high
-    description: CLS ≤ 0.1
-    threshold: 0.1
-  - id: SEO-CWV4
-    name: Interaction to Next Paint
-    category: core_web_vitals
-    severity: high
-    description: INP ≤ 200ms
-    threshold: 200
-    unit: ms
-  - id: SEO-CWV5
-    name: Time to First Byte
-    category: core_web_vitals
-    severity: medium
-    description: TTFB ≤ 800ms
-    threshold: 800
-    unit: ms
-
-  # --- Performance ---
-  - id: SEO-PF1
-    name: PageSpeed Desktop Score
-    category: performance
-    severity: medium
-    description: Desktop score ≥ 80
-    threshold: 80
-  - id: SEO-PF2
-    name: PageSpeed Mobile Score
-    category: performance
-    severity: high
-    description: Mobile score ≥ 50
-    threshold: 50
-  - id: SEO-PF3
-    name: Total Page Size
-    category: performance
-    severity: medium
-    description: ページサイズ ≤ 3MB
-    threshold: 3145728
-    unit: bytes
-  - id: SEO-PF4
-    name: DOM Element Count
-    category: performance
-    severity: low
-    description: DOM要素数 ≤ 1500
-    threshold: 1500
-  - id: SEO-PF5
-    name: HTTP Request Count
-    category: performance
-    severity: medium
-    description: リクエスト数 ≤ 50
-    threshold: 50
-  - id: SEO-PF6
-    name: Image Optimization
-    category: performance
-    severity: medium
-    description: 画像の最適化（WebP/AVIF使用率）
-  - id: SEO-PF7
-    name: JavaScript Bundle Size
-    category: performance
-    severity: medium
-    description: JSバンドル ≤ 500KB
-    threshold: 512000
-    unit: bytes
-  - id: SEO-PF8
-    name: Render Blocking Resources
-    category: performance
-    severity: high
-    description: レンダリングブロッキング要素なし
-  - id: SEO-PF9
-    name: Font Loading Strategy
-    category: performance
-    severity: low
-    description: font-display swap 設定
-
-  # --- SEO Basics ---
-  - id: SEO-BS1
-    name: Title Tag
-    category: seo_basics
-    severity: high
-    description: タイトルタグ存在 + 60文字以内
-  - id: SEO-BS2
-    name: Meta Description
-    category: seo_basics
-    severity: medium
-    description: メタディスクリプション存在 + 160文字以内
-  - id: SEO-BS3
-    name: H1 Tag
-    category: seo_basics
-    severity: high
-    description: H1タグが1つ存在
-  - id: SEO-BS4
-    name: Heading Hierarchy
-    category: seo_basics
-    severity: medium
-    description: 見出し階層が正しい (H1→H2→H3)
-  - id: SEO-BS5
-    name: Canonical URL
-    category: seo_basics
-    severity: high
-    description: canonical URL設定
-  - id: SEO-BS6
-    name: Alt Text Coverage
-    category: seo_basics
-    severity: medium
-    description: 画像のalt属性カバー率 ≥ 90%
-    threshold: 90
-  - id: SEO-BS7
-    name: Internal Links
-    category: seo_basics
-    severity: low
-    description: 内部リンク ≥ 3
-    threshold: 3
-  - id: SEO-BS8
-    name: Structured Data (JSON-LD)
-    category: seo_basics
-    severity: medium
-    description: 構造化データ存在
-  - id: SEO-BS9
-    name: Robots Meta Tag
-    category: seo_basics
-    severity: high
-    description: robots meta が noindex でない
-  - id: SEO-BS10
-    name: Open Graph Tags
-    category: seo_basics
-    severity: low
-    description: OGP タグ設定
-
-  # --- Mobile ---
-  - id: SEO-MB1
-    name: Viewport Meta Tag
-    category: mobile
-    severity: critical
-    description: viewport meta 設定
-  - id: SEO-MB2
-    name: Touch Target Size
-    category: mobile
-    severity: medium
-    description: タッチターゲット ≥ 48px
-    threshold: 48
-    unit: px
-  - id: SEO-MB3
-    name: Font Size Legibility
-    category: mobile
-    severity: medium
-    description: フォントサイズ ≥ 12px
-    threshold: 12
-    unit: px
-  - id: SEO-MB4
-    name: Content Width Fit
-    category: mobile
-    severity: high
-    description: 水平スクロールなし
-
-  # --- Security ---
-  - id: SEO-SC1
-    name: HTTPS
-    category: security
-    severity: critical
-    description: HTTPS 有効
-  - id: SEO-SC2
-    name: Mixed Content
-    category: security
-    severity: high
-    description: Mixed Content なし
-  - id: SEO-SC3
-    name: HSTS Header
-    category: security
-    severity: medium
-    description: Strict-Transport-Security ヘッダ
-  - id: SEO-SC4
-    name: Content Security Policy
-    category: security
-    severity: medium
-    description: CSP ヘッダ設定
-  - id: SEO-SC5
-    name: X-Frame-Options
-    category: security
-    severity: low
-    description: X-Frame-Options ヘッダ
-
-  # --- LP Quality for Ads ---
-  - id: SEO-LP1
-    name: LP Form Presence
-    category: seo_basics
-    severity: high
-    description: フォームまたはCTAが存在
-  - id: SEO-LP2
-    name: LP Load Time
-    category: performance
-    severity: critical
-    description: LP読込 ≤ 3秒 (広告品質に直結)
-    threshold: 3.0
-    unit: seconds
-  - id: SEO-LP3
-    name: Ad-LP Message Match
-    category: seo_basics
-    severity: high
-    description: 広告文とLPの訴求一致度
+- id: S01
+  name: robots.txt設定
+  category: 構造_設定
+  severity: critical
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S17
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: クロール制御の前提
+  enabled: true
+- id: S02
+  name: sitemap.xmlの存在と整合
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - S01
+  conflicts: []
+  dependencies:
+  - S20
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S03
+  name: HTTPS/SSL
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 技術的前提
+  enabled: true
+- id: S04
+  name: LCP
+  category: Core_Web_Vitals
+  severity: critical
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-06
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - S09
+  - S10
+  - S29
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: UX結果指標
+  enabled: true
+- id: S05
+  name: CLS
+  category: Core_Web_Vitals
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S06
+  name: INP
+  category: Core_Web_Vitals
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S07
+  name: モバイルフレンドリー
+  category: モバイル
+  severity: critical
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S08
+  - S43
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S08
+  name: ビューポート設定
+  category: モバイル
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S07
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S09
+  name: サーバー応答時間
+  category: サイト速度
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S04
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S10
+  name: 画像最適化
+  category: サイト速度
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S04
+  - S28
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S11
+  name: Schema.org実装
+  category: 構造化データ
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S12
+  - S32
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: リッチリザルト
+  enabled: true
+- id: S12
+  name: 構造化データエラー
+  category: 構造化データ
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - S11
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S13
+  name: hreflang整合
+  category: 国際SEO
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S14
+  name: canonical整合
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-06
+  secondary_axis: TO-01
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts:
+  - S15
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 重複の正規化
+  enabled: true
+- id: S15
+  name: 重複コンテンツ
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: TO-01
+  axis_position: right
+  polarity: aggregate
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S14
+  - S44
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 1コンテンツ1URL原則
+  enabled: true
+- id: S16
+  name: クロールエラー
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S17
+  name: インデックスカバレッジ
+  category: 構造_設定
+  severity: critical
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - S01
+  - S02
+  - S20
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S18
+  name: 内部リンク構造
+  category: 内部リンク
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-11
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S37
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S19
+  name: 404/リダイレクト設計
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S20
+  name: XMLサイトマップ内エラー
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: サイト全体
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - S02
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S21
+  name: titleタグ長さ
+  category: メタ情報
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S22
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 見出し相当
+  enabled: true
+- id: S22
+  name: title重複
+  category: メタ情報
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-06
+  secondary_axis: TO-01
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts:
+  - S15
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 1ページ1title
+  enabled: true
+- id: S23
+  name: meta description
+  category: メタ情報
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S24
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S24
+  name: meta description重複
+  category: メタ情報
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S25
+  name: H1の存在と単一性
+  category: 見出し構造
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S26
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S26
+  name: H2/H3階層の論理性
+  category: 見出し構造
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - S25
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S27
+  name: 画像alt属性
+  category: 画像最適化
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S28
+  name: 画像ファイルサイズ
+  category: 画像最適化
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S04
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S29
+  name: 画像lazy-loading
+  category: 画像最適化
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S04
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S30
+  name: OGP設定
+  category: OGP
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S31
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S31
+  name: Twitter Card
+  category: OGP
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - S30
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S32
+  name: JSON-LD実装
+  category: 構造化データ
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - S11
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S33
+  name: コンテンツ文字数
+  category: コンテンツ
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S34
+  name: キーワード出現密度
+  category: コンテンツ
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S35
+  name: E-E-A-T要素
+  category: コンテンツ
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: YMYL対応
+  enabled: true
+- id: S36
+  name: コンテンツの鮮度
+  category: コンテンツ
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-10
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: preserve
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ポジティブシグナルの維持
+  enabled: true
+- id: S37
+  name: 内部リンク数
+  category: 内部リンク
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S38
+  name: アンカーテキスト最適化
+  category: 内部リンク
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S39
+  name: 外部リンクの品質
+  category: 外部リンク
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis: null
+  axis_position: neutral
+  polarity: preserve
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ネガリンク保持判断
+  enabled: true
+- id: S40
+  name: 外部リンクのnofollow/UGC
+  category: 外部リンク
+  severity: medium
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S41
+  name: CTA配置
+  category: UX
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer4
+  quick_win: true
+  primary_axis: TO-06
+  secondary_axis: TO-08
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S42
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: LP-広告連続性
+  enabled: true
+- id: S42
+  name: ファーストビュー情報設計
+  category: UX
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer4
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S41
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S43
+  name: モバイルレンダリング
+  category: UX
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - S07
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true
+- id: S44
+  name: 共食いコンテンツ
+  category: コンテンツ
+  severity: high
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-01
+  secondary_axis: TO-06
+  axis_position: right
+  polarity: aggregate
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S15
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: Hagakure原典そのもの。1コンテンツ1ページ原則
+  enabled: true
+- id: S45
+  name: noindex誤設定
+  category: メタ情報
+  severity: critical
+  weight: 1.0
+  platform: seo
+  placement: ページ別
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - S17
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ''
+  enabled: true

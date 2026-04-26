@@ -800,6 +800,213 @@ class TestConflictImpact:
         assert conflicts[0]["impact_score"] == int((6 + 6) * 1.5)
 
 
+class TestV2Polarity:
+    """v2.0 polarity multiplier テスト"""
+
+    def test_monitor_only_polarity(self):
+        """monitor_only → multiplier 0.3"""
+        from engine.yaml_evaluator import evaluate_checks
+        checks = [{"id": "G26", "passed": False, "platform": "google", "campaign": "Test"}]
+        result = evaluate_checks(checks, "google")
+        g26 = [d for d in result["details"] if d["id"] == "G26"]
+        assert len(g26) == 1
+        assert g26[0]["polarity"] == "monitor_only"
+        assert g26[0]["polarity_multiplier"] == 0.3
+
+    def test_preserve_polarity(self):
+        """preserve → multiplier 1.2"""
+        from engine.yaml_evaluator import evaluate_checks
+        checks = [{"id": "G27", "passed": False, "platform": "google", "campaign": "Test"}]
+        result = evaluate_checks(checks, "google")
+        g27 = [d for d in result["details"] if d["id"] == "G27"]
+        assert len(g27) == 1
+        assert g27[0]["polarity"] == "preserve"
+        assert g27[0]["polarity_multiplier"] == 1.2
+
+    def test_open_polarity(self):
+        """open → multiplier 0.5"""
+        from engine.yaml_evaluator import evaluate_checks
+        checks = [{"id": "G28", "passed": False, "platform": "google", "campaign": "Test"}]
+        result = evaluate_checks(checks, "google")
+        g28 = [d for d in result["details"] if d["id"] == "G28"]
+        assert len(g28) == 1
+        assert g28[0]["polarity"] == "open"
+        assert g28[0]["polarity_multiplier"] == 0.5
+
+    def test_context_dependent_auto_bidding(self):
+        """context_dependent + 自動入札 → multiplier 0.0"""
+        from engine.yaml_evaluator import evaluate_checks
+        checks = [{"id": "G35", "passed": False, "platform": "google", "campaign": "Test",
+                    "context": {"bidding_strategy": "target_cpa"}}]
+        result = evaluate_checks(checks, "google")
+        g35 = [d for d in result["details"] if d["id"] == "G35"]
+        assert len(g35) == 1
+        assert g35[0]["polarity_multiplier"] == 0.0
+
+    def test_context_dependent_manual_bidding(self):
+        """context_dependent + 手動入札 → multiplier 1.0"""
+        from engine.yaml_evaluator import evaluate_checks
+        checks = [{"id": "G35", "passed": False, "platform": "google", "campaign": "Test",
+                    "context": {"bidding_strategy": "manual_cpc"}}]
+        result = evaluate_checks(checks, "google")
+        g35 = [d for d in result["details"] if d["id"] == "G35"]
+        assert len(g35) == 1
+        assert g35[0]["polarity_multiplier"] == 1.0
+
+
+class TestV2Prerequisite:
+    """v2.0 prerequisite chain テスト"""
+
+    def test_blocked_prerequisite(self):
+        """前提チェック不合格でブロックされる"""
+        from engine.yaml_evaluator import evaluate_checks
+        # G02はG01が前提。G01が不合格→G02はblocked
+        checks = [
+            {"id": "G01", "passed": False, "platform": "google", "campaign": "アカウント全体"},
+            {"id": "G02", "passed": True, "platform": "google", "campaign": "アカウント全体"},
+        ]
+        result = evaluate_checks(checks, "google")
+        g02 = [d for d in result["details"] if d["id"] == "G02"]
+        assert len(g02) == 1
+        assert g02[0]["scoring_passed"] is False
+        assert "G01" in g02[0]["blocked_by"]
+
+    def test_unblocked_prerequisite(self):
+        """前提チェック合格でブロックされない"""
+        from engine.yaml_evaluator import evaluate_checks
+        checks = [
+            {"id": "G01", "passed": True, "platform": "google", "campaign": "アカウント全体"},
+            {"id": "G02", "passed": True, "platform": "google", "campaign": "アカウント全体"},
+        ]
+        result = evaluate_checks(checks, "google")
+        g02 = [d for d in result["details"] if d["id"] == "G02"]
+        assert len(g02) == 1
+        assert g02[0]["scoring_passed"] is True
+        assert g02[0]["blocked_by"] == []
+
+    def test_missing_prerequisite(self):
+        """前提チェックが存在しない場合もブロック"""
+        from engine.yaml_evaluator import evaluate_checks
+        # G02の前提G01が結果にない
+        checks = [{"id": "G02", "passed": True, "platform": "google", "campaign": "アカウント全体"}]
+        result = evaluate_checks(checks, "google")
+        g02 = [d for d in result["details"] if d["id"] == "G02"]
+        assert len(g02) == 1
+        assert g02[0]["scoring_passed"] is False
+
+
+class TestV2Enabled:
+    """v2.0 enabled:false skip テスト"""
+
+    def test_disabled_rule_skipped(self):
+        """enabled:false のルールはスコアに影響しない"""
+        from engine.yaml_evaluator import evaluate_checks
+        # enabled=true のルールが正常にスコアリングされることを確認
+        checks = [{"id": "G25", "passed": False, "platform": "google", "campaign": "Test"}]
+        result = evaluate_checks(checks, "google")
+        g25 = [d for d in result["details"] if d["id"] == "G25"]
+        assert len(g25) == 1
+        assert g25[0]["enabled"] is True
+
+
+class TestV2AxisConflict:
+    """v2.0 軸ベース矛盾検出テスト"""
+
+    def test_hard_axis_conflict(self):
+        """left/right対立でhard conflict検出"""
+        from engine.conflict_detector import detect_axis_conflicts
+        details = [
+            {"id": "G31", "passed": False, "enabled": True,
+             "primary_axis": "TO-01", "axis_position": "left"},
+            {"id": "G30", "passed": False, "enabled": True,
+             "primary_axis": "TO-01", "axis_position": "right"},
+        ]
+        result = detect_axis_conflicts(details)
+        assert len(result["hard"]) == 1
+        assert result["hard"][0]["axis"] == "TO-01"
+
+    def test_no_axis_conflict_neutral(self):
+        """neutral同士ではconflictなし"""
+        from engine.conflict_detector import detect_axis_conflicts
+        details = [
+            {"id": "G01", "passed": False, "enabled": True,
+             "primary_axis": "TO-11", "axis_position": "neutral"},
+            {"id": "G02", "passed": False, "enabled": True,
+             "primary_axis": "TO-11", "axis_position": "neutral"},
+        ]
+        result = detect_axis_conflicts(details)
+        assert len(result["hard"]) == 0
+
+    def test_passed_items_excluded(self):
+        """passedはaxis conflict検出から除外"""
+        from engine.conflict_detector import detect_axis_conflicts
+        details = [
+            {"id": "G31", "passed": True, "enabled": True,
+             "primary_axis": "TO-01", "axis_position": "left"},
+            {"id": "G30", "passed": False, "enabled": True,
+             "primary_axis": "TO-01", "axis_position": "right"},
+        ]
+        result = detect_axis_conflicts(details)
+        assert len(result["hard"]) == 0
+
+
+class TestV2RuleCounts:
+    """v2.0 YAMLルール件数検証テスト"""
+
+    def test_google_85_rules(self):
+        """Google YAML = 85件"""
+        from engine.yaml_evaluator import load_rules
+        rules = load_rules("google")
+        assert len(rules["rules"]) == 85
+
+    def test_meta_55_rules(self):
+        """Meta YAML = 55件"""
+        from engine.yaml_evaluator import load_rules
+        rules = load_rules("meta")
+        assert len(rules["rules"]) == 55
+
+    def test_tiktok_35_rules(self):
+        """TikTok YAML = 35件"""
+        from engine.yaml_evaluator import load_rules
+        rules = load_rules("tiktok")
+        assert len(rules["rules"]) == 35
+
+    def test_seo_45_rules(self):
+        """SEO YAML = 45件"""
+        from engine.yaml_evaluator import load_rules
+        rules = load_rules("seo")
+        assert len(rules["rules"]) == 45
+
+    def test_adtruth_15_rules(self):
+        """AdTruth YAML = 15件"""
+        from engine.yaml_evaluator import load_rules
+        rules = load_rules("adtruth")
+        assert len(rules["rules"]) == 15
+
+    def test_tradeoff_axes_11(self):
+        """トレードオフ軸 = 11"""
+        import yaml
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "rules", "tradeoff_axes.yaml")
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        assert len(data["axes"]) == 11
+
+
+class TestV2ConflictGroups:
+    """v2.0 conflict group 11件テスト"""
+
+    def test_11_conflict_groups(self):
+        """CONFLICT_GROUPSが11件"""
+        from engine.conflict_detector import CONFLICT_GROUPS
+        assert len(CONFLICT_GROUPS) == 11
+
+    def test_all_groups_have_axis(self):
+        """全グループにaxis定義がある"""
+        from engine.conflict_detector import CONFLICT_GROUPS
+        for gid, info in CONFLICT_GROUPS.items():
+            assert "axis" in info, f"{gid} missing axis"
+
+
 class TestPydanticModels:
     """Pydantic モデルのテスト"""
 

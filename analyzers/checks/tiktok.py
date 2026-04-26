@@ -250,9 +250,11 @@ def _check_campaign_config(camps, t_t):
     return results
 
 
-def _r(check_id, passed, campaign, message, conflict_group=None):
+def _r(check_id, passed, campaign, message, conflict_group=None, context=None):
     """チェック結果 dict を構築"""
     r = {"id": check_id, "passed": passed, "campaign": campaign, "platform": "tiktok", "message": message}
     if conflict_group:
         r["conflict_group"] = conflict_group
+    if context:
+        r["context"] = context
     return r

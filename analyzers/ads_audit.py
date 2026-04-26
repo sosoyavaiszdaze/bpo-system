@@ -45,7 +45,7 @@ def run_audit(client_id, data, thresholds):
         severity_weights = thresholds.get("scoring", {}).get("severity_weights", {})
 
         # プラットフォーム別にチェック結果を分割（crossも含む）
-        platform_checks = {"google": [], "meta": [], "tiktok": [], "cross": []}
+        platform_checks = {"google": [], "meta": [], "tiktok": [], "cross": [], "adtruth": []}
         for check in all_check_results:
             p = check.get("platform", "unknown")
             if p in platform_checks:
@@ -144,6 +144,8 @@ def run_audit(client_id, data, thresholds):
         "platform_summary": platform_summary,
         "platform_scores": platform_scores,
         "budget_shares": budget_shares,
+        # v2.0: 全platform_detailsを統合（axis conflict検出用）
+        "all_details": [d for details in platform_details.values() for d in details],
     }
 
     log.info(f"[{client_id}] 監査完了: Score {score} ({grade}) / "

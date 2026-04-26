@@ -1,326 +1,1815 @@
-# Google Ads 監査ルール定義 (84項目)
-# カテゴリ重み: Conversion 25%, Wasted Spend 20%, Structure 15%, Creative 15%, Bidding 15%, Technical 10%
-
-version: "1.0"
+name: Google Ads Audit Rules v2.0
+version: '2.0'
 category_weights:
-  conversion_tracking: 0.25
-  wasted_spend: 0.20
-  structure: 0.15
-  creative: 0.15
-  bidding: 0.15
-  technical: 0.10
-
+  構造_設定: 0.31
+  クリエイティブ: 0.19
+  計測_トラッキング: 0.14
+  予算_入札: 0.09
+  キーワード: 0.09
+  フィード: 0.06
+  ターゲティング: 0.06
+  配信面: 0.02
+  計測: 0.02
+  判断ログ: 0.01
 rules:
-  # === Structure (G01-G12) ===
-  - id: G01
-    name: キャンペーン命名規則
-    category: structure
-    severity: low
-    weight: 1.0
-  - id: G03
-    name: STAG構造（1広告グループ≤10KW）
-    category: structure
-    severity: medium
-    weight: 1.0
-  - id: G04
-    name: キャンペーン数/目的の整合性
-    category: structure
-    severity: medium
-    weight: 1.0
-  - id: G05
-    name: ブランド/非ブランド分離
-    category: structure
-    severity: high
-    weight: 1.5
-  - id: G07
-    name: PMax + Search 重複チェック
-    category: structure
-    severity: high
-    weight: 1.5
-  - id: G08
-    name: 予算制限チェック（日予算）
-    category: bidding
-    severity: medium
-    weight: 1.0
-  - id: G09
-    name: 予算配分バランス
-    category: bidding
-    severity: medium
-    weight: 1.0
-  - id: G11
-    name: 地理ターゲティング People in 設定
-    category: structure
-    severity: high
-    weight: 1.5
-  - id: G12
-    name: ネットワーク設定（Search Partners除外）
-    category: structure
-    severity: medium
-    weight: 1.0
-
-  # === Negative KW / Search Terms (G13-G19, G-WS1) ===
-  - id: G13
-    name: 検索語句レビュー日
-    category: wasted_spend
-    severity: medium
-    weight: 1.0
-  - id: G14
-    name: ネガティブキーワードリスト存在
-    category: wasted_spend
-    severity: high
-    weight: 1.5
-  - id: G15
-    name: 共有ネガキーワードリスト
-    category: wasted_spend
-    severity: medium
-    weight: 1.0
-  - id: G16
-    name: 無駄クリック率
-    category: wasted_spend
-    severity: critical
-    weight: 2.0
-  - id: G17
-    name: Broad Match + Manual CPC 組合せ
-    category: wasted_spend
-    severity: high
-    weight: 1.5
-  - id: G-WS1
-    name: ゼロCV キーワード（コスト発生）
-    category: wasted_spend
-    severity: high
-    weight: 1.5
-
-  # === KW / QS (G20-G25, G-KW1-KW2) ===
-  - id: G20
-    name: Quality Score 平均
-    category: creative
-    severity: high
-    weight: 1.5
-  - id: G21
-    name: QS≤3 比率
-    category: creative
-    severity: critical
-    weight: 2.0
-  - id: G22
-    name: Expected CTR Below Average 比率
-    category: creative
-    severity: high
-    weight: 1.5
-  - id: G23
-    name: Ad Relevance Below Average 比率
-    category: creative
-    severity: high
-    weight: 1.5
-  - id: G24
-    name: LP Experience Below Average 比率
-    category: creative
-    severity: high
-    weight: 1.5
-  - id: G-KW1
-    name: ゼロインプレッション KW
-    category: wasted_spend
-    severity: medium
-    weight: 1.0
-
-  # === Ads / Assets (G26-G35, G-AD1-AD2) ===
-  - id: G26
-    name: RSA数チェック（広告グループあたり）
-    category: creative
-    severity: medium
-    weight: 1.0
-  - id: G27
-    name: RSA ヘッドライン数（≥8推奨）
-    category: creative
-    severity: medium
-    weight: 1.0
-  - id: G28
-    name: RSA 説明文数（≥4推奨）
-    category: creative
-    severity: medium
-    weight: 1.0
-  - id: G29
-    name: Ad Strength チェック
-    category: creative
-    severity: high
-    weight: 1.5
-  - id: G31
-    name: PMax アセット密度（≥20画像/≥5ロゴ/≥5動画）
-    category: creative
-    severity: high
-    weight: 1.5
-  - id: G32
-    name: ネイティブ動画有無
-    category: creative
-    severity: medium
-    weight: 1.0
-
-  # === Bidding / Budget (G36-G41) ===
-  - id: G36
-    name: Smart Bidding 設定
-    category: bidding
-    severity: medium
-    weight: 1.0
-  - id: G37
-    name: 目標CPA/ROAS 妥当性
-    category: bidding
-    severity: high
-    weight: 1.5
-  - id: G38
-    name: 学習フェーズ率
-    category: bidding
-    severity: high
-    weight: 1.5
-  - id: G39
-    name: 予算制約（Limited by budget）
-    category: bidding
-    severity: critical
-    weight: 2.0
-  - id: G40
-    name: Manual CPC 正当性
-    category: bidding
-    severity: medium
-    weight: 1.0
-  - id: G41
-    name: ポートフォリオ入札設定
-    category: bidding
-    severity: low
-    weight: 1.0
-
-  # === Conversion Tracking (G42-G49, G-CT1-CT3) ===
-  - id: G43
-    name: Enhanced Conversions 有効
-    category: conversion_tracking
-    severity: critical
-    weight: 2.0
-  - id: G45
-    name: Consent Mode v2 実装
-    category: conversion_tracking
-    severity: high
-    weight: 1.5
-  - id: G47
-    name: マクロ/マイクロ コンバージョン分離
-    category: conversion_tracking
-    severity: high
-    weight: 1.5
-  - id: G48
-    name: DDA（Data-Driven Attribution）設定
-    category: conversion_tracking
-    severity: critical
-    weight: 2.0
-  - id: G49
-    name: コンバージョン値割当
-    category: conversion_tracking
-    severity: medium
-    weight: 1.0
-  - id: G-CT2
-    name: GA4連携
-    category: conversion_tracking
-    severity: high
-    weight: 1.5
-
-  # === Extensions (G50-G61) ===
-  - id: G50
-    name: サイトリンク拡張
-    category: creative
-    severity: medium
-    weight: 1.0
-  - id: G51
-    name: コールアウト拡張
-    category: creative
-    severity: low
-    weight: 1.0
-  - id: G52
-    name: 構造化スニペット
-    category: creative
-    severity: low
-    weight: 1.0
-  - id: G53
-    name: 画像拡張
-    category: creative
-    severity: medium
-    weight: 1.0
-  - id: G56
-    name: オーディエンスセグメント
-    category: structure
-    severity: medium
-    weight: 1.0
-  - id: G57
-    name: Customer Match
-    category: structure
-    severity: medium
-    weight: 1.0
-  - id: G58
-    name: プレースメント除外
-    category: wasted_spend
-    severity: medium
-    weight: 1.0
-  - id: G59
-    name: LP速度
-    category: technical
-    severity: high
-    weight: 1.5
-  - id: G60
-    name: LP関連性
-    category: technical
-    severity: medium
-    weight: 1.0
-
-  # === PMax Extended (G-PM1-PM6) ===
-  - id: G-PM1
-    name: PMax オーディエンスシグナル
-    category: structure
-    severity: high
-    weight: 1.5
-  - id: G-PM2
-    name: PMax Ad Strength
-    category: creative
-    severity: high
-    weight: 1.5
-  - id: G-PM3
-    name: PMax ブランドカニバリゼーション
-    category: wasted_spend
-    severity: critical
-    weight: 2.0
-    conflict_group: exclude_vs_opportunity
-  - id: G-PM4
-    name: PMax 検索テーマ
-    category: structure
-    severity: medium
-    weight: 1.0
-  - id: G-PM5
-    name: PMax ネガティブKW（アカウントレベル）
-    category: wasted_spend
-    severity: high
-    weight: 1.5
-  - id: G-PM6
-    name: PMax ブランドKW除外
-    category: wasted_spend
-    severity: high
-    weight: 1.5
-
-  # === AI Max / Demand Gen / CTV ===
-  - id: G-AI1
-    name: AI Max 評価
-    category: technical
-    severity: medium
-    weight: 1.0
-  - id: G-DG1
-    name: Demand Gen 画像+動画
-    category: creative
-    severity: medium
-    weight: 1.0
-  - id: G-DG2
-    name: VAC→Demand Gen 移行
-    category: technical
-    severity: medium
-    weight: 1.0
-  - id: G-DG3
-    name: フリークエンシーキャップ
-    category: wasted_spend
-    severity: medium
-    weight: 1.0
-  - id: G-CTV1
-    name: CTV Floodlight制限
-    category: technical
-    severity: low
-    weight: 1.0
+- id: G01
+  name: コンバージョン重複計測
+  category: 計測_トラッキング
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts:
+  - G02
+  - G06
+  dependencies:
+  - G11
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 計測の正しさは全運用判断の前提。最優先項目
+  enabled: true
+- id: G02
+  name: コンバージョンカテゴリ設定
+  category: 計測_トラッキング
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: preserve
+  prerequisite:
+  - G01
+  conflicts: []
+  dependencies:
+  - G06
+  - G11
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ポジ/ネガ両方のシグナルを学習に与える土台
+  enabled: true
+- id: G03
+  name: 拡張コンバージョン実装状況
+  category: 計測_トラッキング
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-02
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G01
+  conflicts: []
+  dependencies:
+  - G11
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 計測精度向上 = 学習シグナル精度向上
+  enabled: true
+- id: G04
+  name: GA4連携状態
+  category: 計測_トラッキング
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-11
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G01
+  conflicts: []
+  dependencies:
+  - G09
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 外部シグナルの取り込み土台
+  enabled: true
+- id: G05
+  name: タグ発火エラー
+  category: 計測_トラッキング
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer3
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G01-G10全て
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: G01-10の前提となる物理的な発火確認
+  enabled: true
+- id: G06
+  name: コンバージョン価値設定
+  category: 計測_トラッキング
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis: TO-03
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G01
+  - G02
+  conflicts: []
+  dependencies:
+  - G11(tROAS)
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: tROAS運用の前提条件
+  enabled: true
+- id: G07
+  name: クロスデバイスコンバージョン
+  category: 計測_トラッキング
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis: null
+  axis_position: neutral
+  polarity: preserve
+  prerequisite:
+  - G01
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ポジティブシグナルの取りこぼし防止
+  enabled: true
+- id: G08
+  name: データドリブンアトリビューション
+  category: 計測_トラッキング
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G01
+  - G04
+  conflicts: []
+  dependencies:
+  - G11
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: シグナル評価の基準軸そのもの
+  enabled: true
+- id: G09
+  name: オーディエンスリスト同期
+  category: 計測_トラッキング
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G04
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ファーストパーティデータをシグナルとして注入
+  enabled: true
+- id: G10
+  name: オフラインコンバージョンインポート
+  category: 計測_トラッキング
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis: TO-10
+  axis_position: neutral
+  polarity: preserve
+  prerequisite:
+  - G01
+  conflicts: []
+  dependencies:
+  - G11
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: B2B長期CVを学習に与える
+  enabled: true
+- id: G11
+  name: 入札戦略と目標値の整合
+  category: 予算_入札
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-03
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G01
+  - G02
+  conflicts:
+  - G14
+  dependencies:
+  - G12
+  - G44
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: TO-03の中核。tCPA/tMaxConv選択の妥当性
+  enabled: true
+- id: G12
+  name: 学習フェーズ滞留
+  category: 予算_入札
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-10
+  secondary_axis: TO-03
+  axis_position: neutral
+  polarity: preserve
+  prerequisite:
+  - G11
+  - G13
+  - G14
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 学習未完了 = 短期判断を急いで長期最適化を毀損
+  enabled: true
+- id: G13
+  name: 予算制限による機会損失
+  category: 予算_入札
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-09
+  secondary_axis: TO-03
+  axis_position: neutral
+  polarity: budget_first
+  prerequisite:
+  - G11
+  conflicts: []
+  dependencies:
+  - G44
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: TO-09の中核。Budget Lost先行解消
+  enabled: true
+- id: G14
+  name: 入札戦略の頻繁な変更
+  category: 予算_入札
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-10
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: preserve
+  prerequisite:
+  - G11
+  conflicts:
+  - G11
+  dependencies:
+  - G12
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 短期判断の積み重ねが長期学習を破壊
+  enabled: true
+- id: G15
+  name: 共有予算の適切性
+  category: 予算_入札
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-09
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G13
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: Budget Lost解消の手段の一つ
+  enabled: true
+- id: G16
+  name: 季節性調整の設定
+  category: 予算_入札
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-11
+  secondary_axis: TO-10
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G11
+  conflicts:
+  - G14
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 計画的な人的介入として正当
+  enabled: true
+- id: G17
+  name: キャンペーンタイプの目的一致
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G39
+  - G40
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 1コンテンツ1AG原則の上位概念
+  enabled: true
+- id: G18
+  name: 広告スケジュール最適化
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: TO-03
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G11
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 頻度の幅(時間)制御。自動入札時は不要な場合多し
+  enabled: true
+- id: G19
+  name: デバイス別入札調整
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: TO-03
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G11
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 要再定義
+  redesign_note: 自動入札時は調整比は無効。tCPA調整比として動作
+  enabled: true
+- id: G20
+  name: 地域入札調整
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: TO-09
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G11
+  conflicts: []
+  dependencies:
+  - G21
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ネガティブシグナル(低パフォ地域)の保持
+  enabled: true
+- id: G21
+  name: 除外地域の適切性
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G20
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 明確に商圏外なら除外
+  enabled: true
+- id: G22
+  name: 広告表示オプションの網羅
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G34
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 目立ち度向上 = pCTR向上 = Ad Rank向上
+  enabled: true
+- id: G23
+  name: ポリシー違反・不承認
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 配信前提条件のチェック
+  enabled: true
+- id: G24
+  name: キャンペーン/広告グループ停止忘れ
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 意図のない予算消費を防ぐ
+  enabled: true
+- id: G25
+  name: ネーミングルール整合
+  category: 構造_設定
+  severity: low
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 分析時の障害除去
+  enabled: true
+- id: G26
+  name: 品質スコア低下キーワード
+  category: キーワード
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-04
+  secondary_axis: TO-05
+  axis_position: neutral
+  polarity: monitor_only
+  prerequisite: []
+  conflicts:
+  - G28
+  - G35
+  dependencies:
+  - G26-NEW1
+  - G26-NEW2
+  conflict_group: null
+  yonemitsu_alignment: 概念的に問題
+  redesign_note: '重要: 米満氏noteによれば品質スコアはAd Rank算出に使われない結果指標。停止判断の根拠にしない。モニタリングのみ'
+  enabled: true
+- id: G27
+  name: ネガティブキーワード不足
+  category: キーワード
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-02
+  secondary_axis: TO-05
+  axis_position: neutral
+  polarity: preserve
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G28
+  - G29
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ネガティブシグナルの保持は学習有意差を高める
+  enabled: true
+- id: G28
+  name: 検索語句レポート未反映
+  category: キーワード
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-05
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: open
+  prerequisite:
+  - G27
+  conflicts: []
+  dependencies:
+  - G27
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: クエリ→KW追加→可視化のサイクル
+  enabled: true
+- id: G29
+  name: マッチタイプの偏り
+  category: キーワード
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-05
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: open
+  prerequisite:
+  - G11
+  - G27
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 自動入札+除外整備済みなら部分一致(インテントマッチ)推奨
+  enabled: true
+- id: G30
+  name: 重複キーワード
+  category: キーワード
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-01
+  secondary_axis: TO-05
+  axis_position: right
+  polarity: aggregate
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G39
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 細分化由来の自社競合
+  enabled: true
+- id: G31
+  name: ブランドKWと一般KWの混在
+  category: キーワード
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-01
+  secondary_axis: TO-04
+  axis_position: left
+  polarity: separate
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 評価軸が異なるので分離が正しい
+  enabled: true
+- id: G32
+  name: 低インプレッションKW
+  category: キーワード
+  severity: low
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-05
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: preserve
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 要再定義
+  redesign_note: 削除でなく分析ノイズ低減策へ。低IMP=ネガティブシグナル候補
+  enabled: true
+- id: G33
+  name: 競合KWの露出シェア
+  category: キーワード
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-09
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G44
+  - G45
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: オークションインサイト活用
+  enabled: true
+- id: G34
+  name: RSA広告強度
+  category: クリエイティブ
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G37
+  - G38
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 短い見出し x 多バリエーションを評価
+  enabled: true
+- id: G35
+  name: 3x Kill Rule違反
+  category: クリエイティブ
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-07
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: context_dependent
+  prerequisite:
+  - G11
+  conflicts:
+  - G34
+  dependencies:
+  - G26-NEW1
+  conflict_group: null
+  yonemitsu_alignment: 要再定義
+  redesign_note: '重要: 自動入札時は止めずに編集。手動入札時のみ停止検討。文脈依存'
+  enabled: true
+- id: G36
+  name: 広告文の重複
+  category: クリエイティブ
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: TO-08
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ABテスト機会と統計的有意差の確保
+  enabled: true
+- id: G37
+  name: 見出し・説明文数
+  category: クリエイティブ
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G34
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: バリエーション最大化の前提
+  enabled: true
+- id: G38
+  name: ピン留め過剰
+  category: クリエイティブ
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G34
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: システム最適化の阻害要因
+  enabled: true
+- id: G39
+  name: 広告グループあたりKW数
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-01
+  secondary_axis: TO-05
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G40
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 20KW超は過密。集約 or 細分化判断
+  enabled: true
+- id: G40
+  name: SKAG/STAG構造の妥当性
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-01
+  secondary_axis: TO-10
+  axis_position: right
+  polarity: aggregate
+  prerequisite: []
+  conflicts:
+  - G39
+  dependencies:
+  - G39
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: SKAGは粒度過剰でデータ希薄。集約推奨が妥当
+  enabled: true
+- id: G41
+  name: 入札単価上限の妥当性
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-03
+  secondary_axis: TO-09
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G11
+  conflicts: []
+  dependencies:
+  - G44
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 深度の天井で機会損失
+  enabled: true
+- id: G42
+  name: 検索パートナー配信
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-02
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ノイズ流入の除外判断
+  enabled: true
+- id: G43
+  name: 動的検索広告のターゲット
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-05
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G27
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: DSAは集約型。除外整備が前提
+  enabled: true
+- id: G44
+  name: インプレッションシェア上位損失率
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-09
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G13
+  conflicts: []
+  dependencies:
+  - G45
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: TO-09の中核。Budget/Ad Rank分解の入口
+  enabled: true
+- id: G45
+  name: 絶対トップIS損失率
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-09
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G44
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ページ最上部IS。米満氏が広告クリエイティブ評価軸として強調
+  enabled: true
+- id: G46
+  name: フィードエラー・警告
+  category: フィード
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: Shopping
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: Shopping配信の前提
+  enabled: true
+- id: G47
+  name: タイトル最適化
+  category: フィード
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Shopping
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 商品KW × 訴求要素のバランス
+  enabled: true
+- id: G48
+  name: 画像品質
+  category: フィード
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Shopping
+  detection_layer: Layer3
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ユーザー認知の前提
+  enabled: true
+- id: G49
+  name: 在庫切れ商品の配信
+  category: フィード
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Shopping
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-06
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: LP整合性の保証
+  enabled: true
+- id: G50
+  name: 価格競争力
+  category: フィード
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Shopping
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-04
+  secondary_axis: TO-09
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: Ad Rank的要因(競争力)
+  enabled: true
+- id: G51
+  name: 商品グループ細分化
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Shopping
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-01
+  secondary_axis: TO-10
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: Shoppingでも構造粒度のトレードオフ
+  enabled: true
+- id: G52
+  name: プロモーション拡張の設定
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Shopping
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 目立ち度向上
+  enabled: true
+- id: G53
+  name: ショッピング優先度設定
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Shopping
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-01
+  secondary_axis: TO-09
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts:
+  - G70
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: Standard vs PMAX重複の構造調停
+  enabled: true
+- id: G54
+  name: 低品質プレースメント除外
+  category: 配信面
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: GDN
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-02
+  secondary_axis: TO-05
+  axis_position: neutral
+  polarity: preserve
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ネガティブシグナル保持
+  enabled: true
+- id: G55
+  name: アプリ面除外設定
+  category: 配信面
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: GDN
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-02
+  secondary_axis: null
+  axis_position: neutral
+  polarity: preserve
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 誤クリック由来のノイズ除外
+  enabled: true
+- id: G56
+  name: ビューアビリティ
+  category: クリエイティブ
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: GDN
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 視認性の物理的測定
+  enabled: true
+- id: G57
+  name: オーディエンス拡張の挙動
+  category: ターゲティング
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: GDN
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-05
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 拡張は学習を促進 過拡張は無駄配信
+  enabled: true
+- id: G58
+  name: レスポンシブディスプレイ広告の素材数
+  category: クリエイティブ
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: GDN
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: RSA同様 バリエーション幅
+  enabled: true
+- id: G59
+  name: 動画完了率
+  category: クリエイティブ
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: YouTube
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G63
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 視聴維持 = pCTR/pVTR向上
+  enabled: true
+- id: G60
+  name: CPV効率
+  category: 予算_入札
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: YouTube
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-03
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G11
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 深度のCPV版
+  enabled: true
+- id: G61
+  name: オーディエンス適合性
+  category: ターゲティング
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: YouTube
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ブランドセーフティ
+  enabled: true
+- id: G62
+  name: 動画広告フォーマット混在
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: YouTube
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: TO-08
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 目的とフォーマットの整合
+  enabled: true
+- id: G63
+  name: 冒頭5秒のフック
+  category: クリエイティブ
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: YouTube
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 動画版の見出し相当
+  enabled: true
+- id: G64
+  name: アセットグループ複数化
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: P-MAX
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-01
+  secondary_axis: TO-10
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts:
+  - G65
+  - G67
+  dependencies:
+  - G73
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: PMAX内構造の粒度
+  enabled: true
+- id: G65
+  name: 画像アセット数
+  category: クリエイティブ
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: P-MAX
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-08
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G64
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: バリエーション幅
+  enabled: true
+- id: G66
+  name: 動画アセット自動生成
+  category: クリエイティブ
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: P-MAX
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: システム自動化に任せすぎるリスク
+  enabled: true
+- id: G67
+  name: 見出し・説明文のパターン数
+  category: クリエイティブ
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: P-MAX
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G64
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: テキスト版バリエーション幅
+  enabled: true
+- id: G68
+  name: オーディエンスシグナル設定
+  category: ターゲティング
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: P-MAX
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-02
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G09
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 学習初期値の人的設計
+  enabled: true
+- id: G69
+  name: URL拡張の設定
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: P-MAX
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: LP個別最適 vs 統一
+  enabled: true
+- id: G70
+  name: ブランドKW除外リスト
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: P-MAX
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-01
+  secondary_axis: TO-09
+  axis_position: left
+  polarity: separate
+  prerequisite: []
+  conflicts:
+  - G31
+  dependencies:
+  - G53
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: Search/PMAX重複防止
+  enabled: true
+- id: G71
+  name: 商品フィード連携
+  category: 構造_設定
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: P-MAX
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-11
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G46
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: PMAXのEC前提条件
+  enabled: true
+- id: G72
+  name: 除外オーディエンス
+  category: ターゲティング
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: P-MAX
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis: null
+  axis_position: neutral
+  polarity: preserve
+  prerequisite:
+  - G09
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: ネガティブシグナル
+  enabled: true
+- id: G73
+  name: アセットグループ別パフォーマンス分析
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: P-MAX
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-04
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G64
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: PMAX内ブラックボックスの可視化
+  enabled: true
+- id: G74
+  name: 縦型動画素材の有無
+  category: クリエイティブ
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Demand Gen
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: TO-06
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: プレースメント別フォーマット
+  enabled: true
+- id: G75
+  name: 入札戦略の適合性
+  category: 予算_入札
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Demand Gen
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-03
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G11
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 深度x頻度バランス
+  enabled: true
+- id: G76
+  name: 類似オーディエンス活用
+  category: ターゲティング
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: Demand Gen
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G09
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 学習シグナルの拡張
+  enabled: true
+- id: G77
+  name: カルーセル素材多様性
+  category: クリエイティブ
+  severity: low
+  weight: 1.0
+  platform: google
+  placement: Demand Gen
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-08
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: バリエーション幅
+  enabled: true
+- id: G78
+  name: インストールCV計測
+  category: 計測_トラッキング
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: App
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-11
+  secondary_axis: TO-02
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - G79
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: App前提条件
+  enabled: true
+- id: G79
+  name: アプリ内イベント最適化
+  category: 計測_トラッキング
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: App
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: preserve
+  prerequisite:
+  - G78
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: 深層イベントを学習に与える
+  enabled: true
+- id: G80
+  name: ディープリンク設定
+  category: 構造_設定
+  severity: medium
+  weight: 1.0
+  platform: google
+  placement: App
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: null
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 整合
+  redesign_note: LP-広告整合性のApp版
+  enabled: true
+- id: G26-NEW1
+  name: Ad Rank Lost原因分解 (新設)
+  category: クリエイティブ
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-04
+  secondary_axis: TO-09
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G44
+  conflicts: []
+  dependencies:
+  - G34
+  - G37
+  conflict_group: null
+  yonemitsu_alignment: 新設
+  redesign_note: '新設: G26を結果指標から原因変数に置き換え。pCTR低/CPC低/品質スコア低の3分解'
+  enabled: true
+- id: G26-NEW2
+  name: 推定CTR低文字列特定 (新設)
+  category: クリエイティブ
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-04
+  secondary_axis: TO-08
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G26-NEW1
+  conflicts: []
+  dependencies:
+  - G34
+  conflict_group: null
+  yonemitsu_alignment: 新設
+  redesign_note: '新設: 品質スコア構成要素の推定CTR低KW群から視認性課題の文字列を特定'
+  enabled: true
+- id: G45-NEW
+  name: ページ最上部/上部IS推移 (新設)
+  category: 計測
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: Search
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-09
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G44
+  conflicts: []
+  dependencies:
+  - G45
+  conflict_group: null
+  yonemitsu_alignment: 新設
+  redesign_note: '新設: 米満氏note06が強調する評価軸。競合動向と並べてモニタリング'
+  enabled: true
+- id: G81-NEW
+  name: トレードオフ判断ログ生成 (新設)
+  category: 判断ログ
+  severity: critical
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-10
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: preserve
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group: null
+  yonemitsu_alignment: 新設
+  redesign_note: '新設: Zynect独自の説明責任インフラ。月次レポートに搭載'
+  enabled: true
+- id: G82-NEW
+  name: オークションインサイト分析 (新設)
+  category: 計測
+  severity: high
+  weight: 1.0
+  platform: google
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: false
+  primary_axis: TO-09
+  secondary_axis: TO-04
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - G44
+  conflicts: []
+  dependencies:
+  - G45-NEW
+  conflict_group: null
+  yonemitsu_alignment: 新設
+  redesign_note: '新設: 競合の入札強化/参入を月次で切り分け'
+  enabled: true

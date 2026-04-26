@@ -11,21 +11,62 @@ log = logging.getLogger("bpo")
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
 
 CONFLICT_GROUPS = {
+    # v1.0 既存 (4グループ)
     "cpa_vs_volume": {
         "name": "CPA最小化 vs CV量最大化",
-        "description": "CPA を下げるとCV数が減る可能性",
+        "description": "CPA を下げるとCV数が減る可能性。目標CPAの厳格化と予算拡大の二律背反",
+        "axis": "TO-07",
     },
     "learning_vs_testing": {
         "name": "学習フェーズ安定 vs クリエイティブテスト",
         "description": "学習フェーズ維持にはCVを集約するが、テストには分散が必要",
+        "axis": "TO-04",
     },
     "precision_vs_reach": {
         "name": "詳細ターゲティング vs Advantage+ リーチ",
         "description": "精密ターゲティングとAI最適化リーチのトレードオフ",
+        "axis": "TO-03",
     },
     "exclude_vs_opportunity": {
         "name": "ネガKW除外 vs ロングテール機会",
         "description": "除外しすぎるとロングテールの機会を逃す",
+        "axis": "TO-05",
+    },
+    # v2.0 新規 (7グループ)
+    "segmentation_vs_consolidation": {
+        "name": "分割 vs 統合",
+        "description": "細分化は短期CPA改善に寄与するが、集約は学習データの蓄積と長期最適化に有利",
+        "axis": "TO-01",
+    },
+    "automation_vs_control": {
+        "name": "自動化 vs 手動制御",
+        "description": "自動入札・自動ターゲティングはスケールするが、人的介入による初期値設計が精度を左右する",
+        "axis": "TO-02",
+    },
+    "creative_volume_vs_quality": {
+        "name": "クリエイティブ量 vs 品質",
+        "description": "多バリエーション投入は学習を促進するが、品質管理コストとブランド一貫性のリスクが増大",
+        "axis": "TO-06",
+    },
+    "budget_efficiency_vs_opportunity": {
+        "name": "予算効率 vs 機会損失",
+        "description": "予算制限でCPA効率を保つか、予算拡大で機会損失を防ぐかの選択",
+        "axis": "TO-08",
+    },
+    "privacy_vs_measurement": {
+        "name": "プライバシー vs 計測精度",
+        "description": "iOS ATT等のプライバシー規制でCV計測が欠損するが、CAPI等の代替計測は実装コストが高い",
+        "axis": "TO-09",
+    },
+    "brand_vs_performance": {
+        "name": "ブランド vs パフォーマンス",
+        "description": "ブランド認知施策はCPAに寄与しにくいが、長期的なCVR・LTV向上に影響する",
+        "axis": "TO-10",
+    },
+    "concentration_vs_diversification": {
+        "name": "集中 vs 分散",
+        "description": "高パフォーマンスチャネルへの集中投資か、リスク分散のための媒体・配信面の多角化か",
+        "axis": "TO-11",
     },
 }
 
@@ -133,6 +174,13 @@ def _resolve_for_cpa(group):
         "learning_vs_testing": "学習フェーズ安定を優先: CV集約してCPA安定化",
         "precision_vs_reach": "精密ターゲティングを優先: Advantage+を制限",
         "exclude_vs_opportunity": "ネガKW除外を優先: 無駄クリック削減でCPA改善",
+        "segmentation_vs_consolidation": "集約を優先: CV集中で学習加速、CPA安定化",
+        "automation_vs_control": "自動入札を優先: tCPAで深度を制御",
+        "creative_volume_vs_quality": "品質を優先: 高CTRクリエイティブに集中してCPC低減",
+        "budget_efficiency_vs_opportunity": "効率を優先: 高CPA帯の予算を削減",
+        "privacy_vs_measurement": "計測精度を優先: CAPI実装でCV欠損を最小化",
+        "brand_vs_performance": "パフォーマンスを優先: 直接CV施策に集中",
+        "concentration_vs_diversification": "集中を優先: 高効率チャネルへ投資集約",
     }
     return resolutions.get(group, "CPA最小化方向で対応")
 
@@ -144,6 +192,13 @@ def _resolve_for_volume(group):
         "learning_vs_testing": "テスト優先: 新クリエイティブ投入でCV増加を狙う",
         "precision_vs_reach": "Advantage+リーチを優先: AI最適化で新規CV獲得",
         "exclude_vs_opportunity": "ロングテール機会を優先: 除外を最小限に",
+        "segmentation_vs_consolidation": "細分化を許容: ターゲット別にCV機会を最大化",
+        "automation_vs_control": "自動化を優先: tMaxConvで頻度最大化",
+        "creative_volume_vs_quality": "量を優先: 多バリエーション投入で学習促進",
+        "budget_efficiency_vs_opportunity": "機会損失を優先: 予算拡大でCV量確保",
+        "privacy_vs_measurement": "計測精度を優先: CV量の把握が前提",
+        "brand_vs_performance": "パフォーマンスを優先: CV最大化施策に集中",
+        "concentration_vs_diversification": "分散を優先: 複数チャネルでCV機会拡大",
     }
     return resolutions.get(group, "CV量最大化方向で対応")
 
@@ -155,8 +210,39 @@ def _resolve_for_roas(group):
         "learning_vs_testing": "学習安定を優先: 高ROASクリエイティブを維持",
         "precision_vs_reach": "バランス: 高ROASセグメントでのリーチ拡大",
         "exclude_vs_opportunity": "ROASベースで判断: 低ROAS検索語句のみ除外",
+        "segmentation_vs_consolidation": "ROASベースで判断: 高ROAS群は細分化維持、低ROAS群は集約",
+        "automation_vs_control": "tROASを優先: 価値ベースの自動最適化",
+        "creative_volume_vs_quality": "品質を優先: 高ROAS訴求を特定しスケール",
+        "budget_efficiency_vs_opportunity": "効率を優先: ROAS閾値以下の施策は停止",
+        "privacy_vs_measurement": "計測精度を優先: CV価値の正確な把握が前提",
+        "brand_vs_performance": "バランス: ブランド施策のLTV貢献をROASに組込み",
+        "concentration_vs_diversification": "集中を優先: 高ROASチャネルへの投資比率を上げる",
     }
     return resolutions.get(group, "ROAS目標方向で対応")
+
+
+def detect_axis_conflicts(audit_details):
+    """§7-2: 軸ベース矛盾検出 — axis_positionがleft/rightで対立する場合のみhard conflict"""
+    axis_groups = {}
+    for d in audit_details:
+        if d.get("passed") or not d.get("enabled", True):
+            continue
+        axis = d.get("primary_axis")
+        pos = d.get("axis_position", "neutral")
+        if axis and pos in ("left", "right"):
+            axis_groups.setdefault(axis, {"left": [], "right": []})
+            axis_groups[axis][pos].append(d)
+    hard = []
+    for axis, sides in axis_groups.items():
+        if sides["left"] and sides["right"]:
+            hard.append({
+                "type": "hard_axis_conflict",
+                "axis": axis,
+                "left_items": [d["id"] for d in sides["left"]],
+                "right_items": [d["id"] for d in sides["right"]],
+                "requires_resolution": True,
+            })
+    return {"hard": hard, "potential": []}
 
 
 def _save_overrides(conflicts):

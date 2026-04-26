@@ -1,0 +1,68 @@
+version: '2.0'
+axes:
+- id: TO-01
+  name: 構造の粒度
+  pole_left: 細分化
+  pole_right: 集約
+  criteria: 週1,000IMP未満なら集約・以上なら細分化維持。1コンテンツ1AG原則
+  source: Hagakure / GORIN / デッキp7 運用パラダイムシフト
+- id: TO-02
+  name: 学習シグナル
+  pole_left: ポジティブ強化
+  pole_right: ネガティブ保持
+  criteria: ネガティブも学習資源。安易な停止は学習を毀損する
+  source: Unlocking 03 機械学習 / siranui ep0
+- id: TO-03
+  name: 入札次元
+  pole_left: 頻度の幅
+  pole_right: 深度の強さ
+  criteria: tCPA=深度+頻度両方制御 / tMaxConv=頻度集中で深度自由
+  source: siranui ep4 入札概念
+- id: TO-04
+  name: 評価対象
+  pole_left: 品質スコア(結果)
+  pole_right: Ad Rank(原因)
+  criteria: 品質スコアはモニタリング指標。原因はpCTR・関連性・LP利便性
+  source: Unlocking 05 品質スコアの誤解
+- id: TO-05
+  name: KW運用
+  pole_left: KW追加で可視化
+  pole_right: 学習データ集約
+  criteria: 自動入札時代はKW追加=文字列レベル可視化目的のみ
+  source: Unlocking 03, 05
+- id: TO-06
+  name: クリエイティブ-LP
+  pole_left: 広告統一
+  pole_right: LP個別最適
+  criteria: 1AG=1LP原則。複数LPは広告カスタマイザで吸収
+  source: Unlocking 08 / Hagakure原典
+- id: TO-07
+  name: クリエイティブ管理
+  pole_left: 負け止め
+  pole_right: 学習継続
+  criteria: 自動入札時は止めずに編集。手動入札時のみ停止検討
+  source: Unlocking 07
+- id: TO-08
+  name: 広告フォーマット
+  pole_left: 訴求網羅
+  pole_right: バリエーション幅
+  criteria: RSA/RDAは短い見出しでバリエーション重視
+  source: Unlocking 08
+- id: TO-09
+  name: IS Lost構造
+  pole_left: Budget最適化
+  pole_right: Ad Rank最適化
+  criteria: Budget Lost解消後にAd Rank Lostが顕在化する順序がある
+  source: デッキp36 / Unlocking 02
+- id: TO-10
+  name: 時間軸
+  pole_left: 短期効率
+  pole_right: 長期学習
+  criteria: 細分化は短期CPA改善、集約は長期学習蓄積
+  source: デッキp7 運用パラダイムシフト
+- id: TO-11
+  name: コントロール権
+  pole_left: 人的最適化
+  pole_right: システム自動化
+  criteria: 施策は最終的に自動化に乗せる前提で初期値を人間が設計
+  source: デッキ Automation Process
