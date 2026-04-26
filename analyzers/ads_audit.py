@@ -36,12 +36,26 @@ def run_audit(client_id, data, thresholds):
 
 
 
-    # === 2. YAML ルール評価 + スコアリング ===
+    # === 2. YAML ルール評価 + スコアリング（3層エラーハンドリング） ===
     budget_shares = {}
+    platform_scores = {}
+    platform_details = {}
+    platform_errors = {}
+
+    # Layer 1: モジュールインポート
     try:
         from engine.yaml_evaluator import evaluate_checks
         from engine.scorer import calc_platform_score, calc_cross_platform_score, calc_budget_shares
+    except ImportError as e:
+        log.error(f"エンジンモジュールのインポート失敗: {e}")
+        failed = [c for c in all_check_results if not c.get("passed", True)]
+        total = len(all_check_results) if all_check_results else 1
+        score = round((1 - len(failed) / total) * 100, 1) if total > 0 else 0
+        grade = _fallback_grade(score)
+        # 以降の処理をスキップして結果整理へ
+        evaluate_checks = None
 
+    if evaluate_checks:
         severity_weights = thresholds.get("scoring", {}).get("severity_weights", {})
 
         # プラットフォーム別にチェック結果を分割（crossも含む）
@@ -55,30 +69,33 @@ def run_audit(client_id, data, thresholds):
             else:
                 platform_checks["cross"].append(check)
 
-        platform_scores = {}
-        platform_details = {}
+        # Layer 2: プラットフォーム別評価（1つ失敗しても他は続行）
         for platform, checks in platform_checks.items():
-            if checks:
+            if not checks:
+                continue
+            try:
                 eval_result = evaluate_checks(checks, platform, severity_weights)
                 ps = calc_platform_score(eval_result)
                 platform_scores[platform] = ps
                 platform_details[platform] = eval_result.get("details", [])
+            except Exception as e:
+                log.warning(f"[{platform}] 評価エラー (スキップ): {e}", exc_info=True)
+                platform_errors[platform] = str(e)
 
-        # 予算シェア加重平均
-        budget_shares = calc_budget_shares(data)
-        overall = calc_cross_platform_score(platform_scores, budget_shares)
-        score = overall.get("score", 0)
-        grade = overall.get("grade", "F")
-
-    except Exception as e:
-        log.warning(f"スコアリングエラー (フォールバック使用): {e}")
-        # フォールバック: 簡易スコアリング
-        failed = [c for c in all_check_results if not c.get("passed", True)]
-        total = len(all_check_results) if all_check_results else 1
-        score = round((1 - len(failed) / total) * 100, 1) if total > 0 else 0
-        grade = _fallback_grade(score)
-        platform_scores = {}
-        platform_details = {}
+        # Layer 3: クロスプラットフォーム集計
+        try:
+            budget_shares = calc_budget_shares(data)
+            overall = calc_cross_platform_score(platform_scores, budget_shares)
+            score = overall.get("score", 0)
+            grade = overall.get("grade", "F")
+        except Exception as e:
+            log.warning(f"クロスプラットフォーム集計エラー: {e}", exc_info=True)
+            if platform_scores:
+                scores = [ps.get("score", 0) for ps in platform_scores.values()]
+                score = round(sum(scores) / len(scores), 1)
+                grade = _fallback_grade(score)
+            else:
+                score, grade = 0, "F"
 
     # === 3. 結果整理 ===
     # YAML ルール定義のseverityをcheck IDごとにlookup（最初の一致を使用）
@@ -146,7 +163,29 @@ def run_audit(client_id, data, thresholds):
         "budget_shares": budget_shares,
         # v2.0: 全platform_detailsを統合（axis conflict検出用）
         "all_details": [d for details in platform_details.values() for d in details],
+        "platform_errors": platform_errors,
     }
+
+    # v2.0: 軸ベース矛盾検出
+    try:
+        from engine.conflict_detector import detect_axis_conflicts
+        result["axis_conflicts"] = detect_axis_conflicts(result.get("all_details", []))
+    except Exception as e:
+        log.warning(f"軸矛盾検出エラー: {e}")
+        result["axis_conflicts"] = {"hard": [], "potential": []}
+
+    # v2.0: ルールカバレッジ分析
+    try:
+        from engine.rule_coverage import analyze_coverage
+        coverage = analyze_coverage(all_check_results)
+        result["rule_coverage"] = coverage
+        if coverage["coverage_percent"] < 80:
+            result["score_note"] = (
+                f"注意: ルールカバレッジ {coverage['coverage_percent']}%。"
+                f"未実装の{len(coverage['uncovered_critical'])}件のcriticalルールがあります"
+            )
+    except Exception as e:
+        log.warning(f"カバレッジ分析エラー: {e}")
 
     log.info(f"[{client_id}] 監査完了: Score {score} ({grade}) / "
              f"チェック {result['total_checks']}件 / 問題 {result['failed_checks']}件")

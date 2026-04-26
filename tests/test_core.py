@@ -834,14 +834,14 @@ class TestV2Polarity:
         assert g28[0]["polarity_multiplier"] == 0.5
 
     def test_context_dependent_auto_bidding(self):
-        """context_dependent + 自動入札 → multiplier 0.0"""
+        """context_dependent + 自動入札 → multiplier 0.05（ほぼゼロだが評価済みとして記録）"""
         from engine.yaml_evaluator import evaluate_checks
         checks = [{"id": "G35", "passed": False, "platform": "google", "campaign": "Test",
                     "context": {"bidding_strategy": "target_cpa"}}]
         result = evaluate_checks(checks, "google")
         g35 = [d for d in result["details"] if d["id"] == "G35"]
         assert len(g35) == 1
-        assert g35[0]["polarity_multiplier"] == 0.0
+        assert g35[0]["polarity_multiplier"] == 0.05
 
     def test_context_dependent_manual_bidding(self):
         """context_dependent + 手動入札 → multiplier 1.0"""

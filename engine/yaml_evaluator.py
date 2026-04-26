@@ -67,6 +67,9 @@ def evaluate_checks(check_results, platform, severity_weights=None):
         if k not in category_weights:
             category_weights[k] = v
 
+    # インデックス構築（prerequisite/budget_first のO(1)ルックアップ用）
+    result_index = _build_result_index(check_results)
+
     weighted_pass = 0.0
     weighted_total = 0.0
     by_category = {}
@@ -101,7 +104,7 @@ def evaluate_checks(check_results, platform, severity_weights=None):
 
         # §5: polarity multiplier
         polarity = rule.get("polarity", "neutral")
-        polarity_mult = _resolve_polarity(polarity, check, check_results)
+        polarity_mult = _resolve_polarity(polarity, check, check_results, result_index)
 
         # 基本重み計算
         w = calc_check_weight(rule, severity_weights)
@@ -110,7 +113,7 @@ def evaluate_checks(check_results, platform, severity_weights=None):
         base_effective_w = w * cat_w
 
         # §6: prerequisite 評価
-        is_blocked, blocked_by_list = _evaluate_prerequisite(rule, check_results, check)
+        is_blocked, blocked_by_list = _evaluate_prerequisite(rule, check_results, check, result_index)
 
         if is_blocked:
             effective_w = base_effective_w * 0.3
@@ -166,12 +169,12 @@ def evaluate_checks(check_results, platform, severity_weights=None):
 # §5: Polarity Resolution
 # ========================================
 
-def _resolve_polarity(polarity, check_result, all_results):
+def _resolve_polarity(polarity, check_result, all_results, result_index=None):
     """polarity文字列をmultiplierに解決"""
     if polarity == "context_dependent":
         return _resolve_context_dependent(check_result)
     if polarity == "budget_first":
-        return _resolve_budget_first(check_result, all_results)
+        return _resolve_budget_first(check_result, all_results, result_index)
     return POLARITY_MULTIPLIERS.get(polarity, 1.0)
 
 
@@ -188,24 +191,25 @@ def _get_bidding_strategy(check_result):
 
 
 def _resolve_context_dependent(check_result):
-    """§5-2: 自動入札→0.0, 手動入札→1.0, 不明→0.5"""
+    """§5-2: 自動入札→0.05(ほぼゼロだが評価済みとして可視化), 手動入札→1.0, 不明→0.5"""
     bidding = _get_bidding_strategy(check_result)
     if bidding in AUTO_BIDDING:
-        return 0.0
+        return 0.05
     elif bidding in MANUAL_BIDDING:
         return 1.0
     else:
         return 0.5
 
 
-def _resolve_budget_first(check_result, all_results):
+def _resolve_budget_first(check_result, all_results, result_index=None):
     """§5-3: G39(予算制約) の結果を参照"""
     campaign = check_result.get("campaign", "")
     platform = check_result.get("platform", "")
-    g39 = _find_result_scoped(all_results, "G39", platform, campaign)
+    lookup = _find_result_indexed if result_index else _find_result_scoped
+    source = result_index if result_index else all_results
+    g39 = lookup(source, "G39", platform, campaign)
     if g39 is None:
-        # G13(予算制限)もfallbackとして確認
-        g13 = _find_result_scoped(all_results, "G13", platform, campaign)
+        g13 = lookup(source, "G13", platform, campaign)
         if g13 is not None and not g13.get("passed", True):
             return 0.3
         return 0.5
@@ -231,18 +235,47 @@ def _find_result_scoped(all_results, check_id, platform, campaign):
     return None
 
 
-def _evaluate_prerequisite(rule, all_results, check_result):
+def _evaluate_prerequisite(rule, all_results, check_result, result_index=None):
     """§6-2: prerequisite 評価 — ブロックされていれば (True, [blocked_ids])"""
     prereqs = rule.get("prerequisite", [])
     if not prereqs:
         return False, []
     campaign = check_result.get("campaign", "")
     platform = check_result.get("platform", "")
+    lookup = _find_result_indexed if result_index else _find_result_scoped
+    source = result_index if result_index else all_results
     blocked_by = []
     for prereq_id in prereqs:
-        prereq = _find_result_scoped(all_results, prereq_id, platform, campaign)
+        prereq = lookup(source, prereq_id, platform, campaign)
         if prereq is None:
             blocked_by.append(prereq_id)
         elif not prereq.get("passed", True):
             blocked_by.append(prereq_id)
     return len(blocked_by) > 0, blocked_by
+
+
+def _build_result_index(check_results):
+    """check_id + platform + campaign でインデックス辞書を構築 (O(n)で1回)"""
+    index = {}
+    for r in check_results:
+        cid = r.get("id", "")
+        plat = r.get("platform", "")
+        camp = r.get("campaign", "")
+        index.setdefault((cid, plat, camp), r)
+        if camp == "アカウント全体":
+            index.setdefault((cid, plat, "__account__"), r)
+    return index
+
+
+def _find_result_indexed(index, check_id, platform, campaign):
+    """インデックスからO(1)で結果を引く"""
+    r = index.get((check_id, platform, campaign))
+    if r:
+        return r
+    r = index.get((check_id, platform, "__account__"))
+    if r:
+        return r
+    r = index.get((check_id, platform, "アカウント全体"))
+    if r:
+        return r
+    return None
