@@ -111,7 +111,7 @@ def send_tradeoff_question(client_id, conflict, notif_cfg):
     try:
         data = json.dumps({"blocks": blocks}).encode("utf-8")
         req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10):
             log.info(f"[{client_id}] トレードオフ質問送信完了")
     except Exception as e:
         log.error(f"[{client_id}] トレードオフ質問送信失敗: {e}")

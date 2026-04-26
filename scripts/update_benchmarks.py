@@ -33,7 +33,7 @@ def update_benchmarks():
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
 
-    log.info(f"benchmarks.yaml 更新完了")
+    log.info("benchmarks.yaml 更新完了")
 
 
 if __name__ == "__main__":

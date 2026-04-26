@@ -40,11 +40,16 @@ def run_seo_audit(client_id, seo_cfg, thresholds=None):
     max_p = max(len(pages) * 15 + 20, 60)
     score = max(0, min(100, round(100 - (penalty / max_p * 100))))
 
-    if score >= 90: grade = "A"
-    elif score >= 75: grade = "B"
-    elif score >= 60: grade = "C"
-    elif score >= 40: grade = "D"
-    else: grade = "F"
+    if score >= 90:
+        grade = "A"
+    elif score >= 75:
+        grade = "B"
+    elif score >= 60:
+        grade = "C"
+    elif score >= 40:
+        grade = "D"
+    else:
+        grade = "F"
 
     result = {
         "score": score, "grade": grade,
@@ -330,13 +335,13 @@ def _analyze_page(url, seo_t):
     # S32: 内部リンク数
     internal_links = re.findall(r'href=["\'"](/[^"\']*|https?://[^"\']*)', html or "", re.IGNORECASE)
     domain = url.split("//")[1].split("/")[0] if "//" in url else ""
-    internal = [l for l in internal_links if l.startswith("/") or domain in l]
+    internal = [link for link in internal_links if link.startswith("/") or domain in link]
     if len(internal) < 3:
         issues.append({"check_id": "S32", "severity": "medium", "page": url,
             "message": f"内部リンク数 {len(internal)} — 少なすぎる", "action": "関連ページへの内部リンクを追加"})
 
     # S33: 外部リンクnofollow
-    external = [l for l in internal_links if not l.startswith("/") and domain not in l and l.startswith("http")]
+    external = [link for link in internal_links if not link.startswith("/") and domain not in link and link.startswith("http")]
     nofollow_links = len(re.findall(r'rel=["\'"][^"\']*nofollow', html or "", re.IGNORECASE))
     if external and nofollow_links == 0 and len(external) > 5:
         issues.append({"check_id": "S33", "severity": "low", "page": url,

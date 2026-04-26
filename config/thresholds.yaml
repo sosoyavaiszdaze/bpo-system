@@ -23,6 +23,14 @@ common:
   cpa_spike_pct: 20
   ctr_drop_pct: 15
   cpm_spike_pct: 25
+  impression_drop_pct: 50
+  cost_revenue_ratio_max: 1.0
+  max_active_campaigns: 20
+  budget_utilization_high: 0.95
+  budget_utilization_low: 0.3
+  cvr_min: 0.5
+  cvr_floor_pct: 0.5
+  roas_floor_pct: 50
 
 google:
   search:

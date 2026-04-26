@@ -172,11 +172,16 @@ def run_fraud_audit(client_id, data, thresholds=None):
     penalty = critical * 8 + high * 4 + medium * 2
     score = max(0, min(100, 100 - penalty))
 
-    if score >= 90: grade, risk = "A", "low"
-    elif score >= 70: grade, risk = "B", "moderate"
-    elif score >= 50: grade, risk = "C", "elevated"
-    elif score >= 30: grade, risk = "D", "high"
-    else: grade, risk = "F", "critical"
+    if score >= 90:
+        grade, risk = "A", "low"
+    elif score >= 70:
+        grade, risk = "B", "moderate"
+    elif score >= 50:
+        grade, risk = "C", "elevated"
+    elif score >= 30:
+        grade, risk = "D", "high"
+    else:
+        grade, risk = "F", "critical"
 
     result = {
         "score": score, "grade": grade, "fraud_risk": risk,

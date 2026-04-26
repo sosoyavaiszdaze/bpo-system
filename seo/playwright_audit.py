@@ -155,8 +155,6 @@ def _measure_page(context, url, timeout_ms):
 def evaluate_results(results, thresholds=None):
     """実測結果を評価してチェックリストに変換"""
     checks = []
-    t = thresholds or {}
-
     for r in results:
         url = r.get("url", "")
         if r.get("error"):

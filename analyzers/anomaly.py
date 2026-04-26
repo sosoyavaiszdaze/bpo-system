@@ -102,7 +102,6 @@ def detect_anomalies(client_id, data, thresholds):
             name = camp.get("campaign", "unknown")
             freq = camp.get("frequency", 0)
             ctr = camp.get("ctr", 0)
-            cpa = camp.get("cpa", 0)
             roas = camp.get("roas", 0)
             cost = camp.get("cost", 0)
             camp_type = camp.get("campaign_type", "")

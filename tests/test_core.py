@@ -262,5 +262,380 @@ class TestAdsAuditOrchestrator:
         assert result["grade"] == "F"
 
 
+class TestCommonChecksExtended:
+    """共通チェック C08-C15 のテスト"""
+
+    def test_cpm_spike_check(self):
+        """C08: CPMスパイク検出"""
+        from analyzers.checks.common import run_common_checks
+        campaigns = [
+            {"campaign": "low_cpm", "platform": "google", "ctr": 2.0, "impressions": 1000,
+             "cost": 100, "conversions": 1, "cpm": 100},
+            {"campaign": "high_cpm", "platform": "google", "ctr": 2.0, "impressions": 1000,
+             "cost": 300, "conversions": 1, "cpm": 500},
+        ]
+        thresholds = {"common": {"cpm_spike_pct": 50}}
+        results = run_common_checks(campaigns, thresholds)
+        cpm_checks = [r for r in results if r["id"] == "C08"]
+        assert len(cpm_checks) == 1
+        assert cpm_checks[0]["campaign"] == "high_cpm"
+
+    def test_impression_drop_check(self):
+        """C09: インプレッション急減"""
+        from analyzers.checks.common import run_common_checks
+        campaigns = [{"campaign": "test", "platform": "google", "ctr": 2.0,
+                       "impressions": 200, "prev_impressions": 1000, "cost": 100, "conversions": 1}]
+        thresholds = {"common": {}}
+        results = run_common_checks(campaigns, thresholds)
+        imp_checks = [r for r in results if r["id"] == "C09"]
+        assert len(imp_checks) == 1
+        assert imp_checks[0]["passed"] is False
+
+    def test_cost_revenue_ratio(self):
+        """C10: コスト対効果比（赤字）"""
+        from analyzers.checks.common import run_common_checks
+        campaigns = [{"campaign": "loss", "platform": "google", "ctr": 2.0,
+                       "impressions": 1000, "cost": 50000, "conversions": 5,
+                       "revenue": 30000}]
+        thresholds = {"common": {}}
+        results = run_common_checks(campaigns, thresholds)
+        ratio_checks = [r for r in results if r["id"] == "C10"]
+        assert len(ratio_checks) == 1
+        assert ratio_checks[0]["passed"] is False
+
+    def test_budget_utilization_high(self):
+        """C13: 日予算制約（消化率95%超）"""
+        from analyzers.checks.common import run_common_checks
+        campaigns = [{"campaign": "capped", "platform": "google", "ctr": 2.0,
+                       "impressions": 1000, "cost": 9800, "conversions": 5,
+                       "daily_budget": 10000}]
+        thresholds = {"common": {}}
+        results = run_common_checks(campaigns, thresholds)
+        budget_checks = [r for r in results if r["id"] == "C13"]
+        assert len(budget_checks) == 1
+        assert budget_checks[0]["passed"] is False
+
+
+class TestGoogleChecks:
+    """Google チェックの代表的テスト"""
+
+    def test_naming_convention(self):
+        """G01: 命名規則チェック"""
+        from analyzers.checks.google import run_google_checks
+        campaigns = [
+            {"campaign": "Brand_Search_01", "platform": "google", "campaign_type": "search"},
+            {"campaign": "nounderscore", "platform": "google", "campaign_type": "search"},
+        ]
+        results = run_google_checks(campaigns, {})
+        g01 = [r for r in results if r["id"] == "G01"]
+        assert len(g01) == 2
+        assert g01[0]["passed"] is True
+        assert g01[1]["passed"] is False
+
+    def test_stag_structure(self):
+        """G03: STAG構造チェック"""
+        from analyzers.checks.google import run_google_checks
+        campaigns = [{"campaign": "Test_Search", "platform": "google",
+                       "campaign_type": "search", "keyword_count": 100, "adgroup_count": 2}]
+        results = run_google_checks(campaigns, {})
+        g03 = [r for r in results if r["id"] == "G03"]
+        assert len(g03) == 1
+        assert g03[0]["passed"] is False  # 100/2 = 50 > 15
+
+    def test_enhanced_conversions(self):
+        """G43: Enhanced Conversions チェック"""
+        from analyzers.checks.google import run_google_checks
+        campaigns = [{"campaign": "Test_Search", "platform": "google",
+                       "campaign_type": "search", "enhanced_conversions": False}]
+        results = run_google_checks(campaigns, {})
+        g43 = [r for r in results if r["id"] == "G43"]
+        assert len(g43) == 1
+        assert g43[0]["passed"] is False
+
+    def test_qs_average(self):
+        """G20: Quality Score平均チェック"""
+        from analyzers.checks.google import run_google_checks
+        campaigns = [{"campaign": "Test_Search", "platform": "google",
+                       "campaign_type": "search", "quality_score_avg": 3.0}]
+        results = run_google_checks(campaigns, {})
+        g20 = [r for r in results if r["id"] == "G20"]
+        assert len(g20) == 1
+        assert g20[0]["passed"] is False
+
+
+class TestMetaChecks:
+    """Meta チェックの代表的テスト"""
+
+    def test_pixel_not_installed(self):
+        """M-PI1: Pixel未設置"""
+        from analyzers.checks.meta import run_meta_checks
+        campaigns = [{"campaign": "Test_Meta", "platform": "meta", "cost": 1000}]
+        results = run_meta_checks(campaigns, {}, pixel_status={"pixel_installed": False})
+        pi1 = [r for r in results if r["id"] == "M-PI1"]
+        assert len(pi1) == 1
+        assert pi1[0]["passed"] is False
+
+    def test_frequency_fatigue(self):
+        """M-CR3: フリークエンシー疲弊"""
+        from analyzers.checks.meta import run_meta_checks
+        campaigns = [{"campaign": "High_Freq", "platform": "meta",
+                       "frequency": 5.0, "cost": 1000}]
+        results = run_meta_checks(campaigns, {"meta": {"creative": {"fatigue_frequency": 3.5}}})
+        cr3 = [r for r in results if r["id"] == "M-CR3"]
+        assert len(cr3) == 1
+        assert cr3[0]["passed"] is False
+
+    def test_adset_count(self):
+        """M-ST2: 広告セット数超過"""
+        from analyzers.checks.meta import run_meta_checks
+        campaigns = [{"campaign": "Too_Many_Adsets", "platform": "meta",
+                       "adset_count": 10, "cost": 1000}]
+        results = run_meta_checks(campaigns, {"meta": {"structure": {"max_adsets_per_campaign": 5}}})
+        st2 = [r for r in results if r["id"] == "M-ST2"]
+        assert len(st2) == 1
+        assert st2[0]["passed"] is False
+
+
+class TestTikTokChecks:
+    """TikTok チェックの代表的テスト"""
+
+    def test_pixel_not_installed(self):
+        """T-TC1: Pixel未設置"""
+        from analyzers.checks.tiktok import run_tiktok_checks
+        campaigns = [{"campaign": "TT_Test", "platform": "tiktok"}]
+        results = run_tiktok_checks(campaigns, {}, pixel_status={"pixel_installed": False})
+        tc1 = [r for r in results if r["id"] == "T-TC1"]
+        assert len(tc1) == 1
+        assert tc1[0]["passed"] is False
+
+    def test_video_completion_rate(self):
+        """T-CR3: 動画完視聴率"""
+        from analyzers.checks.tiktok import run_tiktok_checks
+        campaigns = [{"campaign": "TT_Low_VCR", "platform": "tiktok",
+                       "video_completion_rate": 8.0}]
+        results = run_tiktok_checks(campaigns, {"tiktok": {"creative": {"video_completion_rate_min": 15.0}}})
+        cr3 = [r for r in results if r["id"] == "T-CR3"]
+        assert len(cr3) == 1
+        assert cr3[0]["passed"] is False
+
+    def test_learning_phase(self):
+        """T-BL1: 学習フェーズ未達"""
+        from analyzers.checks.tiktok import run_tiktok_checks
+        campaigns = [{"campaign": "TT_Learning", "platform": "tiktok",
+                       "conversions": 1, "cost": 5000}]
+        results = run_tiktok_checks(campaigns, {"tiktok": {"learning_phase": {"min_weekly_conversions": 50}}})
+        bl1 = [r for r in results if r["id"] == "T-BL1"]
+        assert len(bl1) == 1
+        assert bl1[0]["passed"] is False
+
+
+class TestAnomalyDetection:
+    """異常検知のテスト"""
+
+    def test_frequency_fatigue_alert(self):
+        """フリークエンシー過多アラート"""
+        from analyzers.anomaly import detect_anomalies
+        data = {"campaigns": [
+            {"campaign": "test", "platform": "google", "frequency": 5.0,
+             "ctr": 2.0, "cpa": 1000, "roas": 2.0, "cost": 10000,
+             "conversions": 10, "clicks": 500, "impressions": 10000}
+        ]}
+        result = detect_anomalies("test_client", data, {})
+        freq_alerts = [a for a in result["alerts"] if a["type"] == "frequency_fatigue"]
+        assert len(freq_alerts) == 1
+
+    def test_roas_deficit_alert(self):
+        """ROAS赤字アラート"""
+        from analyzers.anomaly import detect_anomalies
+        data = {"campaigns": [
+            {"campaign": "losing", "platform": "meta", "frequency": 1.0,
+             "ctr": 2.0, "cpa": 5000, "roas": 0.5, "cost": 50000,
+             "conversions": 10, "clicks": 500, "impressions": 10000}
+        ]}
+        result = detect_anomalies("test_client", data, {})
+        roas_alerts = [a for a in result["alerts"] if a["type"] == "roas_deficit"]
+        assert len(roas_alerts) == 1
+        assert roas_alerts[0]["severity"] == "critical"
+
+
+class TestSegmentWaste:
+    """無駄コスト検出のテスト"""
+
+    def test_zero_cv_detection(self):
+        """ゼロCV高コスト検出"""
+        from analyzers.segment_waste import detect_waste
+        data = {
+            "campaigns": [
+                {"campaign": "waste_cp", "platform": "google", "cost": 10000,
+                 "conversions": 0, "impressions": 5000, "cpa": 0, "ctr": 1.0,
+                 "roas": 0, "frequency": 1.0, "campaign_type": "search"},
+            ],
+            "totals": {"total_cost": 10000, "avg_cpa": 0},
+        }
+        result = detect_waste("test", data, {})
+        assert result["waste_count"] == 1
+        assert result["waste_items"][0]["type"] == "zero_cv"
+
+    def test_high_cpa_detection(self):
+        """高CPA検出"""
+        from analyzers.segment_waste import detect_waste
+        data = {
+            "campaigns": [
+                {"campaign": "good", "platform": "google", "cost": 10000,
+                 "conversions": 10, "impressions": 5000, "cpa": 1000, "ctr": 2.0,
+                 "roas": 3.0, "frequency": 1.0, "campaign_type": "search"},
+                {"campaign": "bad_cpa", "platform": "google", "cost": 15000,
+                 "conversions": 2, "impressions": 5000, "cpa": 7500, "ctr": 2.0,
+                 "roas": 0.5, "frequency": 1.0, "campaign_type": "search"},
+            ],
+            "totals": {"total_cost": 25000, "avg_cpa": 2083},
+        }
+        result = detect_waste("test", data, {})
+        high_cpa = [w for w in result["waste_items"] if w["type"] == "high_cpa"]
+        assert len(high_cpa) == 1
+        assert high_cpa[0]["campaign"] == "bad_cpa"
+
+
+class TestFraudAudit:
+    """不正検知のテスト"""
+
+    def test_abnormal_ctr(self):
+        """F01: 異常CTR検出"""
+        from analyzers.fraud_audit import run_fraud_audit
+        data = {
+            "campaigns": [
+                {"campaign": "sus", "platform": "google", "clicks": 2000,
+                 "impressions": 5000, "conversions": 10, "cost": 30000,
+                 "ctr": 40.0, "cpa": 3000, "frequency": 1.0}
+            ],
+            "totals": {"total_cost": 30000},
+        }
+        result = run_fraud_audit("test", data)
+        f01 = [i for i in result["issues"] if i["check_id"] == "F01"]
+        assert len(f01) == 1
+        assert f01[0]["severity"] == "critical"
+
+    def test_bot_traffic(self):
+        """F02: ボットトラフィック検出"""
+        from analyzers.fraud_audit import run_fraud_audit
+        data = {
+            "campaigns": [
+                {"campaign": "bot", "platform": "google", "clicks": 1000,
+                 "impressions": 50000, "conversions": 0, "cost": 50000,
+                 "ctr": 2.0, "cpa": 0, "frequency": 1.0}
+            ],
+            "totals": {"total_cost": 50000},
+        }
+        result = run_fraud_audit("test", data)
+        f02 = [i for i in result["issues"] if i["check_id"] == "F02"]
+        assert len(f02) == 1
+
+    def test_clean_account(self):
+        """不正なしのアカウント"""
+        from analyzers.fraud_audit import run_fraud_audit
+        data = {
+            "campaigns": [
+                {"campaign": "clean", "platform": "google", "clicks": 100,
+                 "impressions": 5000, "conversions": 10, "cost": 5000,
+                 "ctr": 2.0, "cpa": 500, "frequency": 1.5}
+            ],
+            "totals": {"total_cost": 5000},
+        }
+        result = run_fraud_audit("test", data)
+        assert result["score"] == 100
+        assert result["grade"] == "A"
+
+
+class TestFraudIngest:
+    """不正データ取込のテスト"""
+
+    def test_heuristic_generation(self):
+        """ヒューリスティック生成"""
+        from analyzers.fraud_ingest import _generate_heuristic
+        data = {"campaigns": [
+            {"campaign": "suspicious", "platform": "google", "ctr": 25.0,
+             "clicks": 500, "conversions": 0, "cost": 10000},
+            {"campaign": "normal", "platform": "google", "ctr": 2.0,
+             "clicks": 100, "conversions": 5, "cost": 5000},
+        ]}
+        result = _generate_heuristic(data)
+        assert result["source"] == "heuristic"
+        assert result["total_items"] >= 1
+        assert any(f["campaign"] == "suspicious" for f in result["fraud_items"])
+
+
+class TestPlaywrightEvaluate:
+    """playwright_audit.py evaluate_results のテスト"""
+
+    def test_evaluate_good_results(self):
+        """良好なCWV結果の評価"""
+        from seo.playwright_audit import evaluate_results
+        results = [{
+            "url": "https://example.com",
+            "lcp": 2000, "cls": 0.05, "ttfb": 500,
+            "dom_count": 800, "has_title": True, "title_length": 40,
+            "h1_count": 1, "has_viewport": True, "is_https": True,
+            "has_form": True, "has_cta": True, "load_time": 2000,
+        }]
+        checks = evaluate_results(results)
+        failed = [c for c in checks if not c["passed"]]
+        assert len(failed) == 0
+
+    def test_evaluate_poor_lcp(self):
+        """LCPが悪い結果"""
+        from seo.playwright_audit import evaluate_results
+        results = [{
+            "url": "https://example.com",
+            "lcp": 5000, "cls": 0.05, "ttfb": 500,
+            "dom_count": 800, "has_title": True, "title_length": 40,
+            "h1_count": 1, "has_viewport": True, "is_https": True,
+            "has_form": True, "has_cta": True,
+        }]
+        checks = evaluate_results(results)
+        lcp_check = [c for c in checks if c["id"] == "SEO-CWV1"]
+        assert len(lcp_check) == 1
+        assert lcp_check[0]["passed"] is False
+
+
+class TestReportGenerator:
+    """レポート生成のテスト"""
+
+    def test_build_template_data(self):
+        """build_template_data の基本動作"""
+        from engine.report_generator import build_template_data
+        results = {
+            "ads_audit": {
+                "score": 75, "grade": "B", "issues": [],
+                "quick_wins": [], "platform_summary": {},
+                "total_checks": 50, "total_cost": 100000,
+                "total_conversions": 50, "avg_cpa": 2000,
+                "total_campaigns": 5, "failed_checks": 10,
+            },
+            "anomalies": {"alerts": []},
+            "waste": {"items": [], "total_waste": 0},
+            "fraud_audit": {"fraud_rate": 0},
+            "fraud_action": {},
+            "conflicts": [],
+            "claude_analysis": {"skipped": True},
+            "seo_audit": {},
+            "client_name": "Test Client",
+            "timestamp": "2026-04-25",
+        }
+        data = build_template_data("test_client", results)
+        assert data["score"] == 75
+        assert data["grade"] == "B"
+        assert data["client_id"] == "test_client"
+        assert data["client_name"] == "Test Client"
+        assert "grade_description" in data
+        assert "executive_summary" in data
+
+    def test_build_template_data_empty(self):
+        """空の結果でもエラーにならない"""
+        from engine.report_generator import build_template_data
+        data = build_template_data("empty", {})
+        assert data["score"] == 0
+        assert data["grade"] == "F"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

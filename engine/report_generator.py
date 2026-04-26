@@ -31,8 +31,6 @@ def build_template_data(client_id, results):
     fraud_action = results.get("fraud_action") or {}
     conflicts = results.get("conflicts") or []
     claude = results.get("claude_analysis") or {}
-    seo = results.get("seo_audit") or {}
-
     score = audit.get("score", 0)
     grade = audit.get("grade", "F")
     issues = audit.get("issues", [])

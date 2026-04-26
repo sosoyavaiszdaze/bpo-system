@@ -100,7 +100,6 @@ def run_fraud_action(client_id, fraud_results, client_cfg, thresholds):
 def _aggregate_ips(ips):
     """同一 /24 サブネットを集約"""
     subnets = {}
-    individual = []
 
     for ip in ips:
         parts = ip.split(".")
@@ -146,7 +145,7 @@ def _send_fraud_alert(client_id, fraud_rate, actions, notif_cfg, critical=False)
     try:
         data = json.dumps({"blocks": blocks}).encode("utf-8")
         req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10):
             log.info(f"[{client_id}] Fraud Slack通知送信完了")
     except Exception as e:
         log.error(f"[{client_id}] Fraud Slack通知失敗: {e}")
