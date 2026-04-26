@@ -72,6 +72,7 @@ def run_audit(client_id, data, thresholds):
         log.warning(f"クロスチェックエラー: {e}")
 
     # === 2. YAML ルール評価 + スコアリング ===
+    budget_shares = {}
     try:
         from engine.yaml_evaluator import evaluate_checks
         from engine.scorer import calc_platform_score, calc_cross_platform_score, calc_budget_shares
@@ -155,7 +156,7 @@ def run_audit(client_id, data, thresholds):
         "quick_wins": quick_wins[:10],
         "platform_summary": platform_summary,
         "platform_scores": platform_scores,
-        "budget_shares": budget_shares if "budget_shares" in dir() else {},
+        "budget_shares": budget_shares,
     }
 
     log.info(f"[{client_id}] 監査完了: Score {score} ({grade}) / "
@@ -310,8 +311,8 @@ def _suggest_action(check):
 
 
 def _severity_order(severity):
-    """ソート用: critical=0, high=1, medium=2, low=3"""
-    return {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(severity, 4)
+    """ソート用: critical=0, high=1, medium/warning=2, low=3"""
+    return {"critical": 0, "high": 1, "medium": 2, "warning": 2, "low": 3}.get(severity, 4)
 
 
 def _fallback_grade(score):

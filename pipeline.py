@@ -23,16 +23,22 @@ LOGS_DIR = os.path.join(BASE_DIR, "logs")
 
 # ログ設定
 os.makedirs(LOGS_DIR, exist_ok=True)
-log_file = os.path.join(LOGS_DIR, f"{datetime.now():%Y-%m-%d}.log")
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(log_file, encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
-)
 log = logging.getLogger("bpo")
+
+
+def _setup_logging():
+    """ロガーを初期化（二重登録防止）"""
+    if log.handlers:
+        return
+    log_file = os.path.join(LOGS_DIR, f"{datetime.now():%Y-%m-%d}.log")
+    log.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    fh = logging.FileHandler(log_file, encoding="utf-8")
+    fh.setFormatter(formatter)
+    sh = logging.StreamHandler()
+    sh.setFormatter(formatter)
+    log.addHandler(fh)
+    log.addHandler(sh)
 
 
 def load_config():
@@ -248,12 +254,14 @@ def run_client(client_id, client_cfg, thresholds):
     # 4. 低効率セグメント検出
     results["waste"] = run_waste_detection(client_id, data, thresholds)
 
-    # 5. Fraud 監査 + アクション
+    # 5. Fraud 監査 + Ingest + アクション
     results["fraud_audit"] = run_fraud_audit(client_id, data, thresholds)
     if results["fraud_audit"] and not results["fraud_audit"].get("error"):
         try:
+            from analyzers.fraud_ingest import ingest_fraud_data
+            fraud_data = ingest_fraud_data(client_id, client_cfg, data)
             from analyzers.fraud_action import run_fraud_action as fraud_action_run
-            results["fraud_action"] = fraud_action_run(client_id, results["fraud_audit"], client_cfg, thresholds)
+            results["fraud_action"] = fraud_action_run(client_id, fraud_data, client_cfg, thresholds)
         except Exception as e:
             log.error(f"[{client_id}] Fraud Action エラー: {e}")
 
@@ -279,7 +287,7 @@ def run_client(client_id, client_cfg, thresholds):
     # 8. SEO監査
     results["seo_audit"] = run_seo_audit(client_id, client_cfg, thresholds)
 
-    # 6. 出力
+    # 9. 出力
     output_results(client_id, client_cfg, results)
 
     score = ""
@@ -349,4 +357,5 @@ def main():
 
 
 if __name__ == "__main__":
+    _setup_logging()
     main()

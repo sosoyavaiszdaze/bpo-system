@@ -80,7 +80,8 @@ def run_common_checks(campaigns, thresholds):
             results.append({
                 "id": "C05", "passed": False, "campaign": name, "platform": platform,
                 "message": f"CPA ¥{cpa:,.0f} が平均 ¥{avg_cpa:,.0f} の{cpa_spike}%超",
-                "severity": "high"
+                "severity": "high",
+                "conflict_group": "cpa_vs_volume",
             })
 
         # C06: コスト集中度
@@ -101,7 +102,8 @@ def run_common_checks(campaigns, thresholds):
             results.append({
                 "id": "C07", "passed": False, "campaign": name, "platform": platform,
                 "message": f"学習フェーズ未達: 日次CV {cv:.1f} (目標: {daily_cv_min:.1f})",
-                "severity": "medium"
+                "severity": "medium",
+                "conflict_group": "cpa_vs_volume",
             })
 
         # C08: CPM スパイク

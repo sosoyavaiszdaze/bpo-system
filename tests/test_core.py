@@ -597,6 +597,80 @@ class TestPlaywrightEvaluate:
         assert lcp_check[0]["passed"] is False
 
 
+class TestConflictDetector:
+    """トレードオフ検出のテスト"""
+
+    def test_detect_conflicts(self):
+        """conflict_group が2件以上でトリガー"""
+        from engine.conflict_detector import detect_conflicts
+        audit = {"issues": [
+            {"id": "C05", "conflict_group": "cpa_vs_volume", "campaign": "A", "platform": "google"},
+            {"id": "C07", "conflict_group": "cpa_vs_volume", "campaign": "B", "platform": "google"},
+        ]}
+        conflicts = detect_conflicts(audit, {})
+        assert len(conflicts) == 1
+        assert conflicts[0]["conflict_group"] == "cpa_vs_volume"
+
+    def test_no_conflicts(self):
+        """conflict_group が1件だけではトリガーしない"""
+        from engine.conflict_detector import detect_conflicts
+        audit = {"issues": [
+            {"id": "C05", "conflict_group": "cpa_vs_volume", "campaign": "A", "platform": "google"},
+        ]}
+        conflicts = detect_conflicts(audit, {})
+        assert len(conflicts) == 0
+
+    def test_resolve_for_cpa(self):
+        """CPA最小化目標での自動解決"""
+        from engine.conflict_detector import detect_conflicts, resolve_conflicts
+        audit = {"issues": [
+            {"id": "C05", "conflict_group": "cpa_vs_volume", "campaign": "A", "platform": "google"},
+            {"id": "C07", "conflict_group": "cpa_vs_volume", "campaign": "B", "platform": "google"},
+        ]}
+        conflicts = detect_conflicts(audit, {})
+        resolved = resolve_conflicts(conflicts, {"objective": "cpa_minimize"})
+        assert resolved[0]["auto_resolved"] is True
+        assert resolved[0]["resolution"] is not None
+
+
+class TestFraudAction:
+    """Fraud Action のテスト"""
+
+    def test_empty_fraud_items(self):
+        """fraud_items が空の場合"""
+        from analyzers.fraud_action import run_fraud_action
+        fraud_data = {"source": "heuristic", "fraud_items": [], "fraud_rate": 0}
+        result = run_fraud_action("test", fraud_data, {}, {})
+        assert result["blocked_ips"] == 0
+        assert result["estimated_savings"] == 0
+
+    def test_skipped_on_none(self):
+        """None入力でスキップ"""
+        from analyzers.fraud_action import run_fraud_action
+        result = run_fraud_action("test", None, {}, {})
+        assert result.get("skipped") is True
+
+
+class TestValidatorSync:
+    """バリデータの conversion_value/revenue 同期テスト"""
+
+    def test_revenue_to_conversion_value(self):
+        """revenue → conversion_value 同期"""
+        from adapters.validator import validate_data
+        data = {"campaigns": [{"campaign": "test", "revenue": 50000, "cost": 10000}]}
+        result = validate_data(data)
+        camp = result["campaigns"][0]
+        assert camp["conversion_value"] == 50000
+
+    def test_conversion_value_to_revenue(self):
+        """conversion_value → revenue 同期"""
+        from adapters.validator import validate_data
+        data = {"campaigns": [{"campaign": "test", "conversion_value": 80000, "cost": 10000}]}
+        result = validate_data(data)
+        camp = result["campaigns"][0]
+        assert camp["revenue"] == 80000
+
+
 class TestReportGenerator:
     """レポート生成のテスト"""
 

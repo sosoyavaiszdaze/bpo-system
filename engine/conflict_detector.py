@@ -133,7 +133,7 @@ def _resolve_for_roas(group):
 
 
 def _save_overrides(conflicts):
-    """解決結果を context-overrides.yaml に保存"""
+    """解決結果を context-overrides.yaml に保存（dedup + 期限切れ削除）"""
     path = os.path.join(CONFIG_DIR, "context-overrides.yaml")
 
     existing = {"version": "1.0", "overrides": []}
@@ -141,15 +141,41 @@ def _save_overrides(conflicts):
         with open(path, "r", encoding="utf-8") as f:
             existing = yaml.safe_load(f) or existing
 
+    now = datetime.now()
+
+    # 期限切れエントリーを削除
+    existing["overrides"] = [
+        o for o in existing.get("overrides", [])
+        if _parse_iso(o.get("expires_at", "")) > now
+    ]
+
+    # 既存のconflict_groupをインデックス化（dedup用）
+    existing_groups = {
+        o.get("conflict_group"): i
+        for i, o in enumerate(existing["overrides"])
+    }
+
     for conflict in conflicts:
+        group_id = conflict.get("conflict_group")
         override = {
-            "conflict_group": conflict.get("conflict_group"),
+            "conflict_group": group_id,
             "chosen_priority": conflict.get("resolution", ""),
             "decided_by": "auto" if conflict.get("auto_resolved") else "pending",
-            "decided_at": datetime.now().isoformat(),
-            "expires_at": (datetime.now() + timedelta(days=90)).isoformat(),
+            "decided_at": now.isoformat(),
+            "expires_at": (now + timedelta(days=90)).isoformat(),
         }
-        existing["overrides"].append(override)
+        if group_id in existing_groups:
+            existing["overrides"][existing_groups[group_id]] = override
+        else:
+            existing["overrides"].append(override)
 
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(existing, f, allow_unicode=True, default_flow_style=False)
+
+
+def _parse_iso(iso_str):
+    """ISO形式の日時文字列をパース（不正値は過去日を返す）"""
+    try:
+        return datetime.fromisoformat(iso_str)
+    except (ValueError, TypeError):
+        return datetime.min

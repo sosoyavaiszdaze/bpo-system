@@ -45,16 +45,38 @@ PLATFORM_DEFAULTS = {
 
 
 def _load_previous(client_id):
-    prev_path = os.path.join(DATA_DIR, f"{client_id}_previous.json")
-    if os.path.exists(prev_path):
-        with open(prev_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+    """前日のデータを読み込む（日付ベースのファイル名で同日上書きを防止）"""
+    from datetime import datetime, timedelta
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # 昨日のファイルを優先的に読む
+    for date_str in [yesterday, "previous"]:
+        if date_str == "previous":
+            path = os.path.join(DATA_DIR, f"{client_id}_previous.json")
+        else:
+            path = os.path.join(DATA_DIR, f"{client_id}_{date_str}.json")
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
     return None
 
 
 def _save_current(client_id, data):
-    prev_path = os.path.join(DATA_DIR, f"{client_id}_previous.json")
+    """当日データを日付付きファイルに保存（同日再実行時は上書きしない）"""
+    from datetime import datetime
     os.makedirs(DATA_DIR, exist_ok=True)
+    today = datetime.now().strftime("%Y-%m-%d")
+    today_path = os.path.join(DATA_DIR, f"{client_id}_{today}.json")
+
+    # 同日に既に保存済みなら上書きしない
+    if os.path.exists(today_path):
+        return
+
+    with open(today_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, default=str)
+
+    # 後方互換: レガシーファイルも更新
+    prev_path = os.path.join(DATA_DIR, f"{client_id}_previous.json")
     with open(prev_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, default=str)
 

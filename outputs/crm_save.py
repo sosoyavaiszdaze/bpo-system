@@ -58,9 +58,9 @@ def _build_markdown(client_id, results):
     lines.append("")
     lines.append(f"## Health Score: {audit.get('score', 'N/A')} / 100 ({audit.get('grade', '?')})")
     lines.append(f"- Campaigns: {audit.get('total_campaigns', 0)}")
-    lines.append(f"- Total Cost: Y{audit.get('total_cost', 0):,.0f}")
+    lines.append(f"- Total Cost: ¥{audit.get('total_cost', 0):,.0f}")
     lines.append(f"- Total CV: {audit.get('total_conversions', 0):.0f}")
-    lines.append(f"- Avg CPA: Y{audit.get('avg_cpa', 0):,.0f}")
+    lines.append(f"- Avg CPA: ¥{audit.get('avg_cpa', 0):,.0f}")
     lines.append(f"- Avg CTR: {audit.get('avg_ctr', 0):.2f}%")
     lines.append("")
 

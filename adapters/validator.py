@@ -73,10 +73,18 @@ def validate_data(data):
         if camp.get("ctr", 0) == 0 and camp.get("impressions", 0) > 0 and camp.get("clicks", 0) > 0:
             camp["ctr"] = round(camp["clicks"] / camp["impressions"] * 100, 2)
 
+        # conversion_value と revenue の同期
+        cv_val = camp.get("conversion_value", 0)
+        rev_val = camp.get("revenue", 0)
+        if cv_val > 0 and rev_val == 0:
+            camp["revenue"] = cv_val
+        elif rev_val > 0 and cv_val == 0:
+            camp["conversion_value"] = rev_val
+
         # 自動計算: ROAS
-        cv_val = camp.get("conversion_value", 0) or camp.get("revenue", 0)
-        if camp.get("roas", 0) == 0 and cv_val > 0 and camp.get("cost", 0) > 0:
-            camp["roas"] = round(cv_val / camp["cost"], 2)
+        effective_value = camp.get("conversion_value", 0) or camp.get("revenue", 0)
+        if camp.get("roas", 0) == 0 and effective_value > 0 and camp.get("cost", 0) > 0:
+            camp["roas"] = round(effective_value / camp["cost"], 2)
 
     # totals 検証
     totals = data.get("totals", {})

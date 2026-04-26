@@ -156,15 +156,17 @@ def _call_claude(client, model, prompt, max_retries, backoff_base):
                 time.sleep(wait)
             else:
                 log.error(f"Claude API 失敗: {e}")
-                return f"分析エラー: {e}"
+                return None
 
 
 def _build_summary(analyses):
     """分析結果のサマリーを生成"""
     summaries = []
     for key, analysis in analyses.items():
-        result = analysis.get("result", "")
-        # 最初の2行を抽出
+        result = analysis.get("result")
+        if result is None:
+            summaries.append(f"**{analysis['name']}**: 分析エラー（API応答なし）")
+            continue
         lines = result.strip().split("\n")[:2]
         summaries.append(f"**{analysis['name']}**: {' '.join(lines)}")
     return "\n".join(summaries)

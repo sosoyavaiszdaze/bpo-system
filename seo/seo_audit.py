@@ -4,6 +4,7 @@ import json
 import logging
 import urllib.request
 import urllib.parse
+import urllib.error
 import re
 import ssl
 
@@ -66,14 +67,36 @@ def run_seo_audit(client_id, seo_cfg, thresholds=None):
     return result
 
 
-def _fetch_url(url, timeout=10):
+def _check_no_redirect(url, timeout=5):
+    """リダイレクト追従なしでHTTPステータスコードを返す"""
+    try:
+        class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+        opener = urllib.request.build_opener(NoRedirectHandler,
+                                             urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; BPO-SEO-Audit/3.0)"})
+        with opener.open(req, timeout=timeout) as resp:
+            return resp.status
+    except urllib.error.HTTPError as e:
+        return e.code
+    except Exception:
+        return 0
+
+
+def _fetch_url(url, timeout=10, verify_ssl=True):
+    """URLを取得する（デフォルトSSL検証有効）"""
     try:
         ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
+        if not verify_ssl:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; BPO-SEO-Audit/3.0)"})
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
             return resp.read().decode("utf-8", errors="ignore"), resp.status, dict(resp.headers)
+    except ssl.SSLCertVerificationError:
+        # SSL検証失敗時はリトライせず、エラーを返す（S24で指摘される）
+        return None, 0, {"error": "SSL certificate verification failed"}
     except Exception as e:
         return None, 0, {"error": str(e)}
 
@@ -136,10 +159,10 @@ def _check_site_level(site_url, seo_t):
             issues.append({"check_id": "S03", "severity": "high", "page": "サイト全体",
                 "message": "HTTP→HTTPSリダイレクトが未設定", "action": "301リダイレクトを設定"})
 
-    # S04: www正規化
+    # S04: www正規化（リダイレクト追従なしで判定）
     if "www." not in domain:
         www_url = domain.replace("https://", "https://www.")
-        _, www_status, _ = _fetch_url(www_url)
+        www_status = _check_no_redirect(www_url)
         if www_status == 200:
             issues.append({"check_id": "S04", "severity": "medium", "page": "サイト全体",
                 "message": "www有無の両方でアクセス可能 — canonical重複リスク", "action": "どちらかに301リダイレクト統一"})
@@ -385,7 +408,7 @@ def _analyze_page(url, seo_t):
             "message": f"テキスト量 {word_count}文字 — コンテンツ薄い", "action": "有益なコンテンツを追加（最低500文字推奨）"})
 
     # S40: meta robots noindex
-    if "noindex" in hl and '<meta[^>]+robots' in hl:
+    if re.search(r'<meta[^>]+robots[^>]*noindex', hl):
         issues.append({"check_id": "S40", "severity": "critical", "page": url,
             "message": "noindex が設定されている — 検索結果に表示されない", "action": "意図的でなければnoindexを削除"})
 
