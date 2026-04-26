@@ -33,24 +33,22 @@ def run_seo_audit(client_id, seo_cfg, thresholds=None):
         page_results.append(pr)
         issues.extend(pr.get("issues", []))
 
-    # スコア算定
+    # スコア算定（yaml_evaluator + scorer 経由で広告監査と同形式）
+    try:
+        from engine.yaml_evaluator import evaluate_checks
+        from engine.scorer import calc_platform_score
+        # issuesをチェック結果形式に変換
+        seo_checks = _issues_to_checks(issues)
+        eval_result = evaluate_checks(seo_checks, "seo")
+        score_result = calc_platform_score(eval_result)
+        score = score_result.get("score", 0)
+        grade = score_result.get("grade", "F")
+    except Exception as e:
+        log.warning(f"SEOスコアリングエラー (フォールバック使用): {e}")
+        score, grade = _fallback_seo_score(issues)
+
     critical = len([i for i in issues if i.get("severity") == "critical"])
     high = len([i for i in issues if i.get("severity") == "high"])
-    medium = len([i for i in issues if i.get("severity") == "medium"])
-    penalty = critical * 5 + high * 3 + medium * 1.5
-    max_p = max(len(pages) * 15 + 20, 60)
-    score = max(0, min(100, round(100 - (penalty / max_p * 100))))
-
-    if score >= 90:
-        grade = "A"
-    elif score >= 75:
-        grade = "B"
-    elif score >= 60:
-        grade = "C"
-    elif score >= 40:
-        grade = "D"
-    else:
-        grade = "F"
 
     result = {
         "score": score, "grade": grade,
@@ -65,6 +63,49 @@ def run_seo_audit(client_id, seo_cfg, thresholds=None):
     }
     log.info(f"[{client_id}] SEO監査完了: {len(page_results)}ページ分析")
     return result
+
+
+def _issues_to_checks(issues):
+    """SEO issuesをチェック結果形式に変換（yaml_evaluator互換）"""
+    checks = []
+    seen_ids = set()
+    for issue in issues:
+        check_id = issue.get("check_id", "")
+        checks.append({
+            "id": check_id,
+            "passed": False,
+            "platform": "seo",
+            "campaign": issue.get("page", ""),
+            "message": issue.get("message", ""),
+            "severity": issue.get("severity", "medium"),
+        })
+        seen_ids.add(check_id)
+    # 全45チェック中、issueに出ていないものはpassedとして追加（母数安定化）
+    all_seo_ids = [f"S{i:02d}" for i in range(1, 46)]
+    for sid in all_seo_ids:
+        if sid not in seen_ids:
+            checks.append({"id": sid, "passed": True, "platform": "seo", "campaign": "", "message": ""})
+    return checks
+
+
+def _fallback_seo_score(issues):
+    """フォールバック用SEOスコア算定"""
+    critical = len([i for i in issues if i.get("severity") == "critical"])
+    high = len([i for i in issues if i.get("severity") == "high"])
+    medium = len([i for i in issues if i.get("severity") == "medium"])
+    total_checks = max(45, critical + high + medium + 10)
+    failed_weight = critical * 5.0 + high * 3.0 + medium * 1.5
+    total_weight = total_checks * 1.5  # medium平均想定
+    score = max(0, min(100, round((1 - failed_weight / max(total_weight, 1)) * 100)))
+    if score >= 90:
+        return score, "A"
+    if score >= 75:
+        return score, "B"
+    if score >= 60:
+        return score, "C"
+    if score >= 40:
+        return score, "D"
+    return score, "F"
 
 
 def _check_no_redirect(url, timeout=5):

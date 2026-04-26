@@ -173,11 +173,15 @@ def _call_claude(client, model, prompt, max_retries, backoff_base):
                 return None
 
 
+CACHE_TTL_DAYS = 7
+PROMPT_VERSION = "1"
+
+
 def _build_cache_key(client_id, context):
-    """キャッシュキーを生成（client_id + コンテキストハッシュ + 日付）"""
+    """キャッシュキーを生成（client_id + 日付 + コンテキストハッシュ + プロンプトバージョン）"""
     context_hash = hashlib.md5(context.encode()).hexdigest()[:12]
     today = datetime.now().strftime("%Y-%m-%d")
-    return f"{client_id}_{today}_{context_hash}"
+    return f"{client_id}_{today}_{context_hash}_v{PROMPT_VERSION}"
 
 
 def _load_cache(cache_key, analysis_key):
@@ -204,6 +208,26 @@ def _save_cache(cache_key, analysis_key, result):
                       f, ensure_ascii=False)
     except Exception as e:
         log.debug(f"Claude cache save error: {e}")
+    # TTL超過の古いキャッシュを削除
+    _cleanup_cache()
+
+
+def _cleanup_cache():
+    """TTL超過のキャッシュファイルを削除"""
+    if not os.path.exists(CACHE_DIR):
+        return
+    now = datetime.now()
+    try:
+        for f in os.listdir(CACHE_DIR):
+            path = os.path.join(CACHE_DIR, f)
+            if not f.endswith(".json"):
+                continue
+            mtime = datetime.fromtimestamp(os.path.getmtime(path))
+            if (now - mtime).days > CACHE_TTL_DAYS:
+                os.remove(path)
+                log.debug(f"Claude cache expired: {f}")
+    except Exception:
+        pass
 
 
 def _build_summary(analyses):

@@ -108,7 +108,7 @@ def run_common_checks(campaigns, thresholds):
             })
 
         # C08: CPM スパイク
-        cpm_spike_pct = common_t.get("cpm_spike_pct", 50)
+        cpm_spike_pct = common_t.get("cpm_spike_pct", 25)
         if avg_cpm > 0 and cpm > avg_cpm * (1 + cpm_spike_pct / 100):
             results.append({
                 "id": "C08", "passed": False, "campaign": name, "platform": platform,

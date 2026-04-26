@@ -197,17 +197,13 @@ def run_seo_audit(client_id, client_cfg, thresholds):
 
 
 def output_results(client_id, client_cfg, results):
-    """結果出力: Slack, CRM, PDF"""
+    """結果出力: Slack, CRM, PDF, JSON。各ステップの成否をstep_statusに記録。"""
+    step_status = results.get("step_status", {})
+
     # レポートディレクトリ
     today = datetime.now().strftime("%Y-%m-%d")
     report_dir = os.path.join(REPORTS_DIR, today)
     os.makedirs(report_dir, exist_ok=True)
-
-    # JSON保存
-    json_path = os.path.join(report_dir, f"{client_id}_results.json")
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2, default=str)
-    log.info(f"[{client_id}] JSON保存: {json_path}")
 
     # Slack通知
     notif_cfg = client_cfg.get("notifications", {}).get("slack", {})
@@ -215,8 +211,12 @@ def output_results(client_id, client_cfg, results):
         try:
             from outputs.slack_notify import send_notification
             send_notification(client_id, results, notif_cfg)
+            step_status["slack"] = "ok"
         except Exception as e:
             log.error(f"[{client_id}] Slack通知エラー: {e}")
+            step_status["slack"] = "error"
+    else:
+        step_status["slack"] = "skipped"
 
     # CRM保存
     crm_cfg = client_cfg.get("crm", {}).get("twenty", {})
@@ -224,16 +224,28 @@ def output_results(client_id, client_cfg, results):
         try:
             from outputs.crm_save import save_to_crm
             save_to_crm(client_id, results, crm_cfg)
+            step_status["crm"] = "ok"
         except Exception as e:
             log.error(f"[{client_id}] CRM保存エラー: {e}")
+            step_status["crm"] = "error"
+    else:
+        step_status["crm"] = "skipped"
 
-    # PDF生成
+    # PDF/HTML生成
     try:
         from outputs.pdf_report import generate_pdf
         pdf_path = os.path.join(report_dir, f"{client_id}_report.pdf")
         generate_pdf(client_id, results, pdf_path)
+        step_status["pdf"] = "ok"
     except Exception as e:
         log.error(f"[{client_id}] PDF生成エラー: {e}")
+        step_status["pdf"] = "error"
+
+    # JSON保存（最後に実行: step_statusが全て揃った状態で保存）
+    json_path = os.path.join(report_dir, f"{client_id}_results.json")
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2, default=str)
+    log.info(f"[{client_id}] JSON保存: {json_path}")
 
 
 def _phase_extract(client_id, client_cfg):
@@ -267,6 +279,9 @@ def _phase_analyze(client_id, client_cfg, data, thresholds):
         try:
             from analyzers.fraud_ingest import ingest_fraud_data
             fraud_data = ingest_fraud_data(client_id, client_cfg, data)
+            # fraud_audit の fraud_rate を fraud_data に統合（fraud_action が参照）
+            if results["fraud_audit"].get("fraud_rate"):
+                fraud_data["fraud_rate"] = results["fraud_audit"]["fraud_rate"]
             from analyzers.fraud_action import run_fraud_action as fraud_action_run
             results["fraud_action"] = fraud_action_run(client_id, fraud_data, client_cfg, thresholds)
             step_status["fraud_action"] = "ok"

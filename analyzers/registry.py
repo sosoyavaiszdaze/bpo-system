@@ -51,7 +51,10 @@ def run_all_checks(campaigns, thresholds, data=None):
     import importlib
 
     all_results = []
-    pixel_status = (data or {}).get("pixel_status") or (data or {}).get("pixel_statuses", {})
+    # pixel_statuses は {"meta": {...}, "tiktok": {...}} 形式（fetch_dataで構築）
+    # pixel_status はレガシー形式（単一dict）
+    pixel_statuses = (data or {}).get("pixel_statuses", {})
+    legacy_pixel = (data or {}).get("pixel_status")
 
     for mod_def in CHECK_MODULES:
         try:
@@ -66,7 +69,9 @@ def run_all_checks(campaigns, thresholds, data=None):
                 elif arg == "thresholds":
                     kwargs["thresholds"] = thresholds
                 elif arg == "pixel_status":
-                    kwargs["pixel_status"] = pixel_status
+                    # 媒体別pixel_statusを優先、レガシーfallback
+                    platform = mod_def.get("name", "")
+                    kwargs["pixel_status"] = pixel_statuses.get(platform, legacy_pixel)
 
             results = func(**kwargs)
             all_results.extend(results)

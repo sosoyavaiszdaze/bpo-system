@@ -65,12 +65,12 @@ def validate_data(data):
                 camp[field] = default if not isinstance(default, list) else list(default)
                 issues.append(f"Campaign[{i}] '{camp.get('campaign', '?')}': 不足フィールド '{field}' にデフォルト値設定")
 
-        # 自動計算: CPA
-        if camp.get("cpa", 0) == 0 and camp.get("conversions", 0) > 0 and camp.get("cost", 0) > 0:
+        # 自動計算: CPA（未設定 or 0 の場合のみ）
+        if not camp.get("cpa") and camp.get("conversions", 0) > 0 and camp.get("cost", 0) > 0:
             camp["cpa"] = round(camp["cost"] / camp["conversions"], 2)
 
-        # 自動計算: CTR
-        if camp.get("ctr", 0) == 0 and camp.get("impressions", 0) > 0 and camp.get("clicks", 0) > 0:
+        # 自動計算: CTR（未設定 or 0 の場合のみ）
+        if not camp.get("ctr") and camp.get("impressions", 0) > 0 and camp.get("clicks", 0) > 0:
             camp["ctr"] = round(camp["clicks"] / camp["impressions"] * 100, 2)
 
         # conversion_value と revenue の同期
@@ -81,9 +81,9 @@ def validate_data(data):
         elif rev_val > 0 and cv_val == 0:
             camp["conversion_value"] = rev_val
 
-        # 自動計算: ROAS
+        # 自動計算: ROAS（未設定 or 0 の場合のみ）
         effective_value = camp.get("conversion_value", 0) or camp.get("revenue", 0)
-        if camp.get("roas", 0) == 0 and effective_value > 0 and camp.get("cost", 0) > 0:
+        if not camp.get("roas") and effective_value > 0 and camp.get("cost", 0) > 0:
             camp["roas"] = round(effective_value / camp["cost"], 2)
 
     # totals 検証
