@@ -44,12 +44,13 @@ def generate_pdf(client_id, results, pdf_path):
     template = env.get_template("report.html")
     html_content = template.render(**context)
 
-    # HTML を一時ファイルに書き出し
+    # HTML レポートを常に保存（PDFが読めない環境向け）
     html_path = pdf_path.replace(".pdf", ".html")
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html_content)
+    log.info(f"[{client_id}] HTMLレポート保存: {html_path}")
 
-    # Playwright で PDF 生成
+    # Playwright で PDF 生成（オプション）
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
@@ -68,8 +69,7 @@ def generate_pdf(client_id, results, pdf_path):
             browser.close()
         log.info(f"[{client_id}] PDF生成完了: {pdf_path}")
     except Exception as e:
-        log.error(f"[{client_id}] Playwright PDF生成失敗: {e}")
-        log.info(f"[{client_id}] HTMLレポート保存: {html_path}")
+        log.error(f"[{client_id}] Playwright PDF生成失敗（HTMLレポートは利用可能）: {e}")
 
 
 def _build_context(client_id, results):

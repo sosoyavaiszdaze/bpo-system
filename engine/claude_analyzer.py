@@ -1,13 +1,16 @@
-"""Claude API 定性分析エンジン — Anthropic API による広告/LP/クリエイティブ分析"""
+"""Claude API 定性分析エンジン — Anthropic API による広告/LP/クリエイティブ分析 + ファイルキャッシュ"""
 import os
 import json
 import logging
 import yaml
 import time
+import hashlib
+from datetime import datetime
 
 log = logging.getLogger("bpo")
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
+CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "claude_cache")
 
 
 def load_model_config():
@@ -60,13 +63,24 @@ def run_claude_analysis(client_id, data, audit_results):
         ("creative_fatigue", "クリエイティブ疲弊度分析"),
     ]
 
+    cache_key = _build_cache_key(client_id, analysis_context)
+
     for analysis_key, analysis_name in analysis_items:
+        # キャッシュ確認（同日同データならスキップ）
+        cached = _load_cache(cache_key, analysis_key)
+        if cached is not None:
+            analyses[analysis_key] = {"name": analysis_name, "result": cached}
+            continue
+
         prompt = _build_prompt(analysis_key, analysis_context)
         result = _call_claude(client, model, prompt, max_retries, backoff_base)
         analyses[analysis_key] = {
             "name": analysis_name,
             "result": result,
         }
+        # 結果をキャッシュ保存
+        if result is not None:
+            _save_cache(cache_key, analysis_key, result)
 
     log.info(f"[{client_id}] Claude分析完了: {len(analyses)}項目")
 
@@ -157,6 +171,39 @@ def _call_claude(client, model, prompt, max_retries, backoff_base):
             else:
                 log.error(f"Claude API 失敗: {e}")
                 return None
+
+
+def _build_cache_key(client_id, context):
+    """キャッシュキーを生成（client_id + コンテキストハッシュ + 日付）"""
+    context_hash = hashlib.md5(context.encode()).hexdigest()[:12]
+    today = datetime.now().strftime("%Y-%m-%d")
+    return f"{client_id}_{today}_{context_hash}"
+
+
+def _load_cache(cache_key, analysis_key):
+    """キャッシュからClaude分析結果を読み込み"""
+    cache_path = os.path.join(CACHE_DIR, f"{cache_key}_{analysis_key}.json")
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            log.debug(f"Claude cache hit: {analysis_key}")
+            return data.get("result")
+        except Exception:
+            return None
+    return None
+
+
+def _save_cache(cache_key, analysis_key, result):
+    """Claude分析結果をキャッシュに保存"""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    cache_path = os.path.join(CACHE_DIR, f"{cache_key}_{analysis_key}.json")
+    try:
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump({"result": result, "cached_at": datetime.now().isoformat()},
+                      f, ensure_ascii=False)
+    except Exception as e:
+        log.debug(f"Claude cache save error: {e}")
 
 
 def _build_summary(analyses):

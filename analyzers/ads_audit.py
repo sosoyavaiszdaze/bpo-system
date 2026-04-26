@@ -26,50 +26,15 @@ def run_audit(client_id, data, thresholds):
 
     log.info(f"[{client_id}] 広告監査: {len(campaigns)} キャンペーン")
 
-    # === 1. チェック実行 ===
-    all_check_results = []
-
-    # 共通チェック
+    # === 1. チェック実行（レジストリ経由で全モジュール呼び出し） ===
     try:
-        from analyzers.checks.common import run_common_checks
-        common_results = run_common_checks(campaigns, thresholds)
-        all_check_results.extend(common_results)
+        from analyzers.registry import run_all_checks
+        all_check_results = run_all_checks(campaigns, thresholds, data)
     except Exception as e:
-        log.warning(f"共通チェックエラー: {e}")
+        log.warning(f"レジストリチェックエラー、フォールバック使用: {e}")
+        all_check_results = _fallback_checks(campaigns, thresholds, data)
 
-    # Google チェック
-    try:
-        from analyzers.checks.google import run_google_checks
-        google_results = run_google_checks(campaigns, thresholds)
-        all_check_results.extend(google_results)
-    except Exception as e:
-        log.warning(f"Googleチェックエラー: {e}")
 
-    # Meta チェック
-    try:
-        from analyzers.checks.meta import run_meta_checks
-        pixel_status = data.get("pixel_status")
-        meta_results = run_meta_checks(campaigns, thresholds, pixel_status)
-        all_check_results.extend(meta_results)
-    except Exception as e:
-        log.warning(f"Metaチェックエラー: {e}")
-
-    # TikTok チェック
-    try:
-        from analyzers.checks.tiktok import run_tiktok_checks
-        tiktok_pixel = data.get("pixel_status")
-        tiktok_results = run_tiktok_checks(campaigns, thresholds, tiktok_pixel)
-        all_check_results.extend(tiktok_results)
-    except Exception as e:
-        log.warning(f"TikTokチェックエラー: {e}")
-
-    # クロスプラットフォームチェック
-    try:
-        from analyzers.checks.cross import run_cross_checks
-        cross_results = run_cross_checks(campaigns, thresholds)
-        all_check_results.extend(cross_results)
-    except Exception as e:
-        log.warning(f"クロスチェックエラー: {e}")
 
     # === 2. YAML ルール評価 + スコアリング ===
     budget_shares = {}
@@ -348,3 +313,34 @@ def _fallback_grade(score):
     if score >= 40:
         return "D"
     return "F"
+
+
+def _fallback_checks(campaigns, thresholds, data):
+    """レジストリが使えない場合の直接import フォールバック"""
+    results = []
+    try:
+        from analyzers.checks.common import run_common_checks
+        results.extend(run_common_checks(campaigns, thresholds))
+    except Exception as e:
+        log.warning(f"共通チェックエラー: {e}")
+    try:
+        from analyzers.checks.google import run_google_checks
+        results.extend(run_google_checks(campaigns, thresholds))
+    except Exception as e:
+        log.warning(f"Googleチェックエラー: {e}")
+    try:
+        from analyzers.checks.meta import run_meta_checks
+        results.extend(run_meta_checks(campaigns, thresholds, data.get("pixel_status")))
+    except Exception as e:
+        log.warning(f"Metaチェックエラー: {e}")
+    try:
+        from analyzers.checks.tiktok import run_tiktok_checks
+        results.extend(run_tiktok_checks(campaigns, thresholds, data.get("pixel_status")))
+    except Exception as e:
+        log.warning(f"TikTokチェックエラー: {e}")
+    try:
+        from analyzers.checks.cross import run_cross_checks
+        results.extend(run_cross_checks(campaigns, thresholds))
+    except Exception as e:
+        log.warning(f"クロスチェックエラー: {e}")
+    return results

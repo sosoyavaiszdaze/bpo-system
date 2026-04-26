@@ -711,5 +711,107 @@ class TestReportGenerator:
         assert data["grade"] == "F"
 
 
+class TestYAMLEvaluatorWeights:
+    """YAML ルール評価エンジンの重み計算テスト"""
+
+    def test_severity_weight_critical(self):
+        """critical severity の重み計算"""
+        from engine.yaml_evaluator import calc_check_weight
+        rule = {"severity": "critical", "weight": 2.0}
+        w = calc_check_weight(rule)
+        assert w == 10.0  # 5.0 * 2.0
+
+    def test_severity_weight_low(self):
+        """low severity の重み計算"""
+        from engine.yaml_evaluator import calc_check_weight
+        rule = {"severity": "low", "weight": 1.0}
+        w = calc_check_weight(rule)
+        assert w == 0.5  # 0.5 * 1.0
+
+    def test_evaluate_with_common_rules(self):
+        """共通ルール (C01-C15) がYAML経由で正しく評価される"""
+        from engine.yaml_evaluator import evaluate_checks
+        checks = [
+            {"id": "C01", "passed": True, "platform": "google"},
+            {"id": "C02", "passed": False, "platform": "google"},
+        ]
+        result = evaluate_checks(checks, "google")
+        # C01/C02 は common_rules.yaml に定義済みなので category != "other"
+        c02_detail = [d for d in result["details"] if d["id"] == "C02"]
+        assert len(c02_detail) == 1
+        assert c02_detail[0]["severity"] == "critical"  # common_rules.yaml で定義
+        assert c02_detail[0]["category"] != "other"
+
+    def test_category_weight_applied(self):
+        """カテゴリ重みが effective_weight に反映される"""
+        from engine.yaml_evaluator import evaluate_checks
+        checks = [
+            {"id": "C01", "passed": False, "platform": "google"},
+        ]
+        result = evaluate_checks(checks, "google")
+        # weight > 0 であること（category_weight が適用されている）
+        assert result["weighted_total"] > 0
+
+
+class TestRegistry:
+    """チェックモジュールレジストリのテスト"""
+
+    def test_run_all_checks(self):
+        """全モジュールが実行されること"""
+        from analyzers.registry import run_all_checks
+        campaigns = [{"campaign": "Test", "platform": "google", "ctr": 2.0,
+                       "impressions": 1000, "cost": 5000, "conversions": 5}]
+        results = run_all_checks(campaigns, {})
+        assert len(results) > 0
+        # 少なくとも common チェックが含まれる
+        ids = [r["id"] for r in results]
+        assert any(i.startswith("C") for i in ids)
+
+
+class TestConflictImpact:
+    """トレードオフ影響度スコアのテスト"""
+
+    def test_impact_calculation(self):
+        """impact_score が付与される"""
+        from engine.conflict_detector import detect_conflicts
+        audit = {"issues": [
+            {"id": "C05", "conflict_group": "cpa_vs_volume", "campaign": "A",
+             "platform": "google", "severity": "high"},
+            {"id": "C07", "conflict_group": "cpa_vs_volume", "campaign": "B",
+             "platform": "google", "severity": "medium"},
+        ]}
+        conflicts = detect_conflicts(audit, {})
+        assert len(conflicts) == 1
+        assert conflicts[0]["impact_score"] > 0
+        assert conflicts[0]["max_severity"] == "high"
+
+    def test_cross_platform_impact_bonus(self):
+        """複数媒体にまたがるとインパクト増"""
+        from engine.conflict_detector import detect_conflicts
+        audit = {"issues": [
+            {"id": "C05", "conflict_group": "cpa_vs_volume", "campaign": "A",
+             "platform": "google", "severity": "high"},
+            {"id": "C07", "conflict_group": "cpa_vs_volume", "campaign": "B",
+             "platform": "meta", "severity": "high"},
+        ]}
+        conflicts = detect_conflicts(audit, {})
+        assert len(conflicts) == 1
+        # 2媒体なので 1.5x ボーナス
+        assert conflicts[0]["impact_score"] == int((6 + 6) * 1.5)
+
+
+class TestPydanticModels:
+    """Pydantic モデルのテスト"""
+
+    def test_validate_campaign(self):
+        """キャンペーンデータの検証"""
+        from engine.models import validate_campaign, PYDANTIC_AVAILABLE
+        data = {"campaign": "test", "platform": "google", "cost": 1000}
+        result = validate_campaign(data)
+        assert result["campaign"] == "test"
+        if PYDANTIC_AVAILABLE:
+            assert result["cpa"] == 0.0  # デフォルト値が補完される
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

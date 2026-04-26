@@ -53,16 +53,43 @@ def detect_conflicts(audit_results, client_cfg):
     for group_id, group_issues in grouped.items():
         if len(group_issues) >= 2:
             group_info = CONFLICT_GROUPS.get(group_id, {"name": group_id, "description": ""})
+            impact = _calc_conflict_impact(group_issues)
             conflicts.append({
                 "conflict_group": group_id,
                 "name": group_info["name"],
                 "description": group_info["description"],
                 "issues": group_issues,
+                "issue_count": len(group_issues),
+                "impact_score": impact["score"],
+                "max_severity": impact["max_severity"],
+                "affected_platforms": impact["platforms"],
                 "auto_resolved": False,
                 "resolution": None,
             })
 
+    # impact_score 降順でソート（最も影響が大きいものを先に）
+    conflicts.sort(key=lambda c: c["impact_score"], reverse=True)
+
     return conflicts
+
+
+SEVERITY_SCORE = {"critical": 10, "high": 6, "medium": 3, "warning": 3, "low": 1}
+
+
+def _calc_conflict_impact(issues):
+    """トレードオフの影響度を算出"""
+    severities = [i.get("severity", "medium") for i in issues]
+    platforms = list(set(i.get("platform", "unknown") for i in issues))
+    max_sev = "low"
+    total_score = 0
+    for s in severities:
+        total_score += SEVERITY_SCORE.get(s, 1)
+        if SEVERITY_SCORE.get(s, 0) > SEVERITY_SCORE.get(max_sev, 0):
+            max_sev = s
+    # 複数媒体にまたがるとインパクト増
+    if len(platforms) > 1:
+        total_score = int(total_score * 1.5)
+    return {"score": total_score, "max_severity": max_sev, "platforms": platforms}
 
 
 def resolve_conflicts(conflicts, client_cfg):
