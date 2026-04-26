@@ -196,6 +196,8 @@ def _check_site_level(site_url, seo_t):
 
 
 def _analyze_page(url, seo_t):
+    """ページ別SEOチェック"""
+    pagespeed_t = seo_t.get("pagespeed", {})
     issues = []
     ps = _fetch_pagespeed(url)
     html, status, headers = _fetch_url(url)
@@ -219,7 +221,7 @@ def _analyze_page(url, seo_t):
                 "message": f"パフォーマンススコア {ps['performance']} — 改善必要", "action": "Core Web Vitals の最適化"})
 
         # S11: LCP
-        lcp_max = seo_t.get("lcp_max", 2.5)
+        lcp_max = pagespeed_t.get("lcp_max_ms", 2500) / 1000
         if ps["lcp"] > 4.0:
             issues.append({"check_id": "S11", "severity": "critical", "page": url,
                 "message": f"LCP {ps['lcp']:.1f}秒 — 極端に遅い", "action": "メイン画像の最適化・サーバー高速化"})
@@ -228,7 +230,7 @@ def _analyze_page(url, seo_t):
                 "message": f"LCP {ps['lcp']:.1f}秒 > 基準 {lcp_max}秒", "action": "画像遅延読み込み・CDN導入"})
 
         # S12: CLS
-        cls_max = seo_t.get("cls_max", 0.1)
+        cls_max = pagespeed_t.get("cls_max", 0.1)
         if ps["cls"] > 0.25:
             issues.append({"check_id": "S12", "severity": "high", "page": url,
                 "message": f"CLS {ps['cls']:.3f} — レイアウト大幅ずれ", "action": "画像サイズ指定・広告枠の固定高さ設定"})

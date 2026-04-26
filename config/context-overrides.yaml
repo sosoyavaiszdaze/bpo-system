@@ -1,7 +1,7 @@
 overrides:
 - chosen_priority: 'CPA最小化を優先: 目標CPA厳格化、低効率キーワード停止'
   conflict_group: cpa_vs_volume
-  decided_at: '2026-04-26T18:13:15.654394'
+  decided_at: '2026-04-26T18:34:20.755321'
   decided_by: auto
-  expires_at: '2026-07-25T18:13:15.654394'
+  expires_at: '2026-07-25T18:34:20.755321'
 version: '1.0'

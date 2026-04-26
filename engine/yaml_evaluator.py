@@ -72,7 +72,14 @@ def evaluate_checks(check_results, platform, severity_weights=None):
         }
     """
     rules_data = load_rules(platform)
+    # 共通ルール (C01-C15) も読み込み、媒体ルールにマージ
+    common_rules_data = load_rules("common")
     category_weights = rules_data.get("category_weights", {})
+    # 共通ルールのcategory_weightsもマージ（媒体固有が優先）
+    common_cw = common_rules_data.get("category_weights", {})
+    for k, v in common_cw.items():
+        if k not in category_weights:
+            category_weights[k] = v
 
     weighted_pass = 0.0
     weighted_total = 0.0
@@ -84,6 +91,9 @@ def evaluate_checks(check_results, platform, severity_weights=None):
         passed = check.get("passed", True)
 
         rule = get_rule(rules_data, check_id)
+        if not rule:
+            # 共通ルールからも検索
+            rule = get_rule(common_rules_data, check_id)
         if not rule:
             # ルール定義が見つからない場合はデフォルト medium
             rule = {"id": check_id, "severity": "medium", "weight": 1.0, "category": "other"}

@@ -1,0 +1,86 @@
+# config/rules/common_rules.yaml - 共通チェックルール定義 (C01-C15)
+
+category_weights:
+  performance: 0.30
+  wasted_spend: 0.30
+  learning: 0.20
+  structure: 0.20
+
+rules:
+  - id: C01
+    name: CTR最低基準
+    category: performance
+    severity: medium
+    weight: 1.0
+  - id: C02
+    name: ゼロCV + コスト超過
+    category: wasted_spend
+    severity: critical
+    weight: 2.0
+  - id: C03
+    name: ROAS最低基準
+    category: performance
+    severity: high
+    weight: 1.5
+  - id: C04
+    name: フリークエンシー上限
+    category: performance
+    severity: high
+    weight: 1.0
+  - id: C05
+    name: CPAスパイク
+    category: performance
+    severity: high
+    weight: 1.5
+    conflict_group: cpa_vs_volume
+  - id: C06
+    name: コスト集中度
+    category: structure
+    severity: medium
+    weight: 1.0
+  - id: C07
+    name: 学習フェーズ未達
+    category: learning
+    severity: medium
+    weight: 1.0
+    conflict_group: cpa_vs_volume
+  - id: C08
+    name: CPMスパイク
+    category: performance
+    severity: medium
+    weight: 1.0
+  - id: C09
+    name: インプレッション急減
+    category: performance
+    severity: high
+    weight: 1.5
+  - id: C10
+    name: コスト対効果比（赤字）
+    category: wasted_spend
+    severity: high
+    weight: 2.0
+  - id: C11
+    name: キャンペーン数過多
+    category: structure
+    severity: medium
+    weight: 1.0
+  - id: C12
+    name: 停止キャンペーン放置
+    category: structure
+    severity: low
+    weight: 0.5
+  - id: C13
+    name: 日予算消化率
+    category: performance
+    severity: medium
+    weight: 1.0
+  - id: C14
+    name: CVR極端に低い
+    category: performance
+    severity: high
+    weight: 1.5
+  - id: C15
+    name: ROAS全体平均未満
+    category: performance
+    severity: medium
+    weight: 1.0

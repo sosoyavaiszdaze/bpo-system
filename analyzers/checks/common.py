@@ -47,30 +47,31 @@ def run_common_checks(campaigns, thresholds):
 
         # C02: ゼロCV + コスト超過
         cv_zero_cost = common_t.get("cv_zero_cost_min", 5000)
-        if cv == 0 and cost >= cv_zero_cost:
+        if cost >= cv_zero_cost:
+            c02_passed = cv > 0
             results.append({
-                "id": "C02", "passed": False, "campaign": name, "platform": platform,
-                "message": f"ゼロCV: ¥{cost:,.0f} 消化 (閾値: ¥{cv_zero_cost:,.0f})",
+                "id": "C02", "passed": c02_passed, "campaign": name, "platform": platform,
+                "message": f"ゼロCV: ¥{cost:,.0f} 消化 (閾値: ¥{cv_zero_cost:,.0f})" if not c02_passed else "",
                 "severity": "critical"
             })
 
         # C03: ROAS最低基準
         roas_min = common_t.get("roas_min", 1.0)
         if cost > 0 and roas > 0:
-            passed = roas >= roas_min
-            if not passed:
-                results.append({
-                    "id": "C03", "passed": False, "campaign": name, "platform": platform,
-                    "message": f"ROAS {roas:.1f} (基準: ≥{roas_min})",
-                    "severity": "high"
-                })
+            c03_passed = roas >= roas_min
+            results.append({
+                "id": "C03", "passed": c03_passed, "campaign": name, "platform": platform,
+                "message": f"ROAS {roas:.1f} (基準: ≥{roas_min})" if not c03_passed else "",
+                "severity": "high"
+            })
 
         # C04: フリークエンシー上限
         freq_max = common_t.get("frequency_max", 4.0)
-        if freq > freq_max:
+        if freq > 0:
+            c04_passed = freq <= freq_max
             results.append({
-                "id": "C04", "passed": False, "campaign": name, "platform": platform,
-                "message": f"フリークエンシー {freq:.1f} (上限: {freq_max})",
+                "id": "C04", "passed": c04_passed, "campaign": name, "platform": platform,
+                "message": f"フリークエンシー {freq:.1f} (上限: {freq_max})" if not c04_passed else "",
                 "severity": "high"
             })
 

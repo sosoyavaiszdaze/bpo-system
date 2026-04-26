@@ -79,12 +79,16 @@ def run_audit(client_id, data, thresholds):
 
         severity_weights = thresholds.get("scoring", {}).get("severity_weights", {})
 
-        # プラットフォーム別にチェック結果を分割
-        platform_checks = {"google": [], "meta": [], "tiktok": []}
+        # プラットフォーム別にチェック結果を分割（crossも含む）
+        platform_checks = {"google": [], "meta": [], "tiktok": [], "cross": []}
         for check in all_check_results:
             p = check.get("platform", "unknown")
             if p in platform_checks:
                 platform_checks[p].append(check)
+            elif p == "seo":
+                pass  # SEOは別経路でスコアリング
+            else:
+                platform_checks["cross"].append(check)
 
         platform_scores = {}
         platform_details = {}
@@ -112,19 +116,37 @@ def run_audit(client_id, data, thresholds):
         platform_details = {}
 
     # === 3. 結果整理 ===
+    # YAML ルール定義のseverityをcheck IDごとにlookup（最初の一致を使用）
+    yaml_severity_map = {}
+    yaml_conflict_map = {}
+    for details in platform_details.values():
+        for d in details:
+            did = d.get("id", "")
+            if did and did not in yaml_severity_map:
+                yaml_severity_map[did] = d.get("severity", "medium")
+            if did and d.get("conflict_group") and did not in yaml_conflict_map:
+                yaml_conflict_map[did] = d["conflict_group"]
+
     issues = []
     quick_wins = []
     for check in all_check_results:
         if not check.get("passed", True) and check.get("message"):
-            severity = check.get("severity", "medium")
+            check_id = check.get("id", "")
+            # YAML severity を優先、check自身のseverity、fallback medium
+            severity = yaml_severity_map.get(check_id, check.get("severity", "medium"))
             issue = {
-                "id": check.get("id", ""),
+                "id": check_id,
                 "campaign": check.get("campaign", ""),
                 "platform": check.get("platform", ""),
                 "issue": check.get("message", ""),
                 "severity": severity,
                 "action": _suggest_action(check),
             }
+            # conflict_group を保持（check由来 or YAML由来）
+            cg = check.get("conflict_group") or yaml_conflict_map.get(check_id)
+            if cg:
+                issue["conflict_group"] = cg
+
             issues.append(issue)
 
             # Quick Win: medium/low severity で修正しやすいもの

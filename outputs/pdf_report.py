@@ -22,7 +22,7 @@ GRADE_DESC = {
 def generate_pdf(client_id, results, pdf_path):
     """HTML テンプレートから PDF を生成"""
     try:
-        from jinja2 import Environment, FileSystemLoader
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
     except ImportError:
         log.error(f"[{client_id}] jinja2未インストール: pip3 install jinja2")
         return
@@ -36,8 +36,11 @@ def generate_pdf(client_id, results, pdf_path):
     except ImportError:
         context = _build_context(client_id, results)
 
-    # Jinja2 レンダリング
-    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+    # Jinja2 レンダリング（autoescape有効でHTMLインジェクション防止）
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATE_DIR),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
     template = env.get_template("report.html")
     html_content = template.render(**context)
 

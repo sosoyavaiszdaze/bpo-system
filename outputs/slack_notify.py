@@ -31,7 +31,7 @@ def send_notification(client_id, results, config):
             data=data,
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             log.info(f"[{client_id}] Slack通知送信完了: {resp.status}")
     except Exception as e:
         log.error(f"[{client_id}] Slack通知失敗: {e}")

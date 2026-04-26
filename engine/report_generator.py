@@ -60,9 +60,10 @@ def build_template_data(client_id, results):
     # 異常検知
     alerts = anomalies.get("alerts", [])
 
-    # 無駄コスト
-    waste_items = waste.get("items", [])
-    waste_savings = f"¥{waste.get('total_waste', 0):,.0f}"
+    # 無駄コスト（segment_waste.py は waste_items / total_waste_cost を返す）
+    waste_items = waste.get("waste_items", waste.get("items", []))
+    waste_total = waste.get("total_waste_cost", waste.get("total_waste", 0))
+    waste_savings = f"¥{waste_total:,.0f}"
     for w in waste_items:
         w["platform_label"] = PLATFORM_LABEL.get(w.get("platform", ""), "")
         w["waste_display"] = f"{w.get('waste_amount', 0):,.0f}"
@@ -94,7 +95,7 @@ def build_template_data(client_id, results):
         "platform_count": len(platforms),
         "total_checks": audit.get("total_checks", 0),
         "alert_count": len(alerts),
-        "savings_display": f"{waste.get('total_waste', 0):,.0f}",
+        "savings_display": f"{waste_total:,.0f}",
         "total_cost_display": f"{total_cost:,.0f}",
         "avg_cpa_display": f"{audit.get('avg_cpa', 0):,.0f}",
         "campaign_count": audit.get("total_campaigns", 0),
@@ -152,7 +153,7 @@ def _build_summary_items(audit, anomalies, waste, fraud):
             "text": f"異常検知: {len(critical_alerts)}件の重大アラート",
         })
 
-    total_waste = waste.get("total_waste", 0)
+    total_waste = waste.get("total_waste_cost", waste.get("total_waste", 0))
     if total_waste > 0:
         items.append({
             "icon": "¥", "bg": "#FAEEDA", "color": "#854F0B",

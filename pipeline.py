@@ -54,10 +54,13 @@ def load_thresholds():
 
 
 def fetch_data(client_id, client_cfg):
-    """データ取得: Google Ads -> Meta API -> TikTok API -> CSV fallback"""
+    """データ取得: 3媒体を全て取得しmerge → CSV fallback"""
     log.info(f"[{client_id}] データ取得開始")
 
     ads_cfg = client_cfg.get("ads", {})
+    all_campaigns = []
+    sources = []
+    pixel_statuses = {}
 
     # Google Ads API
     google_cfg = ads_cfg.get("google", {})
@@ -65,9 +68,10 @@ def fetch_data(client_id, client_cfg):
         try:
             from adapters.google_adapter import fetch_google_ads
             data = fetch_google_ads(google_cfg)
-            if data:
-                log.info(f"[{client_id}] Google Ads APIからデータ取得成功")
-                return _validate(data)
+            if data and data.get("campaigns"):
+                sources.append("google_api")
+                all_campaigns.extend(data["campaigns"])
+                log.info(f"[{client_id}] Google Ads API: {len(data['campaigns'])}キャンペーン取得")
         except Exception as e:
             log.warning(f"[{client_id}] Google Ads API失敗: {e}")
 
@@ -77,9 +81,12 @@ def fetch_data(client_id, client_cfg):
         try:
             from adapters.meta_adapter import fetch_meta_ads
             data = fetch_meta_ads(meta_cfg)
-            if data:
-                log.info(f"[{client_id}] Meta APIからデータ取得成功")
-                return _validate(data)
+            if data and data.get("campaigns"):
+                sources.append("meta_api")
+                all_campaigns.extend(data["campaigns"])
+                if data.get("pixel_status"):
+                    pixel_statuses["meta"] = data["pixel_status"]
+                log.info(f"[{client_id}] Meta API: {len(data['campaigns'])}キャンペーン取得")
         except Exception as e:
             log.warning(f"[{client_id}] Meta API失敗: {e}")
 
@@ -89,13 +96,25 @@ def fetch_data(client_id, client_cfg):
         try:
             from adapters.tiktok_adapter import fetch_tiktok_ads
             data = fetch_tiktok_ads(tiktok_cfg)
-            if data:
-                log.info(f"[{client_id}] TikTok APIからデータ取得成功")
-                return _validate(data)
+            if data and data.get("campaigns"):
+                sources.append("tiktok_api")
+                all_campaigns.extend(data["campaigns"])
+                if data.get("pixel_status"):
+                    pixel_statuses["tiktok"] = data["pixel_status"]
+                log.info(f"[{client_id}] TikTok API: {len(data['campaigns'])}キャンペーン取得")
         except Exception as e:
             log.warning(f"[{client_id}] TikTok API失敗: {e}")
 
-    # CSV fallback
+    # API経由でデータ取得できた場合はmergeして返す
+    if all_campaigns:
+        merged = {
+            "source": "+".join(sources),
+            "campaigns": all_campaigns,
+            "pixel_statuses": pixel_statuses,
+        }
+        return _validate(merged)
+
+    # CSV fallback（APIが全て失敗した場合のみ）
     csv_pattern = os.path.join(DATA_DIR, f"{client_id}*.csv")
     csv_files = sorted(glob.glob(csv_pattern))
     if csv_files:
