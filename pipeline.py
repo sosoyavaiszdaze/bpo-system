@@ -236,8 +236,91 @@ def output_results(client_id, client_cfg, results):
         log.error(f"[{client_id}] PDF生成エラー: {e}")
 
 
+def _phase_extract(client_id, client_cfg):
+    """Phase 1: Extract — データ取得"""
+    data = fetch_data(client_id, client_cfg)
+    return data
+
+
+def _phase_analyze(client_id, client_cfg, data, thresholds):
+    """Phase 2: Analyze — 監査・異常検知・Fraud・トレードオフ・SEO"""
+    results = {}
+    step_status = {}
+
+    # 2a. 広告監査
+    results["ads_audit"] = run_ads_audit(client_id, data, thresholds)
+    step_status["ads_audit"] = "ok" if results["ads_audit"] and not results["ads_audit"].get("error") else "error"
+
+    # 2b. 異常検知
+    results["anomalies"] = run_anomaly_detection(client_id, data, thresholds)
+    step_status["anomaly"] = "ok" if results["anomalies"] and not results["anomalies"].get("error") else "error"
+
+    # 2c. 低効率セグメント検出
+    results["waste"] = run_waste_detection(client_id, data, thresholds)
+    step_status["waste"] = "ok" if results["waste"] and not results["waste"].get("error") else "error"
+
+    # 2d. Fraud 監査 + Ingest + アクション
+    results["fraud_audit"] = run_fraud_audit(client_id, data, thresholds)
+    step_status["fraud_audit"] = "ok" if results["fraud_audit"] and not results["fraud_audit"].get("error") else "error"
+
+    if step_status["fraud_audit"] == "ok":
+        try:
+            from analyzers.fraud_ingest import ingest_fraud_data
+            fraud_data = ingest_fraud_data(client_id, client_cfg, data)
+            from analyzers.fraud_action import run_fraud_action as fraud_action_run
+            results["fraud_action"] = fraud_action_run(client_id, fraud_data, client_cfg, thresholds)
+            step_status["fraud_action"] = "ok"
+        except Exception as e:
+            log.error(f"[{client_id}] Fraud Action エラー: {e}")
+            step_status["fraud_action"] = "error"
+    else:
+        results["fraud_action"] = None
+        step_status["fraud_action"] = "skipped"
+
+    # 2e. トレードオフ検出
+    results["conflicts"] = None
+    if step_status["ads_audit"] == "ok":
+        try:
+            from engine.conflict_detector import detect_conflicts, resolve_conflicts
+            conflicts = detect_conflicts(results["ads_audit"], client_cfg)
+            if conflicts:
+                results["conflicts"] = resolve_conflicts(conflicts, client_cfg)
+                log.info(f"[{client_id}] トレードオフ検出: {len(conflicts)}件")
+            step_status["conflicts"] = "ok"
+        except Exception as e:
+            log.error(f"[{client_id}] トレードオフ検出エラー: {e}")
+            step_status["conflicts"] = "error"
+    else:
+        step_status["conflicts"] = "skipped"
+
+    # 2f. Claude API 分析
+    results["claude_analysis"] = None
+    if step_status["ads_audit"] == "ok":
+        try:
+            from engine.claude_analyzer import run_claude_analysis
+            results["claude_analysis"] = run_claude_analysis(client_id, data, results["ads_audit"])
+            step_status["claude"] = "ok"
+        except Exception as e:
+            log.error(f"[{client_id}] Claude分析エラー: {e}")
+            step_status["claude"] = "error"
+    else:
+        step_status["claude"] = "skipped"
+
+    # 2g. SEO監査
+    results["seo_audit"] = run_seo_audit(client_id, client_cfg, thresholds)
+    step_status["seo"] = "ok" if results["seo_audit"] and not results["seo_audit"].get("error") else "skipped"
+
+    results["step_status"] = step_status
+    return results
+
+
+def _phase_report(client_id, client_cfg, results):
+    """Phase 3: Report — 結果出力"""
+    output_results(client_id, client_cfg, results)
+
+
 def run_client(client_id, client_cfg, thresholds):
-    """1クライアント分の全パイプライン実行"""
+    """1クライアント分の全パイプライン実行（3フェーズ: Extract → Analyze → Report）"""
     log.info(f"{'='*50}")
     log.info(f"[{client_id}] パイプライン開始: {client_cfg.get('name', '')}")
     log.info(f"{'='*50}")
@@ -254,60 +337,25 @@ def run_client(client_id, client_cfg, thresholds):
         "conflicts": None,
         "claude_analysis": None,
         "seo_audit": None,
+        "step_status": {},
     }
 
-    # 1. データ取得
-    data = fetch_data(client_id, client_cfg)
+    # Phase 1: Extract
+    data = _phase_extract(client_id, client_cfg)
     if not data:
         log.warning(f"[{client_id}] データ取得失敗、スキップ")
         results["error"] = "No data available"
-        output_results(client_id, client_cfg, results)
+        results["step_status"]["extract"] = "error"
+        _phase_report(client_id, client_cfg, results)
         return results
+    results["step_status"]["extract"] = "ok"
 
-    # 2. 広告監査
-    results["ads_audit"] = run_ads_audit(client_id, data, thresholds)
+    # Phase 2: Analyze
+    analyze_results = _phase_analyze(client_id, client_cfg, data, thresholds)
+    results.update(analyze_results)
 
-    # 3. 異常検知
-    results["anomalies"] = run_anomaly_detection(client_id, data, thresholds)
-
-    # 4. 低効率セグメント検出
-    results["waste"] = run_waste_detection(client_id, data, thresholds)
-
-    # 5. Fraud 監査 + Ingest + アクション
-    results["fraud_audit"] = run_fraud_audit(client_id, data, thresholds)
-    if results["fraud_audit"] and not results["fraud_audit"].get("error"):
-        try:
-            from analyzers.fraud_ingest import ingest_fraud_data
-            fraud_data = ingest_fraud_data(client_id, client_cfg, data)
-            from analyzers.fraud_action import run_fraud_action as fraud_action_run
-            results["fraud_action"] = fraud_action_run(client_id, fraud_data, client_cfg, thresholds)
-        except Exception as e:
-            log.error(f"[{client_id}] Fraud Action エラー: {e}")
-
-    # 6. トレードオフ検出
-    if results["ads_audit"] and not results["ads_audit"].get("error"):
-        try:
-            from engine.conflict_detector import detect_conflicts, resolve_conflicts
-            conflicts = detect_conflicts(results["ads_audit"], client_cfg)
-            if conflicts:
-                results["conflicts"] = resolve_conflicts(conflicts, client_cfg)
-                log.info(f"[{client_id}] トレードオフ検出: {len(conflicts)}件")
-        except Exception as e:
-            log.error(f"[{client_id}] トレードオフ検出エラー: {e}")
-
-    # 7. Claude API 分析
-    if results["ads_audit"] and not results["ads_audit"].get("error"):
-        try:
-            from engine.claude_analyzer import run_claude_analysis
-            results["claude_analysis"] = run_claude_analysis(client_id, data, results["ads_audit"])
-        except Exception as e:
-            log.error(f"[{client_id}] Claude分析エラー: {e}")
-
-    # 8. SEO監査
-    results["seo_audit"] = run_seo_audit(client_id, client_cfg, thresholds)
-
-    # 9. 出力
-    output_results(client_id, client_cfg, results)
+    # Phase 3: Report
+    _phase_report(client_id, client_cfg, results)
 
     score = ""
     if results["ads_audit"] and "score" in results["ads_audit"]:
