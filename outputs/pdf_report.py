@@ -29,8 +29,12 @@ def generate_pdf(client_id, results, pdf_path):
 
     os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
 
-    # データ準備
-    context = _build_context(client_id, results)
+    # データ準備 — report_generator 優先、フォールバックでローカル _build_context
+    try:
+        from engine.report_generator import build_template_data
+        context = build_template_data(client_id, results)
+    except ImportError:
+        context = _build_context(client_id, results)
 
     # Jinja2 レンダリング
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))

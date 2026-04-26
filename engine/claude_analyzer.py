@@ -98,35 +98,44 @@ def _build_context(data, audit_results):
     }, ensure_ascii=False, indent=2)
 
 
+def _load_prompt_config():
+    """config/prompts/analysis_prompts.yaml からプロンプト設定を読み込み"""
+    path = os.path.join(CONFIG_DIR, "prompts", "analysis_prompts.yaml")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
 def _build_prompt(analysis_key, context):
-    """分析プロンプトを構築"""
-    prompts = {
-        "ad_copy_quality": (
-            "以下の広告キャンペーンデータを分析し、広告コピーの品質を評価してください。"
-            "改善提案を3つ挙げてください。日本語で回答。\n\n"
-        ),
-        "campaign_structure": (
-            "以下のキャンペーンデータを分析し、構造の最適化提案を行ってください。"
-            "キャンペーン統合・分割の推奨を含めてください。日本語で回答。\n\n"
-        ),
-        "budget_allocation": (
-            "以下のデータから予算配分の最適化を提案してください。"
-            "ROAS/CPA効率に基づいた再配分案を示してください。日本語で回答。\n\n"
-        ),
-        "audience_strategy": (
-            "以下のデータからオーディエンス戦略の改善提案を行ってください。"
-            "ターゲティングの精度向上案を含めてください。日本語で回答。\n\n"
-        ),
-        "creative_fatigue": (
-            "以下のデータからクリエイティブ疲弊の兆候を分析してください。"
-            "リフレッシュが必要なキャンペーンを特定してください。日本語で回答。\n\n"
-        ),
+    """分析プロンプトを構築（外部YAML優先 → インラインフォールバック）"""
+    prompt_cfg = _load_prompt_config()
+    prompts_yaml = prompt_cfg.get("prompts", {})
+
+    if analysis_key in prompts_yaml:
+        template = prompts_yaml[analysis_key].get("template", "")
+        return template.replace("{{ context }}", context)
+
+    # フォールバック
+    fallback = {
+        "ad_copy_quality": "以下の広告キャンペーンデータを分析し、広告コピーの品質を評価してください。改善提案を3つ挙げてください。日本語で回答。\n\n",
+        "campaign_structure": "以下のキャンペーンデータを分析し、構造の最適化提案を行ってください。キャンペーン統合・分割の推奨を含めてください。日本語で回答。\n\n",
+        "budget_allocation": "以下のデータから予算配分の最適化を提案してください。ROAS/CPA効率に基づいた再配分案を示してください。日本語で回答。\n\n",
+        "audience_strategy": "以下のデータからオーディエンス戦略の改善提案を行ってください。ターゲティングの精度向上案を含めてください。日本語で回答。\n\n",
+        "creative_fatigue": "以下のデータからクリエイティブ疲弊の兆候を分析してください。リフレッシュが必要なキャンペーンを特定してください。日本語で回答。\n\n",
     }
-    return prompts.get(analysis_key, "以下のデータを分析してください。\n\n") + context
+    return fallback.get(analysis_key, "以下のデータを分析してください。\n\n") + context
+
+
+def _load_system_prompt():
+    """外部YAMLからシステムプロンプトを読み込み"""
+    prompt_cfg = _load_prompt_config()
+    return prompt_cfg.get("system", "あなたはデジタル広告の専門アナリストです。データに基づいた具体的な改善提案を行います。")
 
 
 def _call_claude(client, model, prompt, max_retries, backoff_base):
     """Claude API 呼び出し（リトライ付き）"""
+    system_prompt = _load_system_prompt()
     for attempt in range(max_retries):
         try:
             message = client.messages.create(
@@ -134,7 +143,7 @@ def _call_claude(client, model, prompt, max_retries, backoff_base):
                 max_tokens=1024,
                 system=[{
                     "type": "text",
-                    "text": "あなたはデジタル広告の専門アナリストです。データに基づいた具体的な改善提案を行います。",
+                    "text": system_prompt,
                     "cache_control": {"type": "ephemeral"},
                 }],
                 messages=[{"role": "user", "content": prompt}],

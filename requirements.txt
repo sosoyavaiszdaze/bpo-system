@@ -1,24 +1,21 @@
-# BPO System - Dependencies
-# Core
+# BPO System 依存パッケージ
+# コアパッケージ（必須）
 pyyaml>=6.0
-jinja2>=3.1.0
-python-dotenv>=1.0.0
-
-# PDF Generation
-playwright>=1.40.0
+jinja2>=3.1
+python-dotenv>=1.0
 
 # Google Ads API
 google-ads>=30.0.0
 
-# Optional: PDF via ReportLab
-# reportlab>=4.0.0
+# PDF生成（Playwright）
+playwright>=1.40
 
-# Scheduling (Phase 4)
-# apscheduler>=3.10.0
+# Claude API
+anthropic>=0.39
 
-# Anthropic Claude API (Phase 3)
-# anthropic>=0.40.0
+# スケジューラ
+apscheduler>=3.10
 
-# Testing
-# pytest>=8.0.0
-# ruff>=0.4.0
+# テスト
+pytest>=8.0
+ruff>=0.4
