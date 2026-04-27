@@ -31,6 +31,22 @@ pipeline.py → adapters/ → analyzers/ → engine/ → outputs/
                                  config/rules/ (YAML)
 ```
 
+## ID マッピング (v2.0)
+
+YAML rule_id と Python check_id は異なる体系を持つ。
+`config/rules/id_mapping.yaml` で変換を定義し、`engine/id_mapper.py` が変換を行う。
+
+```bash
+# マッピングカバレッジ確認
+python -c "from engine.id_mapper import get_mapping_coverage; [print(p, get_mapping_coverage(p)) for p in ['google','meta','tiktok']]"
+```
+
+## スコアリング設計
+
+- 全ルールの `weight` は 1.0 に統一
+- 重み付けは `severity_weight × category_weight × polarity_multiplier` の3層
+- 詳細: `docs/scoring_design.md`
+
 ## 重要な注意事項
 - `outputs/crm_save.py`: 環境変数 `TWENTY_API_URL`, `TWENTY_API_KEY` が必要
 - `config/clients.yaml`: webhook は `webhook_env` で環境変数名を指定

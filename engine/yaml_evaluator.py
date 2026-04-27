@@ -1,7 +1,8 @@
-"""YAML ルール評価エンジン v2.0 — polarity multiplier, prerequisite chain, enabled skip"""
+"""YAML ルール評価エンジン v2.0 — IDマッピング, polarity multiplier, prerequisite chain, enabled skip"""
 import os
 import yaml
 import logging
+from engine.id_mapper import to_yaml_id
 
 log = logging.getLogger("bpo")
 
@@ -76,19 +77,24 @@ def evaluate_checks(check_results, platform, severity_weights=None):
     details = []
 
     for check in check_results:
-        check_id = check.get("id", "")
+        python_check_id = check.get("id", "")
         passed = check.get("passed", True)
 
-        rule = get_rule(rules_data, check_id)
+        # Phase 1: Python check_id → YAML rule_id に変換
+        yaml_check_id = to_yaml_id(python_check_id, platform)
+
+        rule = get_rule(rules_data, yaml_check_id)
         if not rule:
-            rule = get_rule(common_rules_data, check_id)
+            rule = get_rule(common_rules_data, python_check_id)  # common は変換不要
         if not rule:
-            rule = {"id": check_id, "severity": "medium", "weight": 1.0, "category": "other"}
+            rule = {"id": python_check_id, "severity": "medium", "weight": 1.0, "category": "other"}
 
         # §8: enabled:false はスキップ
         if not rule.get("enabled", True):
             details.append({
-                "id": check_id, "name": rule.get("name", ""),
+                "id": python_check_id, "yaml_id": yaml_check_id,
+                "mapped": python_check_id != yaml_check_id,
+                "name": rule.get("name", ""),
                 "passed": passed, "scoring_passed": None,
                 "weight": 0, "category": rule.get("category", "other"),
                 "severity": rule.get("severity", "medium"),
@@ -139,7 +145,9 @@ def evaluate_checks(check_results, platform, severity_weights=None):
 
         details.append({
             # v1.0 互換
-            "id": check_id,
+            "id": python_check_id,
+            "yaml_id": yaml_check_id,
+            "mapped": python_check_id != yaml_check_id,
             "name": rule.get("name", check.get("name", "")),
             "passed": passed,
             "weight": round(effective_w, 2),
@@ -202,18 +210,23 @@ def _resolve_context_dependent(check_result):
 
 
 def _resolve_budget_first(check_result, all_results, result_index=None):
-    """§5-3: G39(予算制約) の結果を参照"""
+    """§5-3: 予算制約の結果を参照（Python ID G39/G08/C13 で検索）"""
     campaign = check_result.get("campaign", "")
     platform = check_result.get("platform", "")
     lookup = _find_result_indexed if result_index else _find_result_scoped
     source = result_index if result_index else all_results
-    g39 = lookup(source, "G39", platform, campaign)
-    if g39 is None:
-        g13 = lookup(source, "G13", platform, campaign)
-        if g13 is not None and not g13.get("passed", True):
+    # Python ID "G39" で予算制約チェックを検索
+    budget_check = lookup(source, "G39", platform, campaign)
+    if budget_check is None:
+        # Python ID "G08" (予算制限別パターン)
+        budget_check = lookup(source, "G08", platform, campaign)
+    if budget_check is None:
+        # C13 (共通: 日予算消化率)
+        budget_fallback = lookup(source, "C13", platform, campaign)
+        if budget_fallback is not None and not budget_fallback.get("passed", True):
             return 0.3
         return 0.5
-    if not g39.get("passed", True):
+    if not budget_check.get("passed", True):
         return 0.3
     return 1.0
 
@@ -236,7 +249,12 @@ def _find_result_scoped(all_results, check_id, platform, campaign):
 
 
 def _evaluate_prerequisite(rule, all_results, check_result, result_index=None):
-    """§6-2: prerequisite 評価 — ブロックされていれば (True, [blocked_ids])"""
+    """§6-2: prerequisite 評価 — ブロックされていれば (True, [blocked_ids])
+
+    prerequisiteはYAML IDで定義されているが、check_resultsはPython IDで格納されている。
+    両方のIDで検索を試みる。
+    """
+    from engine.id_mapper import to_python_id
     prereqs = rule.get("prerequisite", [])
     if not prereqs:
         return False, []
@@ -246,7 +264,12 @@ def _evaluate_prerequisite(rule, all_results, check_result, result_index=None):
     source = result_index if result_index else all_results
     blocked_by = []
     for prereq_id in prereqs:
+        # YAML IDとPython ID両方で検索
         prereq = lookup(source, prereq_id, platform, campaign)
+        if prereq is None:
+            python_prereq_id = to_python_id(prereq_id, platform)
+            if python_prereq_id != prereq_id:
+                prereq = lookup(source, python_prereq_id, platform, campaign)
         if prereq is None:
             blocked_by.append(prereq_id)
         elif not prereq.get("passed", True):

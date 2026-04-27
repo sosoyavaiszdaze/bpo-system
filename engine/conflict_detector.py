@@ -222,18 +222,24 @@ def _resolve_for_roas(group):
 
 
 def detect_axis_conflicts(audit_details):
-    """§7-2: 軸ベース矛盾検出 — axis_positionがleft/rightで対立する場合のみhard conflict"""
-    axis_groups = {}
+    """§7-2: 軸ベース矛盾検出 — axis_positionがleft/rightで対立する場合
+
+    hard: 不合格チェック同士のleft/right対立
+    potential: 合格含む全体でのleft/right対立（hardに含まれないもの）
+    """
+    # hard conflict: 不合格のみ
+    fail_axis = {}
     for d in audit_details:
         if d.get("passed") or not d.get("enabled", True):
             continue
         axis = d.get("primary_axis")
         pos = d.get("axis_position", "neutral")
         if axis and pos in ("left", "right"):
-            axis_groups.setdefault(axis, {"left": [], "right": []})
-            axis_groups[axis][pos].append(d)
+            fail_axis.setdefault(axis, {"left": [], "right": []})
+            fail_axis[axis][pos].append(d)
+
     hard = []
-    for axis, sides in axis_groups.items():
+    for axis, sides in fail_axis.items():
         if sides["left"] and sides["right"]:
             hard.append({
                 "type": "hard_axis_conflict",
@@ -242,7 +248,32 @@ def detect_axis_conflicts(audit_details):
                 "right_items": [d["id"] for d in sides["right"]],
                 "requires_resolution": True,
             })
-    return {"hard": hard, "potential": []}
+
+    # potential conflict: 合格含む全体
+    all_axis = {}
+    for d in audit_details:
+        if not d.get("enabled", True):
+            continue
+        axis = d.get("primary_axis")
+        pos = d.get("axis_position", "neutral")
+        if axis and pos in ("left", "right"):
+            all_axis.setdefault(axis, {"left": [], "right": []})
+            all_axis[axis][pos].append(d)
+
+    hard_axes = {h["axis"] for h in hard}
+    potential = []
+    for axis, sides in all_axis.items():
+        if axis not in hard_axes and sides["left"] and sides["right"]:
+            potential.append({
+                "type": "potential_axis_conflict",
+                "axis": axis,
+                "left_items": [d["id"] for d in sides["left"]],
+                "right_items": [d["id"] for d in sides["right"]],
+                "note": "現在は合格しているが、状態変化で顕在化する可能性あり",
+                "requires_resolution": False,
+            })
+
+    return {"hard": hard, "potential": potential}
 
 
 def _save_overrides(conflicts):

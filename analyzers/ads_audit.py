@@ -3,6 +3,7 @@
 全チェックモジュールを呼び出し、YAMLルール評価エンジン経由でスコアリングする。
 設計文書 v1.3 準拠: S = Σ(C_pass × W_sev × W_cat) / Σ(C_total × W_sev × W_cat) × 100
 """
+import os
 import logging
 
 log = logging.getLogger("bpo")
@@ -171,8 +172,33 @@ def run_audit(client_id, data, thresholds):
         from engine.conflict_detector import detect_axis_conflicts
         result["axis_conflicts"] = detect_axis_conflicts(result.get("all_details", []))
     except Exception as e:
-        log.warning(f"軸矛盾検出エラー: {e}")
+        log.warning(f"軸矛盾検出エラー: {e}", exc_info=True)
         result["axis_conflicts"] = {"hard": [], "potential": []}
+
+    # v2.0: conflict_group ベースの矛盾検出 + 自動解決
+    try:
+        from engine.conflict_detector import detect_conflicts, resolve_conflicts
+        client_cfg = data.get("client_config", {})
+        if not client_cfg:
+            try:
+                import yaml as _yaml
+                cfg_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "config", "clients.yaml"
+                )
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    all_clients = _yaml.safe_load(f) or {}
+                client_cfg = all_clients.get("clients", {}).get(client_id, {})
+            except Exception:
+                client_cfg = {"objective": "balanced"}
+        conflicts = detect_conflicts(result, client_cfg)
+        resolved = resolve_conflicts(conflicts, client_cfg)
+        result["conflicts"] = resolved
+        result["conflict_count"] = len(resolved)
+    except Exception as e:
+        log.warning(f"矛盾検出/解決エラー: {e}", exc_info=True)
+        result["conflicts"] = []
+        result["conflict_count"] = 0
 
     # v2.0: ルールカバレッジ分析
     try:

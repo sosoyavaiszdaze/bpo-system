@@ -1,23 +1,34 @@
-# config/rules/cross_rules.yaml - クロスプラットフォームチェックルール定義 (X-PI1, X-CD1, X-RF1)
-
+name: Cross-Platform Check Rules v2.0
+version: '2.0'
 category_weights:
   pixel_tracking: 0.40
   cost_distribution: 0.35
   frequency_management: 0.25
-
 rules:
-  - id: X-PI1
-    name: 全媒体Pixel/CV追跡
-    category: pixel_tracking
-    severity: critical
-    weight: 2.0
-  - id: X-CD1
-    name: 媒体間コスト配分不均衡
-    category: cost_distribution
-    severity: medium
-    weight: 1.0
-  - id: X-RF1
-    name: 媒体間フリークエンシー集中
-    category: frequency_management
-    severity: medium
-    weight: 1.0
+- id: X-PI1
+  name: 全媒体Pixel/CV追跡
+  category: pixel_tracking
+  severity: critical
+  weight: 1.0
+  platform: cross
+  polarity: neutral
+  prerequisite: []
+  enabled: true
+- id: X-CD1
+  name: 媒体間コスト配分不均衡
+  category: cost_distribution
+  severity: medium
+  weight: 1.0
+  platform: cross
+  polarity: neutral
+  prerequisite: []
+  enabled: true
+- id: X-RF1
+  name: 媒体間フリークエンシー集中
+  category: frequency_management
+  severity: medium
+  weight: 1.0
+  platform: cross
+  polarity: neutral
+  prerequisite: []
+  enabled: true

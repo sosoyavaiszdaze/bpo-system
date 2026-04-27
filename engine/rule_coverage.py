@@ -1,6 +1,7 @@
-"""ルールカバレッジ分析 — YAML定義と実チェック結果の乖離を検出"""
+"""ルールカバレッジ分析 — YAML定義と実チェック結果の乖離を検出 (v2.0 IDマッピング対応)"""
 import logging
 from engine.yaml_evaluator import load_rules
+from engine.id_mapper import to_yaml_id, get_mapping_coverage
 
 log = logging.getLogger("bpo")
 
@@ -8,13 +9,7 @@ PLATFORMS = ["google", "meta", "tiktok", "seo", "adtruth"]
 
 
 def analyze_coverage(check_results):
-    """YAMLルール定義と実チェック結果の突合を行い、カバレッジを算出
-
-    Args:
-        check_results: 全チェック結果リスト
-    Returns:
-        dict: カバレッジレポート
-    """
+    """YAMLルール定義と実チェック結果の突合（IDマッピング考慮）"""
     # 1. 全YAMLルールIDを収集（enabled:trueのみ）
     all_yaml_ids = {}
     for platform in PLATFORMS:
@@ -28,18 +23,26 @@ def analyze_coverage(check_results):
                     "has_check": False,
                 }
 
-    # 2. 実チェック結果に存在するIDをマーク
-    executed_ids = set()
+    # 2. 実チェック結果のIDをYAML IDに変換してマーク
+    executed_python_ids = set()
     for check in check_results:
-        cid = check.get("id", "")
-        executed_ids.add(cid)
-        if cid in all_yaml_ids:
-            all_yaml_ids[cid]["has_check"] = True
+        pid = check.get("id", "")
+        platform = check.get("platform", "unknown")
+        executed_python_ids.add(pid)
+
+        # YAML ID に変換してマッチ
+        yid = to_yaml_id(pid, platform)
+        if yid in all_yaml_ids:
+            all_yaml_ids[yid]["has_check"] = True
+        # 変換前のIDでも直接マッチ（common/cross用）
+        if pid in all_yaml_ids:
+            all_yaml_ids[pid]["has_check"] = True
 
     # 3. カバレッジ集計
     covered = [rid for rid, info in all_yaml_ids.items() if info["has_check"]]
     uncovered = [rid for rid, info in all_yaml_ids.items() if not info["has_check"]]
-    orphan = [cid for cid in executed_ids if cid not in all_yaml_ids]
+    orphan = [pid for pid in executed_python_ids
+              if pid not in all_yaml_ids and to_yaml_id(pid, "google") not in all_yaml_ids]
 
     # 4. severity別の未カバー
     uncovered_by_severity = {}
@@ -49,20 +52,25 @@ def analyze_coverage(check_results):
 
     coverage_pct = round(len(covered) / len(all_yaml_ids) * 100, 1) if all_yaml_ids else 100
 
+    # 5. マッピングカバレッジも含める
+    mapping_stats = {}
+    for p in ["google", "meta", "tiktok"]:
+        mapping_stats[p] = get_mapping_coverage(p)
+
     report = {
         "total_yaml_rules": len(all_yaml_ids),
-        "total_executed_checks": len(executed_ids),
+        "total_executed_checks": len(executed_python_ids),
         "covered": len(covered),
         "uncovered": len(uncovered),
         "orphan_checks": len(orphan),
         "coverage_percent": coverage_pct,
         "uncovered_ids": uncovered,
         "uncovered_by_severity": uncovered_by_severity,
-        "orphan_ids": orphan,
+        "orphan_ids": list(orphan),
         "uncovered_critical": uncovered_by_severity.get("critical", []),
+        "mapping_stats": mapping_stats,
     }
 
-    # 5. 警告ログ
     if uncovered_by_severity.get("critical"):
         log.warning(f"未実装のcriticalルール: {uncovered_by_severity['critical']}")
     log.info(
