@@ -64,10 +64,10 @@ class TestBudgetFirst:
         check = {"platform": "google", "campaign": "camp1"}
         assert _resolve_budget_first(check, all_results) == 1.0
 
-    def test_g39_missing_g13_failed_returns_03(self):
-        """G39なし + G13不合格 → 0.3 (fallback)"""
+    def test_g39_missing_g08_failed_returns_03(self):
+        """G39なし + G08(Python予算制限) 不合格 → 0.3 (fallback)"""
         all_results = [
-            {"id": "G13", "passed": False, "platform": "google", "campaign": "camp1"}
+            {"id": "G08", "passed": False, "platform": "google", "campaign": "camp1"}
         ]
         check = {"platform": "google", "campaign": "camp1"}
         assert _resolve_budget_first(check, all_results) == 0.3
@@ -101,17 +101,15 @@ class TestPrerequisiteBlocking:
         assert g02["scoring_passed"] is False
 
     def test_blocked_reduces_weight(self):
-        """ブロック時のweight = base * 0.3"""
+        """ブロック時のscoring_passed=False (G43→YAML G03, prerequisite=[G01])"""
         checks = [
-            {"id": "G01", "passed": False, "platform": "google", "campaign": "c1"},
-            {"id": "G03", "passed": True, "platform": "google", "campaign": "c1"},
+            {"id": "G43", "passed": True, "platform": "google", "campaign": "c1"},
         ]
+        # G43→YAML G03, prerequisite=[G01]. G01が結果にないのでblocked
         result = evaluate_checks(checks, "google")
-        g03 = next(d for d in result["details"] if d["id"] == "G03")
-        # G03のprerequisiteはG01。ブロックされているのでweight < 通常weight
-        assert g03["blocked_by"] == ["G01"]
-        # weighted_passに加算されていないことを確認
-        assert g03["scoring_passed"] is False
+        g43 = next(d for d in result["details"] if d["id"] == "G43")
+        assert "G01" in g43["blocked_by"]
+        assert g43["scoring_passed"] is False
 
     def test_unblocked_passes_normally(self):
         """前提合格 → scoring_passed=True、blocked_by空"""

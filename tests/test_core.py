@@ -804,34 +804,34 @@ class TestV2Polarity:
     """v2.0 polarity multiplier テスト"""
 
     def test_monitor_only_polarity(self):
-        """monitor_only → multiplier 0.3"""
+        """monitor_only → multiplier 0.3 (G20→YAML G26: 品質スコア, polarity=monitor_only)"""
         from engine.yaml_evaluator import evaluate_checks
-        checks = [{"id": "G26", "passed": False, "platform": "google", "campaign": "Test"}]
+        checks = [{"id": "G20", "passed": False, "platform": "google", "campaign": "Test"}]
         result = evaluate_checks(checks, "google")
-        g26 = [d for d in result["details"] if d["id"] == "G26"]
-        assert len(g26) == 1
-        assert g26[0]["polarity"] == "monitor_only"
-        assert g26[0]["polarity_multiplier"] == 0.3
+        detail = [d for d in result["details"] if d["id"] == "G20"]
+        assert len(detail) == 1
+        assert detail[0]["polarity"] == "monitor_only"
+        assert detail[0]["polarity_multiplier"] == 0.3
 
     def test_preserve_polarity(self):
-        """preserve → multiplier 1.2"""
+        """preserve → multiplier 1.2 (G14→YAML G27: ネガKW不足, polarity=preserve)"""
         from engine.yaml_evaluator import evaluate_checks
-        checks = [{"id": "G27", "passed": False, "platform": "google", "campaign": "Test"}]
+        checks = [{"id": "G14", "passed": False, "platform": "google", "campaign": "Test"}]
         result = evaluate_checks(checks, "google")
-        g27 = [d for d in result["details"] if d["id"] == "G27"]
-        assert len(g27) == 1
-        assert g27[0]["polarity"] == "preserve"
-        assert g27[0]["polarity_multiplier"] == 1.2
+        detail = [d for d in result["details"] if d["id"] == "G14"]
+        assert len(detail) == 1
+        assert detail[0]["polarity"] == "preserve"
+        assert detail[0]["polarity_multiplier"] == 1.2
 
     def test_open_polarity(self):
-        """open → multiplier 0.5"""
+        """open → multiplier 0.5 (G13→YAML G28: 検索語句, polarity=open)"""
         from engine.yaml_evaluator import evaluate_checks
-        checks = [{"id": "G28", "passed": False, "platform": "google", "campaign": "Test"}]
+        checks = [{"id": "G13", "passed": False, "platform": "google", "campaign": "Test"}]
         result = evaluate_checks(checks, "google")
-        g28 = [d for d in result["details"] if d["id"] == "G28"]
-        assert len(g28) == 1
-        assert g28[0]["polarity"] == "open"
-        assert g28[0]["polarity_multiplier"] == 0.5
+        detail = [d for d in result["details"] if d["id"] == "G13"]
+        assert len(detail) == 1
+        assert detail[0]["polarity"] == "open"
+        assert detail[0]["polarity_multiplier"] == 0.5
 
     def test_context_dependent_auto_bidding(self):
         """context_dependent + 自動入札 → multiplier 0.05（ほぼゼロだが評価済みとして記録）"""
