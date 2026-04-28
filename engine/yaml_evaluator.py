@@ -210,18 +210,18 @@ def _resolve_context_dependent(check_result):
 
 
 def _resolve_budget_first(check_result, all_results, result_index=None):
-    """§5-3: 予算制約の結果を参照（Python ID G39/G08/C13 で検索）"""
+    """§5-3: 予算制約の結果を参照（YAML ID G13/G13b/C13 で検索）"""
     campaign = check_result.get("campaign", "")
     platform = check_result.get("platform", "")
     lookup = _find_result_indexed if result_index else _find_result_scoped
     source = result_index if result_index else all_results
-    # Python ID "G39" で予算制約チェックを検索
-    budget_check = lookup(source, "G39", platform, campaign)
+    # G13: 予算制限による機会損失（消化率チェック）
+    budget_check = lookup(source, "G13", platform, campaign)
     if budget_check is None:
-        # Python ID "G08" (予算制限別パターン)
-        budget_check = lookup(source, "G08", platform, campaign)
+        # G13b: 予算制約（Limited by budget）
+        budget_check = lookup(source, "G13b", platform, campaign)
     if budget_check is None:
-        # C13 (共通: 日予算消化率)
+        # C13: 共通の日予算消化率チェック
         budget_fallback = lookup(source, "C13", platform, campaign)
         if budget_fallback is not None and not budget_fallback.get("passed", True):
             return 0.3

@@ -46,41 +46,41 @@ class TestContextDependent:
 
 
 class TestBudgetFirst:
-    """_resolve_budget_first の全パターン"""
+    """_resolve_budget_first の全パターン（YAML ID: G13/G13b/C13）"""
 
-    def test_g39_failed_returns_03(self):
-        """G39不合格 → 0.3"""
+    def test_g13_failed_returns_03(self):
+        """G13(予算制限)不合格 → 0.3"""
         all_results = [
-            {"id": "G39", "passed": False, "platform": "google", "campaign": "camp1"}
+            {"id": "G13", "passed": False, "platform": "google", "campaign": "camp1"}
         ]
         check = {"platform": "google", "campaign": "camp1"}
         assert _resolve_budget_first(check, all_results) == 0.3
 
-    def test_g39_passed_returns_1(self):
-        """G39合格 → 1.0"""
+    def test_g13_passed_returns_1(self):
+        """G13合格 → 1.0"""
         all_results = [
-            {"id": "G39", "passed": True, "platform": "google", "campaign": "camp1"}
+            {"id": "G13", "passed": True, "platform": "google", "campaign": "camp1"}
         ]
         check = {"platform": "google", "campaign": "camp1"}
         assert _resolve_budget_first(check, all_results) == 1.0
 
-    def test_g39_missing_g08_failed_returns_03(self):
-        """G39なし + G08(Python予算制限) 不合格 → 0.3 (fallback)"""
+    def test_g13_missing_g13b_failed_returns_03(self):
+        """G13なし + G13b(Limited by Budget) 不合格 → 0.3"""
         all_results = [
-            {"id": "G08", "passed": False, "platform": "google", "campaign": "camp1"}
+            {"id": "G13b", "passed": False, "platform": "google", "campaign": "camp1"}
         ]
         check = {"platform": "google", "campaign": "camp1"}
         assert _resolve_budget_first(check, all_results) == 0.3
 
     def test_both_missing_returns_05(self):
-        """G39もG13もなし → 0.5"""
+        """G13もG13bもC13もなし → 0.5"""
         check = {"platform": "google", "campaign": "camp1"}
         assert _resolve_budget_first(check, []) == 0.5
 
     def test_account_level_fallback(self):
         """キャンペーン不一致でもアカウント全体にfallback"""
         all_results = [
-            {"id": "G39", "passed": False, "platform": "google", "campaign": "アカウント全体"}
+            {"id": "G13", "passed": False, "platform": "google", "campaign": "アカウント全体"}
         ]
         check = {"platform": "google", "campaign": "different_camp"}
         assert _resolve_budget_first(check, all_results) == 0.3
