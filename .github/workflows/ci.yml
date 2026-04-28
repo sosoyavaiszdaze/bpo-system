@@ -58,15 +58,15 @@ jobs:
         run: |
           python pipeline.py test
 
-      - name: ID mapping coverage check
+      - name: Check ID-mapping coverage
         run: |
           python -c "
           from engine.id_mapper import get_mapping_coverage
           for p in ['google', 'meta', 'tiktok']:
               cov = get_mapping_coverage(p)
               print(f'{p}: {cov}')
-              assert cov['coverage_pct'] > 40, f'{p} mapping coverage too low'
-          print('ID mapping validation passed')
+              assert cov['coverage_pct'] >= 95, f'{p} coverage {cov[\"coverage_pct\"]}% < 95%'
+          print('ID mapping validation passed - Phase 2 complete')
           "
         env:
           PYTHONPATH: .
