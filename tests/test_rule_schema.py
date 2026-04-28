@@ -14,9 +14,9 @@ VALID_POLARITIES = {"neutral", "preserve", "monitor_only", "aggregate",
 VALID_POSITIONS = {"left", "right", "neutral"}
 
 YAML_FILES = [
-    ("google_rules.yaml", 85),
-    ("meta_rules.yaml", 55),
-    ("tiktok_rules.yaml", 35),
+    ("google_rules.yaml", 108),
+    ("meta_rules.yaml", 65),
+    ("tiktok_rules.yaml", 46),
     ("seo_rules.yaml", 45),
     ("adtruth_rules.yaml", 15),
 ]

@@ -967,19 +967,19 @@ class TestV2RuleCounts:
         """Google YAML = 85件"""
         from engine.yaml_evaluator import load_rules
         rules = load_rules("google")
-        assert len(rules["rules"]) == 85
+        assert len(rules["rules"]) == 108
 
     def test_meta_55_rules(self):
         """Meta YAML = 55件"""
         from engine.yaml_evaluator import load_rules
         rules = load_rules("meta")
-        assert len(rules["rules"]) == 55
+        assert len(rules["rules"]) == 65
 
     def test_tiktok_35_rules(self):
         """TikTok YAML = 35件"""
         from engine.yaml_evaluator import load_rules
         rules = load_rules("tiktok")
-        assert len(rules["rules"]) == 35
+        assert len(rules["rules"]) == 46
 
     def test_seo_45_rules(self):
         """SEO YAML = 45件"""
