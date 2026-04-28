@@ -31,15 +31,12 @@ pipeline.py → adapters/ → analyzers/ → engine/ → outputs/
                                  config/rules/ (YAML)
 ```
 
-## ID マッピング (v2.0)
+## ID 体系 (Phase 2 完了)
 
-YAML rule_id と Python check_id は異なる体系を持つ。
-`config/rules/id_mapping.yaml` で変換を定義し、`engine/id_mapper.py` が変換を行う。
+Python check_id と YAML rule_id は統一済み。`id_mapping.yaml` は廃止。
+`engine/id_mapper.py` はパススルー実装として残存（後方互換用）。
 
-```bash
-# マッピングカバレッジ確認
-python -c "from engine.id_mapper import get_mapping_coverage; [print(p, get_mapping_coverage(p)) for p in ['google','meta','tiktok']]"
-```
+ルール数: Google 108, Meta 65, TikTok 46, SEO 45, AdTruth 15 (合計 279, enabled 277)
 
 ## スコアリング設計
 

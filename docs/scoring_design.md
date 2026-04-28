@@ -124,40 +124,15 @@ blocked_effective_weight = base_effective_weight * 0.3
 例: G02 (コンバージョンカテゴリ設定) の前提 G01 (コンバージョン重複計測) が不合格の場合、G02 のスコア貢献は通常の 30% に低減される。
 
 
-## ID マッピング
+## ID 体系 (Phase 2 完了)
 
-### 背景
+Python check_id と YAML rule_id は完全に統一済み。
 
-Python チェックモジュール (`checks/*.py`) が発行する check_id と、YAML ルール定義の rule_id は異なる体系を持つ。
+- `id_mapping.yaml` は廃止
+- `engine/id_mapper.py` はパススルー実装として残存（後方互換用）
+- 全 Python check ID が対応する YAML ルールファイルに直接存在
 
-- Python: `G01, G03, G-PM1, M-PI1, T-TC1, ...` (実装順・機能グループ順)
-- YAML: `G01-G85, M01-M55, T01-T35` (体系的な通し番号)
-
-### マッピングファイル
-
-`config/rules/id_mapping.yaml` で Python check_id -> YAML rule_id の変換を定義。
-
-```yaml
-google:
-  G01: G25      # Python G01 (命名規則) -> YAML G25 (ネーミングルール整合)
-  G03: G39      # Python G03 (STAG構造) -> YAML G39 (広告グループあたりKW数)
-  G07: _unmapped  # マッピング先なし (PMax+Search重複チェック)
-```
-
-### _unmapped の扱い
-
-`_unmapped` は「YAML ルール定義に対応する rule_id がない」ことを意味する。この場合、`to_yaml_id()` は元の Python check_id をそのまま返し、YAML ルール定義にマッチしないためデフォルト重み (severity=medium, category=other) が適用される。
-
-### マッピングモジュール
-
-`engine/id_mapper.py` が変換を担当:
-
-- `to_yaml_id(python_id, platform)`: Python -> YAML 変換
-- `to_python_id(yaml_id, platform)`: YAML -> Python 逆変換
-- `get_mapping_coverage(platform)`: カバレッジ統計
-- `clear_cache()`: テスト用キャッシュクリア
-
-Phase 2 で Python 側を直接 YAML ID に書き換え、マッピングファイルを廃止予定。
+ルール数: Google 108, Meta 65, TikTok 46, SEO 45, AdTruth 15 (合計 279, enabled 277)
 
 
 ## グレード判定
