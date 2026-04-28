@@ -243,6 +243,18 @@ class TestRunAuditIntegration:
         assert result["total_checks"] > 0
         assert result["passed_checks"] + result["failed_checks"] == result["total_checks"]
 
+    def test_all_issue_ids_in_yaml(self, sample_data, thresholds):
+        """全issue IDがYAMLルールファイルに存在する"""
+        from analyzers.ads_audit import run_audit
+        from engine.yaml_evaluator import load_rules
+        result = run_audit("test_integration", sample_data, thresholds)
+        yaml_ids = set()
+        for platform in ["google", "meta", "tiktok", "common", "cross"]:
+            rules = load_rules(platform)
+            yaml_ids.update(r["id"] for r in rules.get("rules", []))
+        for issue in result.get("issues", []):
+            assert issue["id"] in yaml_ids, f"Issue ID '{issue['id']}' not in YAML rules"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

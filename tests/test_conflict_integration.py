@@ -65,9 +65,9 @@ class TestDetectConflicts:
                  "campaign": "A", "platform": "google", "severity": "high"},
                 {"id": "C07", "conflict_group": "cpa_vs_volume",
                  "campaign": "B", "platform": "google", "severity": "medium"},
-                {"id": "M-ST3", "conflict_group": "learning_vs_testing",
+                {"id": "M09", "conflict_group": "learning_vs_testing",
                  "campaign": "C", "platform": "meta", "severity": "critical"},
-                {"id": "M-CR4", "conflict_group": "learning_vs_testing",
+                {"id": "M58", "conflict_group": "learning_vs_testing",
                  "campaign": "D", "platform": "meta", "severity": "medium"},
             ]
         }

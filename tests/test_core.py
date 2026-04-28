@@ -409,7 +409,7 @@ class TestTikTokChecks:
         assert tc1[0]["passed"] is False
 
     def test_video_completion_rate(self):
-        """T-CR3: 動画完視聴率"""
+        """T37: 動画完視聴率"""
         from analyzers.checks.tiktok import run_tiktok_checks
         campaigns = [{"campaign": "TT_Low_VCR", "platform": "tiktok",
                        "video_completion_rate": 8.0}]
@@ -419,7 +419,7 @@ class TestTikTokChecks:
         assert cr3[0]["passed"] is False
 
     def test_learning_phase(self):
-        """T-BL1: 学習フェーズ未達"""
+        """T06: 学習フェーズ未達"""
         from analyzers.checks.tiktok import run_tiktok_checks
         campaigns = [{"campaign": "TT_Learning", "platform": "tiktok",
                        "conversions": 1, "cost": 5000}]
