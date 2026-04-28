@@ -88,11 +88,22 @@ class TestMappingCompleteness:
 class TestIdMapperModule:
     """engine/id_mapper.py の機能テスト"""
 
-    def test_to_yaml_id_mapped(self):
+    def test_to_yaml_id_google_passthrough(self):
+        """Google: Phase 2完了 — IDはパススルー"""
         from engine.id_mapper import to_yaml_id, clear_cache
         clear_cache()
-        assert to_yaml_id("G01", "google") == "G25"
+        assert to_yaml_id("G25", "google") == "G25"
+
+    def test_to_yaml_id_meta_mapped(self):
+        """Meta: まだマッピング経由"""
+        from engine.id_mapper import to_yaml_id, clear_cache
+        clear_cache()
         assert to_yaml_id("M-PI1", "meta") == "M01"
+
+    def test_to_yaml_id_tiktok_mapped(self):
+        """TikTok: まだマッピング経由"""
+        from engine.id_mapper import to_yaml_id, clear_cache
+        clear_cache()
         assert to_yaml_id("T-TC1", "tiktok") == "T01"
 
     def test_unmapped_returns_original(self):
@@ -105,9 +116,10 @@ class TestIdMapperModule:
         clear_cache()
         assert to_yaml_id("C01", "common") == "C01"
 
-    def test_mapping_coverage(self):
+    def test_mapping_coverage_meta(self):
+        """Meta mapping coverage > 0"""
         from engine.id_mapper import get_mapping_coverage, clear_cache
         clear_cache()
-        cov = get_mapping_coverage("google")
+        cov = get_mapping_coverage("meta")
         assert cov["total"] > 0
         assert cov["coverage_pct"] > 0

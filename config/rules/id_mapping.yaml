@@ -1,71 +1,5 @@
-# config/rules/id_mapping.yaml
-# Python check_id → YAML rule_id のマッピング
-# Phase 1: マッピング経由で変換
-# Phase 2: Python側を直接YAML IDに書き換え後、このファイルは不要になる
-
-version: "1.0"
-
-google:
-  G01: G25
-  G03: G39
-  G04: G17
-  G05: G31
-  G07: _unmapped
-  G08: G13
-  G09: _unmapped
-  G11: G20
-  G12: G42
-  G13: G28
-  G14: G27
-  G15: _unmapped
-  G16: _unmapped
-  G17: G29
-  G-WS1: _unmapped
-  G20: G26
-  G21: G26
-  G22: _unmapped
-  G23: _unmapped
-  G24: _unmapped
-  G-KW1: G32
-  G26: G37
-  G27: G37
-  G28: G37
-  G29: G34
-  G31: _unmapped
-  G32: _unmapped
-  G36: G11
-  G37: G11
-  G38: G12
-  G39: G13
-  G40: G11
-  G41: _unmapped
-  G43: G03
-  G45: _unmapped
-  G47: G02
-  G48: G08
-  G49: G06
-  G-CT2: G04
-  G50: G22
-  G51: G22
-  G52: G22
-  G53: G22
-  G56: G09
-  G57: G09
-  G58: G54
-  G59: _unmapped
-  G60: _unmapped
-  G-PM1: _unmapped
-  G-PM2: _unmapped
-  G-PM3: _unmapped
-  G-PM4: _unmapped
-  G-PM5: _unmapped
-  G-PM6: _unmapped
-  G-AI1: _unmapped
-  G-DG1: _unmapped
-  G-DG2: _unmapped
-  G-DG3: _unmapped
-  G-CTV1: _unmapped
-
+version: '1.0'
+google: {}
 meta:
   M-PI1: M01
   M-PI2: M03
@@ -100,7 +34,6 @@ meta:
   M-C04: _unmapped
   M-C05: _unmapped
   M-C06: M19
-
 tiktok:
   T-TC1: T01
   T-TC2: T02

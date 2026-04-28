@@ -320,14 +320,14 @@ class TestGoogleChecks:
     """Google チェックの代表的テスト"""
 
     def test_naming_convention(self):
-        """G01: 命名規則チェック"""
+        """G25: 命名規則チェック"""
         from analyzers.checks.google import run_google_checks
         campaigns = [
             {"campaign": "Brand_Search_01", "platform": "google", "campaign_type": "search"},
             {"campaign": "nounderscore", "platform": "google", "campaign_type": "search"},
         ]
         results = run_google_checks(campaigns, {})
-        g01 = [r for r in results if r["id"] == "G01"]
+        g01 = [r for r in results if r["id"] == "G25"]
         assert len(g01) == 2
         assert g01[0]["passed"] is True
         assert g01[1]["passed"] is False
@@ -338,27 +338,27 @@ class TestGoogleChecks:
         campaigns = [{"campaign": "Test_Search", "platform": "google",
                        "campaign_type": "search", "keyword_count": 100, "adgroup_count": 2}]
         results = run_google_checks(campaigns, {})
-        g03 = [r for r in results if r["id"] == "G03"]
+        g03 = [r for r in results if r["id"] == "G39"]
         assert len(g03) == 1
         assert g03[0]["passed"] is False  # 100/2 = 50 > 15
 
     def test_enhanced_conversions(self):
-        """G43: Enhanced Conversions チェック"""
+        """G03: Enhanced Conversions チェック"""
         from analyzers.checks.google import run_google_checks
         campaigns = [{"campaign": "Test_Search", "platform": "google",
                        "campaign_type": "search", "enhanced_conversions": False}]
         results = run_google_checks(campaigns, {})
-        g43 = [r for r in results if r["id"] == "G43"]
+        g43 = [r for r in results if r["id"] == "G03"]
         assert len(g43) == 1
         assert g43[0]["passed"] is False
 
     def test_qs_average(self):
-        """G20: Quality Score平均チェック"""
+        """G26: Quality Score平均チェック"""
         from analyzers.checks.google import run_google_checks
         campaigns = [{"campaign": "Test_Search", "platform": "google",
                        "campaign_type": "search", "quality_score_avg": 3.0}]
         results = run_google_checks(campaigns, {})
-        g20 = [r for r in results if r["id"] == "G20"]
+        g20 = [r for r in results if r["id"] == "G26"]
         assert len(g20) == 1
         assert g20[0]["passed"] is False
 
@@ -804,31 +804,31 @@ class TestV2Polarity:
     """v2.0 polarity multiplier テスト"""
 
     def test_monitor_only_polarity(self):
-        """monitor_only → multiplier 0.3 (G20→YAML G26: 品質スコア, polarity=monitor_only)"""
+        """monitor_only → multiplier 0.3 (G26: 品質スコア: 品質スコア, polarity=monitor_only)"""
         from engine.yaml_evaluator import evaluate_checks
-        checks = [{"id": "G20", "passed": False, "platform": "google", "campaign": "Test"}]
+        checks = [{"id": "G26", "passed": False, "platform": "google", "campaign": "Test"}]
         result = evaluate_checks(checks, "google")
-        detail = [d for d in result["details"] if d["id"] == "G20"]
+        detail = [d for d in result["details"] if d["id"] == "G26"]
         assert len(detail) == 1
         assert detail[0]["polarity"] == "monitor_only"
         assert detail[0]["polarity_multiplier"] == 0.3
 
     def test_preserve_polarity(self):
-        """preserve → multiplier 1.2 (G14→YAML G27: ネガKW不足, polarity=preserve)"""
+        """preserve → multiplier 1.2 (G27: ネガKW不足: ネガKW不足, polarity=preserve)"""
         from engine.yaml_evaluator import evaluate_checks
-        checks = [{"id": "G14", "passed": False, "platform": "google", "campaign": "Test"}]
+        checks = [{"id": "G27", "passed": False, "platform": "google", "campaign": "Test"}]
         result = evaluate_checks(checks, "google")
-        detail = [d for d in result["details"] if d["id"] == "G14"]
+        detail = [d for d in result["details"] if d["id"] == "G27"]
         assert len(detail) == 1
         assert detail[0]["polarity"] == "preserve"
         assert detail[0]["polarity_multiplier"] == 1.2
 
     def test_open_polarity(self):
-        """open → multiplier 0.5 (G13→YAML G28: 検索語句, polarity=open)"""
+        """open → multiplier 0.5 (G28: 検索語句: 検索語句, polarity=open)"""
         from engine.yaml_evaluator import evaluate_checks
-        checks = [{"id": "G13", "passed": False, "platform": "google", "campaign": "Test"}]
+        checks = [{"id": "G28", "passed": False, "platform": "google", "campaign": "Test"}]
         result = evaluate_checks(checks, "google")
-        detail = [d for d in result["details"] if d["id"] == "G13"]
+        detail = [d for d in result["details"] if d["id"] == "G28"]
         assert len(detail) == 1
         assert detail[0]["polarity"] == "open"
         assert detail[0]["polarity_multiplier"] == 0.5

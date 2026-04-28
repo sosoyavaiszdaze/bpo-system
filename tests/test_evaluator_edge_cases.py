@@ -101,15 +101,15 @@ class TestPrerequisiteBlocking:
         assert g02["scoring_passed"] is False
 
     def test_blocked_reduces_weight(self):
-        """ブロック時のscoring_passed=False (G43→YAML G03, prerequisite=[G01])"""
+        """ブロック時のscoring_passed=False (G03=拡張コンバージョン, prerequisite=[G01])"""
         checks = [
-            {"id": "G43", "passed": True, "platform": "google", "campaign": "c1"},
+            {"id": "G03", "passed": True, "platform": "google", "campaign": "c1"},
         ]
-        # G43→YAML G03, prerequisite=[G01]. G01が結果にないのでblocked
+        # YAML G03のprerequisite=[G01]. G01が結果にないのでblocked
         result = evaluate_checks(checks, "google")
-        g43 = next(d for d in result["details"] if d["id"] == "G43")
-        assert "G01" in g43["blocked_by"]
-        assert g43["scoring_passed"] is False
+        g03 = next(d for d in result["details"] if d["id"] == "G03")
+        assert "G01" in g03["blocked_by"]
+        assert g03["scoring_passed"] is False
 
     def test_unblocked_passes_normally(self):
         """前提合格 → scoring_passed=True、blocked_by空"""
