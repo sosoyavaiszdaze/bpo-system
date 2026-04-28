@@ -156,7 +156,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: シグナル定義の柔軟化
-  enabled: true
+  enabled: false
 - id: M08
   name: iOS14+の影響計測
   category: 計測_トラッキング
@@ -221,7 +221,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: Meta特有の集約推奨基準
-  enabled: true
+  enabled: false
 - id: M11
   name: CBO vs ABO選択
   category: 予算_入札
@@ -283,7 +283,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 学習リセット防止
-  enabled: true
+  enabled: false
 - id: M14
   name: キャンペーン目的の適正
   category: 構造_設定
@@ -344,7 +344,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 配信前提
-  enabled: true
+  enabled: false
 - id: M17
   name: アカウント品質スコア
   category: 構造_設定
@@ -364,7 +364,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 結果指標として参照のみ
-  enabled: true
+  enabled: false
 - id: M18
   name: 広告アカウント制限リスク
   category: 構造_設定
@@ -384,7 +384,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 事業継続性の前提
-  enabled: true
+  enabled: false
 - id: M19
   name: ビジネスマネージャー権限
   category: 構造_設定
@@ -425,7 +425,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: Advantage+前提
-  enabled: true
+  enabled: false
 - id: M21
   name: FBフィードCTR
   category: クリエイティブ
@@ -445,7 +445,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: M22
   name: テキスト量過多
   category: クリエイティブ
@@ -465,7 +465,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: Meta特有制約
-  enabled: true
+  enabled: false
 - id: M23
   name: プレースメント手動最適化
   category: 構造_設定
@@ -485,7 +485,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 自動最適化阻害の例
-  enabled: true
+  enabled: false
 - id: M24
   name: 動画/画像の使い分け
   category: クリエイティブ
@@ -525,7 +525,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 表示面積最大化
-  enabled: true
+  enabled: false
 - id: M26
   name: IGフィードのビジュアル品質
   category: クリエイティブ
@@ -545,7 +545,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ブランド整合性
-  enabled: true
+  enabled: false
 - id: M27
   name: エンゲージメント率
   category: クリエイティブ
@@ -565,7 +565,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 結果指標
-  enabled: true
+  enabled: false
 - id: M28
   name: UGC風素材の活用
   category: クリエイティブ
@@ -585,7 +585,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 訴求軸の多様化
-  enabled: true
+  enabled: false
 - id: M29
   name: キャプション文字数
   category: クリエイティブ
@@ -605,7 +605,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 訴求網羅
-  enabled: true
+  enabled: false
 - id: M30
   name: プロフィール誘導の整合
   category: クリエイティブ
@@ -625,7 +625,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 導線整合
-  enabled: true
+  enabled: false
 - id: M31
   name: リール動画尺
   category: クリエイティブ
@@ -646,7 +646,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: プラットフォーム最適尺
-  enabled: true
+  enabled: false
 - id: M32
   name: 縦型9:16フル画面対応
   category: クリエイティブ
@@ -666,7 +666,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: セーフゾーン
-  enabled: true
+  enabled: false
 - id: M33
   name: サウンド有無
   category: クリエイティブ
@@ -686,7 +686,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: リール特性
-  enabled: true
+  enabled: false
 - id: M34
   name: 動画完了率
   category: クリエイティブ
@@ -707,7 +707,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 結果指標
-  enabled: true
+  enabled: false
 - id: M35
   name: UGC/Spark系素材
   category: クリエイティブ
@@ -747,7 +747,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: M37
   name: スワイプアップ/CTA訴求
   category: クリエイティブ
@@ -767,7 +767,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: M38
   name: FBストーリーズのCTR
   category: クリエイティブ
@@ -787,7 +787,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: M39
   name: AN品質管理
   category: 構造_設定
@@ -807,7 +807,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ネガティブ保持
-  enabled: true
+  enabled: false
 - id: M40
   name: ブランドセーフティ除外
   category: 構造_設定
@@ -827,7 +827,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: M41
   name: AN専用クリエイティブ
   category: クリエイティブ
@@ -847,7 +847,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: M42
   name: Messenger配信のCV計測
   category: 計測_トラッキング
@@ -868,7 +868,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: M43
   name: 自動応答フロー
   category: 構造_設定
@@ -888,7 +888,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: LP-広告連続性
-  enabled: true
+  enabled: false
 - id: M44
   name: Advantage+カタログ整合
   category: 構造_設定
@@ -949,7 +949,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 新規/既存配分の人的制御
-  enabled: true
+  enabled: false
 - id: M47
   name: クリエイティブバリエーション
   category: クリエイティブ
@@ -989,7 +989,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 予算競合の構造解消
-  enabled: true
+  enabled: false
 - id: M49
   name: オーディエンスオーバーラップ
   category: ターゲティング
@@ -1071,7 +1071,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: Meta版粒度判定
-  enabled: true
+  enabled: false
 - id: M53
   name: 既存顧客除外設定
   category: ターゲティング
@@ -1132,7 +1132,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: Meta版マッチタイプ開放議論
-  enabled: true
+  enabled: false
 - id: M56
   name: Aggregated Event Measurement
   category: 計測_トラッキング

@@ -90,7 +90,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T05
   name: マッチ品質
   category: 計測_トラッキング
@@ -112,7 +112,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T06
   name: 学習フェーズ停滞
   category: 予算_入札
@@ -155,7 +155,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: TikTok版集約基準
-  enabled: true
+  enabled: false
 - id: T08
   name: 入札戦略の適合性
   category: 予算_入札
@@ -196,7 +196,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T10
   name: キャンペーン目的の整合
   category: 構造_設定
@@ -236,7 +236,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T12
   name: アカウント警告
   category: 構造_設定
@@ -256,7 +256,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T13
   name: クリエイティブ疲労
   category: クリエイティブ
@@ -277,7 +277,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: TikTok特有の疲労速度
-  enabled: true
+  enabled: false
 - id: T14
   name: クリエイティブ本数
   category: クリエイティブ
@@ -358,7 +358,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T18
   name: CTRのベンチマーク比
   category: クリエイティブ
@@ -378,7 +378,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 結果指標
-  enabled: true
+  enabled: false
 - id: T19
   name: フックの強さ
   category: クリエイティブ
@@ -418,7 +418,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T21
   name: ブランドリフト指標
   category: クリエイティブ
@@ -438,7 +438,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T22
   name: 到達率と頻度
   category: 構造_設定
@@ -458,7 +458,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 頻度x深度のリーチ版
-  enabled: true
+  enabled: false
 - id: T23
   name: Spark Ads権限取得
   category: 構造_設定
@@ -500,7 +500,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T25
   name: クリエイター多様性
   category: クリエイティブ
@@ -520,7 +520,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: リスク分散
-  enabled: true
+  enabled: false
 - id: T26
   name: オーガニック連携整合
   category: クリエイティブ
@@ -540,7 +540,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T27
   name: Search Ads KW設計
   category: ターゲティング
@@ -560,7 +560,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: TikTok版検索広告
-  enabled: true
+  enabled: false
 - id: T28
   name: Search Ads入札
   category: 予算_入札
@@ -580,7 +580,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T29
   name: 除外KW設定
   category: 構造_設定
@@ -600,7 +600,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ネガ保持
-  enabled: true
+  enabled: false
 - id: T30
   name: Pangle品質管理
   category: 構造_設定
@@ -640,7 +640,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T32
   name: Smart+自動最適化設定
   category: 構造_設定
@@ -661,7 +661,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: PMAX相当
-  enabled: true
+  enabled: false
 - id: T33
   name: Smart+ROAS目標
   category: 予算_入札
@@ -682,7 +682,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: T34
   name: Smart+クリエイティブプール
   category: クリエイティブ
@@ -703,7 +703,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 学習素材プール
-  enabled: true
+  enabled: false
 - id: T35
   name: Smart+とマニュアル共存
   category: 構造_設定
@@ -725,7 +725,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: PMAX/ASC同構造
-  enabled: true
+  enabled: false
 - id: T36
   name: 動画クリエイティブ必須
   category: クリエイティブ

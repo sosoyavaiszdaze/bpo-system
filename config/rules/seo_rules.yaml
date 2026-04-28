@@ -890,7 +890,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: S43
   name: モバイルレンダリング
   category: UX

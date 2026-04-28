@@ -128,7 +128,7 @@ class TestRuleCoverage:
         """カバレッジ分析が動作する"""
         from engine.rule_coverage import analyze_coverage
         checks = [
-            {"id": "G01", "passed": True, "platform": "google"},
+            {"id": "G25", "passed": True, "platform": "google"},
             {"id": "ORPHAN_CHECK", "passed": False, "platform": "google"},
         ]
         report = analyze_coverage(checks)

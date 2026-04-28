@@ -159,9 +159,9 @@ class TestEnabledFalse:
 
     def test_enabled_true_has_positive_weight(self):
         """enabled:true → weight > 0"""
-        checks = [{"id": "G01", "passed": False, "platform": "google", "campaign": "c1"}]
+        checks = [{"id": "G25", "passed": False, "platform": "google", "campaign": "c1"}]
         result = evaluate_checks(checks, "google")
-        detail = next(d for d in result["details"] if d["id"] == "G01")
+        detail = next(d for d in result["details"] if d["id"] == "G25")
         assert detail["enabled"] is True
         assert detail["weight"] > 0
 

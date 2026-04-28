@@ -196,8 +196,8 @@ class TestYAMLEvaluator:
         """チェック結果評価"""
         from engine.yaml_evaluator import evaluate_checks
         checks = [
-            {"id": "G01", "passed": True, "platform": "google"},
-            {"id": "G05", "passed": False, "platform": "google"},
+            {"id": "G25", "passed": True, "platform": "google"},
+            {"id": "G26", "passed": False, "platform": "google"},
         ]
         result = evaluate_checks(checks, "google")
         assert result["weighted_total"] > 0
@@ -834,24 +834,16 @@ class TestV2Polarity:
         assert detail[0]["polarity_multiplier"] == 0.5
 
     def test_context_dependent_auto_bidding(self):
-        """context_dependent + 自動入札 → multiplier 0.05（ほぼゼロだが評価済みとして記録）"""
-        from engine.yaml_evaluator import evaluate_checks
-        checks = [{"id": "G35", "passed": False, "platform": "google", "campaign": "Test",
-                    "context": {"bidding_strategy": "target_cpa"}}]
-        result = evaluate_checks(checks, "google")
-        g35 = [d for d in result["details"] if d["id"] == "G35"]
-        assert len(g35) == 1
-        assert g35[0]["polarity_multiplier"] == 0.05
+        """context_dependent + 自動入札 → multiplier 0.05"""
+        from engine.yaml_evaluator import _resolve_context_dependent
+        check = {"context": {"bidding_strategy": "target_cpa"}}
+        assert _resolve_context_dependent(check) == 0.05
 
     def test_context_dependent_manual_bidding(self):
         """context_dependent + 手動入札 → multiplier 1.0"""
-        from engine.yaml_evaluator import evaluate_checks
-        checks = [{"id": "G35", "passed": False, "platform": "google", "campaign": "Test",
-                    "context": {"bidding_strategy": "manual_cpc"}}]
-        result = evaluate_checks(checks, "google")
-        g35 = [d for d in result["details"] if d["id"] == "G35"]
-        assert len(g35) == 1
-        assert g35[0]["polarity_multiplier"] == 1.0
+        from engine.yaml_evaluator import _resolve_context_dependent
+        check = {"context": {"bidding_strategy": "manual_cpc"}}
+        assert _resolve_context_dependent(check) == 1.0
 
 
 class TestV2Prerequisite:

@@ -243,7 +243,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: F13
   name: アフィリエイト不正
   category: 不正検知
@@ -263,7 +263,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: F14
   name: ビューアビリティ不正
   category: 不正検知
@@ -283,7 +283,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: F15
   name: 予算保護アラート
   category: 不正検知

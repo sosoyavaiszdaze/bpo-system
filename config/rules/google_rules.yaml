@@ -34,7 +34,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 計測の正しさは全運用判断の前提。最優先項目
-  enabled: true
+  enabled: false
 - id: G02
   name: コンバージョンカテゴリ設定
   category: 計測_トラッキング
@@ -122,7 +122,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: G01-10の前提となる物理的な発火確認
-  enabled: true
+  enabled: false
 - id: G06
   name: コンバージョン価値設定
   category: 計測_トラッキング
@@ -166,7 +166,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ポジティブシグナルの取りこぼし防止
-  enabled: true
+  enabled: false
 - id: G08
   name: データドリブンアトリビューション
   category: 計測_トラッキング
@@ -232,7 +232,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: B2B長期CVを学習に与える
-  enabled: true
+  enabled: false
 - id: G11
   name: 入札戦略と目標値の整合
   category: 予算_入札
@@ -325,7 +325,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 短期判断の積み重ねが長期学習を破壊
-  enabled: true
+  enabled: false
 - id: G15
   name: 共有予算の適切性
   category: 予算_入札
@@ -368,7 +368,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 計画的な人的介入として正当
-  enabled: true
+  enabled: false
 - id: G17
   name: キャンペーンタイプの目的一致
   category: 構造_設定
@@ -411,7 +411,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 頻度の幅(時間)制御。自動入札時は不要な場合多し
-  enabled: true
+  enabled: false
 - id: G19
   name: デバイス別入札調整
   category: 構造_設定
@@ -432,7 +432,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 要再定義
   redesign_note: 自動入札時は調整比は無効。tCPA調整比として動作
-  enabled: true
+  enabled: false
 - id: G20
   name: 地域入札調整
   category: 構造_設定
@@ -475,7 +475,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 明確に商圏外なら除外
-  enabled: true
+  enabled: false
 - id: G22
   name: 広告表示オプションの網羅
   category: 構造_設定
@@ -516,7 +516,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 配信前提条件のチェック
-  enabled: true
+  enabled: false
 - id: G24
   name: キャンペーン/広告グループ停止忘れ
   category: 構造_設定
@@ -536,7 +536,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 意図のない予算消費を防ぐ
-  enabled: true
+  enabled: false
 - id: G25
   name: ネーミングルール整合
   category: 構造_設定
@@ -667,7 +667,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 細分化由来の自社競合
-  enabled: true
+  enabled: false
 - id: G31
   name: ブランドKWと一般KWの混在
   category: キーワード
@@ -729,7 +729,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: オークションインサイト活用
-  enabled: true
+  enabled: false
 - id: G34
   name: RSA広告強度
   category: クリエイティブ
@@ -774,7 +774,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 要再定義
   redesign_note: '重要: 自動入札時は止めずに編集。手動入札時のみ停止検討。文脈依存'
-  enabled: true
+  enabled: false
 - id: G36
   name: 広告文の重複
   category: クリエイティブ
@@ -794,7 +794,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ABテスト機会と統計的有意差の確保
-  enabled: true
+  enabled: false
 - id: G37
   name: 見出し・説明文数
   category: クリエイティブ
@@ -836,7 +836,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: システム最適化の阻害要因
-  enabled: true
+  enabled: false
 - id: G39
   name: 広告グループあたりKW数
   category: 構造_設定
@@ -879,7 +879,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: SKAGは粒度過剰でデータ希薄。集約推奨が妥当
-  enabled: true
+  enabled: false
 - id: G41
   name: 入札単価上限の妥当性
   category: 構造_設定
@@ -942,7 +942,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: DSAは集約型。除外整備が前提
-  enabled: true
+  enabled: false
 - id: G44
   name: インプレッションシェア上位損失率
   category: 構造_設定
@@ -964,7 +964,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: TO-09の中核。Budget/Ad Rank分解の入口
-  enabled: true
+  enabled: false
 - id: G45
   name: 絶対トップIS損失率
   category: 構造_設定
@@ -985,7 +985,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ページ最上部IS。米満氏が広告クリエイティブ評価軸として強調
-  enabled: true
+  enabled: false
 - id: G46
   name: フィードエラー・警告
   category: フィード
@@ -1005,7 +1005,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: Shopping配信の前提
-  enabled: true
+  enabled: false
 - id: G47
   name: タイトル最適化
   category: フィード
@@ -1025,7 +1025,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 商品KW × 訴求要素のバランス
-  enabled: true
+  enabled: false
 - id: G48
   name: 画像品質
   category: フィード
@@ -1045,7 +1045,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ユーザー認知の前提
-  enabled: true
+  enabled: false
 - id: G49
   name: 在庫切れ商品の配信
   category: フィード
@@ -1065,7 +1065,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: LP整合性の保証
-  enabled: true
+  enabled: false
 - id: G50
   name: 価格競争力
   category: フィード
@@ -1085,7 +1085,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: Ad Rank的要因(競争力)
-  enabled: true
+  enabled: false
 - id: G51
   name: 商品グループ細分化
   category: 構造_設定
@@ -1105,7 +1105,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: Shoppingでも構造粒度のトレードオフ
-  enabled: true
+  enabled: false
 - id: G52
   name: プロモーション拡張の設定
   category: 構造_設定
@@ -1125,7 +1125,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 目立ち度向上
-  enabled: true
+  enabled: false
 - id: G53
   name: ショッピング優先度設定
   category: 構造_設定
@@ -1186,7 +1186,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 誤クリック由来のノイズ除外
-  enabled: true
+  enabled: false
 - id: G56
   name: ビューアビリティ
   category: クリエイティブ
@@ -1206,7 +1206,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 視認性の物理的測定
-  enabled: true
+  enabled: false
 - id: G57
   name: オーディエンス拡張の挙動
   category: ターゲティング
@@ -1226,7 +1226,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 拡張は学習を促進 過拡張は無駄配信
-  enabled: true
+  enabled: false
 - id: G58
   name: レスポンシブディスプレイ広告の素材数
   category: クリエイティブ
@@ -1246,7 +1246,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: RSA同様 バリエーション幅
-  enabled: true
+  enabled: false
 - id: G59
   name: 動画完了率
   category: クリエイティブ
@@ -1308,7 +1308,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ブランドセーフティ
-  enabled: true
+  enabled: false
 - id: G62
   name: 動画広告フォーマット混在
   category: 構造_設定
@@ -1328,7 +1328,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 目的とフォーマットの整合
-  enabled: true
+  enabled: false
 - id: G63
   name: 冒頭5秒のフック
   category: クリエイティブ
@@ -1348,7 +1348,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: 動画版の見出し相当
-  enabled: true
+  enabled: false
 - id: G64
   name: アセットグループ複数化
   category: 構造_設定
@@ -1371,7 +1371,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: PMAX内構造の粒度
-  enabled: true
+  enabled: false
 - id: G65
   name: 画像アセット数
   category: クリエイティブ
@@ -1433,7 +1433,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: テキスト版バリエーション幅
-  enabled: true
+  enabled: false
 - id: G68
   name: オーディエンスシグナル設定
   category: ターゲティング
@@ -1474,7 +1474,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: LP個別最適 vs 統一
-  enabled: true
+  enabled: false
 - id: G70
   name: ブランドKW除外リスト
   category: 構造_設定
@@ -1517,7 +1517,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: PMAXのEC前提条件
-  enabled: true
+  enabled: false
 - id: G72
   name: 除外オーディエンス
   category: ターゲティング
@@ -1538,7 +1538,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ネガティブシグナル
-  enabled: true
+  enabled: false
 - id: G73
   name: アセットグループ別パフォーマンス分析
   category: 構造_設定
@@ -1559,7 +1559,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: PMAX内ブラックボックスの可視化
-  enabled: true
+  enabled: false
 - id: G74
   name: 縦型動画素材の有無
   category: クリエイティブ
@@ -1726,7 +1726,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 新設
   redesign_note: '新設: G26を結果指標から原因変数に置き換え。pCTR低/CPC低/品質スコア低の3分解'
-  enabled: true
+  enabled: false
 - id: G26-NEW2
   name: 推定CTR低文字列特定 (新設)
   category: クリエイティブ
@@ -1770,7 +1770,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 新設
   redesign_note: '新設: 米満氏note06が強調する評価軸。競合動向と並べてモニタリング'
-  enabled: true
+  enabled: false
 - id: G81-NEW
   name: トレードオフ判断ログ生成 (新設)
   category: 判断ログ
@@ -1790,7 +1790,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 新設
   redesign_note: '新設: Zynect独自の説明責任インフラ。月次レポートに搭載'
-  enabled: true
+  enabled: false
 - id: G82-NEW
   name: オークションインサイト分析 (新設)
   category: 計測
@@ -2092,7 +2092,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: G15b
   name: 予算配分バランス
   category: 予算_入札
@@ -2112,7 +2112,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: G27b
   name: 共有ネガティブKWリスト
   category: キーワード
@@ -2152,7 +2152,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: G66b
   name: ネイティブ動画有無
   category: クリエイティブ
@@ -2172,7 +2172,7 @@ rules:
   conflict_group: null
   yonemitsu_alignment: 整合
   redesign_note: ''
-  enabled: true
+  enabled: false
 - id: G68b
   name: PMax Ad Strength
   category: クリエイティブ
