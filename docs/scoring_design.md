@@ -106,7 +106,7 @@ effective_weight = severity_weight * rule_weight * category_weight * polarity_mu
 予算制限による機会損失 (G13) に適用。Budget Lost 解消が先行する順序がある。
 
 ```python
-# G39/G08/C13 で予算制約チェックの結果を参照
+# G13/G13b/C13 で予算制約チェックの結果を参照
 # 予算制約あり (passed=False) -> 0.3
 #   理由: 予算を増やさないと他の改善が効かない
 # 予算制約なし (passed=True) -> 1.0
