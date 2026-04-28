@@ -1,27 +1,4 @@
 version: '1.0'
 google: {}
 meta: {}
-tiktok:
-  T-TC1: T01
-  T-TC2: T02
-  T-CR1: _unmapped
-  T-CR2: T16
-  T-CR3: _unmapped
-  T-CR4: T23
-  T-CR5: T19
-  T-CR6: _unmapped
-  T-CR7: T14
-  T-CR8: T15
-  T-BL1: T06
-  T-BL2: _unmapped
-  T-BL3: T08
-  T-ST1: _unmapped
-  T-ST2: T10
-  T-ST3: _unmapped
-  T-ST4: _unmapped
-  T-ST5: _unmapped
-  T-ST6: _unmapped
-  T-C01: T03
-  T-C02: _unmapped
-  T-C03: _unmapped
-  T-C04: T30
+tiktok: {}

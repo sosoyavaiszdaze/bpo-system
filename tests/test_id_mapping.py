@@ -100,11 +100,11 @@ class TestIdMapperModule:
         clear_cache()
         assert to_yaml_id("M01", "meta") == "M01"
 
-    def test_to_yaml_id_tiktok_mapped(self):
-        """TikTok: まだマッピング経由"""
+    def test_to_yaml_id_tiktok_passthrough(self):
+        """TikTok: Phase 2完了 — IDはパススルー"""
         from engine.id_mapper import to_yaml_id, clear_cache
         clear_cache()
-        assert to_yaml_id("T-TC1", "tiktok") == "T01"
+        assert to_yaml_id("T01", "tiktok") == "T01"
 
     def test_unmapped_returns_original(self):
         from engine.id_mapper import to_yaml_id, clear_cache
@@ -116,10 +116,10 @@ class TestIdMapperModule:
         clear_cache()
         assert to_yaml_id("C01", "common") == "C01"
 
-    def test_mapping_coverage_tiktok(self):
-        """TikTok mapping coverage > 0 (まだマッピング経由)"""
+    def test_mapping_coverage_all_passthrough(self):
+        """全プラットフォーム Phase 2完了 — coverage 100%"""
         from engine.id_mapper import get_mapping_coverage, clear_cache
         clear_cache()
-        cov = get_mapping_coverage("tiktok")
-        assert cov["total"] > 0
-        assert cov["coverage_pct"] > 0
+        for p in ["google", "meta", "tiktok"]:
+            cov = get_mapping_coverage(p)
+            assert cov["coverage_pct"] == 100 or cov["total"] == 0

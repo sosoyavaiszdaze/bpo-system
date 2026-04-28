@@ -400,11 +400,11 @@ class TestTikTokChecks:
     """TikTok チェックの代表的テスト"""
 
     def test_pixel_not_installed(self):
-        """T-TC1: Pixel未設置"""
+        """T01: Pixel未設置"""
         from analyzers.checks.tiktok import run_tiktok_checks
         campaigns = [{"campaign": "TT_Test", "platform": "tiktok"}]
         results = run_tiktok_checks(campaigns, {}, pixel_status={"pixel_installed": False})
-        tc1 = [r for r in results if r["id"] == "T-TC1"]
+        tc1 = [r for r in results if r["id"] == "T01"]
         assert len(tc1) == 1
         assert tc1[0]["passed"] is False
 
@@ -414,7 +414,7 @@ class TestTikTokChecks:
         campaigns = [{"campaign": "TT_Low_VCR", "platform": "tiktok",
                        "video_completion_rate": 8.0}]
         results = run_tiktok_checks(campaigns, {"tiktok": {"creative": {"video_completion_rate_min": 15.0}}})
-        cr3 = [r for r in results if r["id"] == "T-CR3"]
+        cr3 = [r for r in results if r["id"] == "T37"]
         assert len(cr3) == 1
         assert cr3[0]["passed"] is False
 
@@ -424,7 +424,7 @@ class TestTikTokChecks:
         campaigns = [{"campaign": "TT_Learning", "platform": "tiktok",
                        "conversions": 1, "cost": 5000}]
         results = run_tiktok_checks(campaigns, {"tiktok": {"learning_phase": {"min_weekly_conversions": 50}}})
-        bl1 = [r for r in results if r["id"] == "T-BL1"]
+        bl1 = [r for r in results if r["id"] == "T06"]
         assert len(bl1) == 1
         assert bl1[0]["passed"] is False
 
