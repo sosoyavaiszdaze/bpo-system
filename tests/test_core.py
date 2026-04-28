@@ -367,31 +367,31 @@ class TestMetaChecks:
     """Meta チェックの代表的テスト"""
 
     def test_pixel_not_installed(self):
-        """M-PI1: Pixel未設置"""
+        """M01: Pixel未設置"""
         from analyzers.checks.meta import run_meta_checks
         campaigns = [{"campaign": "Test_Meta", "platform": "meta", "cost": 1000}]
         results = run_meta_checks(campaigns, {}, pixel_status={"pixel_installed": False})
-        pi1 = [r for r in results if r["id"] == "M-PI1"]
+        pi1 = [r for r in results if r["id"] == "M01"]
         assert len(pi1) == 1
         assert pi1[0]["passed"] is False
 
     def test_frequency_fatigue(self):
-        """M-CR3: フリークエンシー疲弊"""
+        """M57: フリークエンシー疲弊"""
         from analyzers.checks.meta import run_meta_checks
         campaigns = [{"campaign": "High_Freq", "platform": "meta",
                        "frequency": 5.0, "cost": 1000}]
         results = run_meta_checks(campaigns, {"meta": {"creative": {"fatigue_frequency": 3.5}}})
-        cr3 = [r for r in results if r["id"] == "M-CR3"]
+        cr3 = [r for r in results if r["id"] == "M57"]
         assert len(cr3) == 1
         assert cr3[0]["passed"] is False
 
     def test_adset_count(self):
-        """M-ST2: 広告セット数超過"""
+        """M15: 広告セット数超過"""
         from analyzers.checks.meta import run_meta_checks
         campaigns = [{"campaign": "Too_Many_Adsets", "platform": "meta",
                        "adset_count": 10, "cost": 1000}]
         results = run_meta_checks(campaigns, {"meta": {"structure": {"max_adsets_per_campaign": 5}}})
-        st2 = [r for r in results if r["id"] == "M-ST2"]
+        st2 = [r for r in results if r["id"] == "M15"]
         assert len(st2) == 1
         assert st2[0]["passed"] is False
 

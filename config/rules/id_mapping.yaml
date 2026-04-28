@@ -1,39 +1,6 @@
 version: '1.0'
 google: {}
-meta:
-  M-PI1: M01
-  M-PI2: M03
-  M-PI3: M02
-  M-PI4: M05
-  M-PI5: M06
-  M-PI6: _unmapped
-  M-PI7: M04
-  M-PI8: M08
-  M-CR1: M47
-  M-CR2: M24
-  M-CR3: _unmapped
-  M-CR4: _unmapped
-  M-CR5: M35
-  M-CR6: _unmapped
-  M-ST1: M14
-  M-ST2: M15
-  M-ST3: M09
-  M-ST4: M44
-  M-ST5: M11
-  M-ST6: M12
-  M-ST7: _unmapped
-  M-AU1: M49
-  M-AU2: M51
-  M-AU3: M50
-  M-AU4: M53
-  M-AU5: M54
-  M-AU6: _unmapped
-  M-C01: _unmapped
-  M-C02: _unmapped
-  M-C03: M45
-  M-C04: _unmapped
-  M-C05: _unmapped
-  M-C06: M19
+meta: {}
 tiktok:
   T-TC1: T01
   T-TC2: T02
