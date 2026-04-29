@@ -41,6 +41,14 @@ def start_scheduler():
         name="月次ベンチマーク更新",
     )
 
+    # 月次レポート生成: 毎月1日 03:00 JST
+    scheduler.add_job(
+        _run_monthly_crm_report,
+        CronTrigger(day=1, hour=3, minute=0),
+        id="monthly_crm_report",
+        name="月次CRMレポート生成",
+    )
+
     # 15分毎: Slack判断エスカレーション＆タイムアウト
     try:
         from apscheduler.triggers.interval import IntervalTrigger
@@ -112,6 +120,25 @@ def _run_benchmark_update():
             log.info("ベンチマーク更新スクリプト未検出、スキップ")
     except Exception as e:
         log.error(f"ベンチマーク更新エラー: {e}")
+
+
+def _run_monthly_crm_report():
+    """毎月1日: Twenty CRM 月次レポート生成"""
+    log.info("=== 月次CRMレポート生成 ===")
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from outputs.crm_twenty import TwentyCRM
+        from pipeline import load_config
+        from datetime import datetime
+        crm = TwentyCRM()
+        cfg = load_config()
+        month = datetime.now().strftime("%Y-%m")
+        for client_id in cfg.get("clients", {}):
+            report = crm.generate_monthly_report(client_id, month)
+            crm.save_monthly_report(report)
+            log.info(f"月次レポート保存: {client_id}/{month}")
+    except Exception as e:
+        log.error(f"月次CRMレポートエラー: {e}")
 
 
 def _run_judgment_escalation():

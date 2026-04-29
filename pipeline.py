@@ -330,8 +330,23 @@ def _phase_analyze(client_id, client_cfg, data, thresholds):
 
 
 def _phase_report(client_id, client_cfg, results):
-    """Phase 3: Report — 結果出力"""
+    """Phase 3: Report — 結果出力 + Twenty CRM保存"""
     output_results(client_id, client_cfg, results)
+
+    # Twenty CRM: ヘルススナップショット + ActionLog
+    try:
+        from outputs.crm_twenty import TwentyCRM
+        crm = TwentyCRM()
+        crm.save_health_snapshot(client_id, results)
+        audit = results.get("ads_audit") or {}
+        if audit.get("failed_checks", 0) > 0:
+            crm.save_action_log(
+                client_id=client_id, action_type="daily_audit",
+                platform="cross", title=f"Score {audit.get('score', 0)} ({audit.get('grade', '?')})",
+                description=f"チェック{audit.get('total_checks', 0)}件, 問題{audit.get('failed_checks', 0)}件",
+            )
+    except Exception as e:
+        log.debug(f"[{client_id}] Twenty CRM保存スキップ: {e}")
 
 
 def run_client(client_id, client_cfg, thresholds):

@@ -196,6 +196,12 @@ def auto_update_rules(daily_metrics, current_thresholds):
             if auto_applied:
                 current_thresholds[f"{metric}_threshold"] = new_threshold
                 log.info(f"閾値自動更新: {metric} {old_threshold} → {new_threshold}")
+                # Twenty CRM にルール変更を記録
+                try:
+                    from outputs.crm_twenty import TwentyCRM
+                    TwentyCRM().save_rule_change(updates[-1])
+                except Exception:
+                    pass
         elif classification["classification"] == "platform_change":
             updates.append({
                 "metric": metric,
