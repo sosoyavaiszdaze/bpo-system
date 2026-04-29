@@ -152,19 +152,48 @@ def _run_judgment_escalation():
 
 
 def _run_weekly_learning_review():
-    """毎週月曜09:00: 学習データから閾値調整推奨を生成"""
+    """毎週月曜09:00: 学習データから閾値調整推奨を生成 + Slack送信"""
     log.info("=== 週次学習レビュー ===")
     try:
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from analyzers.judgment_db import JudgmentDB
+        import json
+        import urllib.request
+
         db = JudgmentDB()
         recommendations = db.generate_threshold_adjustment_recommendations()
+        stats = db.get_learning_stats()
+
+        if not recommendations and not stats:
+            log.info("学習レビュー: 推奨事項なし")
+            return
+
+        # レポート生成
+        lines = ["# 週次学習レビュー"]
+        if stats:
+            lines.append("\n## 判断統計")
+            for cat, actions in stats.items():
+                total = sum(actions.values())
+                lines.append(f"**{cat}** ({total}件): " + ", ".join(f"{a}={c}" for a, c in actions.items()))
         if recommendations:
-            log.info(f"閾値調整推奨: {len(recommendations)}件")
+            lines.append("\n## 閾値調整推奨")
             for r in recommendations:
-                log.info(f"  [{r['category']}] {r['suggestion']} (信頼度: {r['confidence']*100:.0f}%)")
-        else:
-            log.info("閾値調整推奨: なし (サンプル不足)")
+                lines.append(f"- [{r['category']}] {r['suggestion']} (信頼度: {r['confidence']*100:.0f}%, サンプル: {r['sample_size']})")
+
+        report_text = "\n".join(lines)
+        log.info(report_text)
+
+        # Slack送信
+        webhook_url = os.environ.get("SLACK_FRAUD_JUDGMENT_WEBHOOK", "")
+        if webhook_url:
+            try:
+                payload = json.dumps({"text": report_text}).encode("utf-8")
+                req = urllib.request.Request(webhook_url, data=payload,
+                                             headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=10):
+                    log.info("週次学習レビューSlack送信完了")
+            except Exception as e:
+                log.warning(f"週次学習レビューSlack送信失敗: {e}")
     except Exception as e:
         log.error(f"週次学習レビューエラー: {e}")
 

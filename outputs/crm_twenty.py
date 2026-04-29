@@ -3,6 +3,7 @@ import os
 import json
 import logging
 import urllib.request
+import urllib.parse
 from datetime import datetime
 
 log = logging.getLogger("bpo")
@@ -105,11 +106,46 @@ class TwentyCRM:
     def generate_monthly_report(self, client_id, month):
         """月次レポートを自動生成（ActionLog + HealthSnapshot集計）"""
         log.info(f"[{client_id}] 月次レポート生成: {month}")
+
+        actions = self.get_client_actions(client_id, month=month)
+        health = self.get_client_health_history(client_id, days=30)
+
+        if not actions and not health:
+            return {
+                "client_id": client_id, "month": month,
+                "generated_at": datetime.utcnow().isoformat(),
+                "note": "Twenty CRM未接続またはデータなし",
+            }
+
+        action_types = {}
+        total_savings = 0
+        for a in actions:
+            title = a.get("title", "")
+            for t in ["fraud_block", "bid_change", "budget_adjust", "daily_audit"]:
+                if f"[{t}]" in title:
+                    action_types[t] = action_types.get(t, 0) + 1
+                    break
+
+        scores = []
+        for h in health:
+            body = h.get("bodyV2", {}).get("markdown", "")
+            for line in body.split("\n"):
+                if "**Score:**" in line:
+                    try:
+                        scores.append(float(line.split("**Score:**")[1].split("/")[0].strip()))
+                    except (ValueError, IndexError):
+                        pass
+
+        avg_score = round(sum(scores) / len(scores), 1) if scores else 0
+
         return {
-            "client_id": client_id,
-            "month": month,
+            "client_id": client_id, "month": month,
             "generated_at": datetime.utcnow().isoformat(),
-            "note": "Twenty CRM クエリ未実装。手動集計またはAPI連携後に自動化。",
+            "total_actions": len(actions),
+            "action_by_type": action_types,
+            "avg_score": avg_score,
+            "health_snapshots": len(health),
+            "total_savings": total_savings,
         }
 
     def save_monthly_report(self, report_data):
@@ -165,21 +201,60 @@ class TwentyCRM:
     # ── クエリ ────────────────────────────────────────────
 
     def get_client_actions(self, client_id, month=None, action_type=None):
-        """ActionLogフィルタ取得（TODO: Twenty GraphQL query実装）"""
-        log.debug(f"get_client_actions: {client_id} (Twenty query未実装)")
-        return []
+        """ActionLogフィルタ取得"""
+        notes = self._rest_get("/notes", {"filter": json.dumps({"title": {"like": f"%{client_id}%"}})})
+        if not notes:
+            return []
+        results = notes if isinstance(notes, list) else notes.get("data", {}).get("notes", [])
+        if month:
+            results = [n for n in results if month in n.get("title", "")]
+        if action_type:
+            results = [n for n in results if f"[{action_type}]" in n.get("title", "")]
+        return results
 
     def get_client_health_history(self, client_id, days=30):
-        """HealthSnapshot取得（TODO: Twenty GraphQL query実装）"""
-        log.debug(f"get_client_health_history: {client_id} (Twenty query未実装)")
-        return []
+        """HealthSnapshot取得（直近N日分）"""
+        notes = self._rest_get("/notes", {"filter": json.dumps({"title": {"like": f"%[Health] {client_id}%"}})})
+        if not notes:
+            return []
+        results = notes if isinstance(notes, list) else notes.get("data", {}).get("notes", [])
+        if days and results:
+            from datetime import timedelta
+            cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+            results = [n for n in results if n.get("createdAt", "") >= cutoff]
+        return results
 
     def get_monthly_report(self, client_id, month):
-        """MonthlyReport取得（TODO: Twenty GraphQL query実装）"""
-        log.debug(f"get_monthly_report: {client_id}/{month} (Twenty query未実装)")
-        return None
+        """MonthlyReport取得"""
+        notes = self._rest_get("/notes", {"filter": json.dumps({"title": {"like": f"%[Monthly] {client_id} - {month}%"}})})
+        if not notes:
+            return None
+        results = notes if isinstance(notes, list) else notes.get("data", {}).get("notes", [])
+        return results[0] if results else None
 
     # ── 共通 ──────────────────────────────────────────────
+
+    def _rest_get(self, endpoint, params=None):
+        """Twenty CRM REST GET リクエスト"""
+        if not self.api_url or not self.api_key:
+            return None
+        try:
+            url = f"{self.api_url}{endpoint}"
+            if params:
+                query = urllib.parse.urlencode(params)
+                url = f"{url}?{query}"
+            req = urllib.request.Request(
+                url, method="GET",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read())
+        except Exception as e:
+            log.warning(f"Twenty CRM GET失敗 ({endpoint}): {e}")
+            return None
 
     def _graphql_mutate(self, operation, variables):
         """Twenty CRM GraphQL mutation 実行"""

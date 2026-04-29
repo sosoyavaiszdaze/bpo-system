@@ -135,3 +135,38 @@ class TestSlackJudgmentOrchestrator:
         record = db.get_judgment(jid)
         assert record["status"] == "resolved"
         assert record["action"] == "block"
+
+
+class TestSlackInteractionHandler:
+    """slack_interaction_handler.py のテスト"""
+
+    def test_app_creation(self):
+        """Flask app が作成できる（flask インストール済みの場合）"""
+        try:
+            from integrations.slack_interaction_handler import create_app
+            app = create_app()
+            # flask がインストールされていればappは非None
+            if app is not None:
+                assert hasattr(app, "test_client")
+        except ImportError:
+            pytest.skip("flask 未インストール")
+
+
+class TestTwentyCRMNoCredentials:
+    """Twenty CRM 未設定時の安全動作テスト"""
+
+    def test_save_action_log_returns_none(self):
+        from outputs.crm_twenty import TwentyCRM
+        crm = TwentyCRM(api_url="", api_key="")
+        assert crm.save_action_log("c1", "test", "google", "title") is None
+
+    def test_get_client_actions_returns_empty(self):
+        from outputs.crm_twenty import TwentyCRM
+        crm = TwentyCRM(api_url="", api_key="")
+        assert crm.get_client_actions("c1") == []
+
+    def test_generate_monthly_report_no_crash(self):
+        from outputs.crm_twenty import TwentyCRM
+        crm = TwentyCRM(api_url="", api_key="")
+        report = crm.generate_monthly_report("c1", "2026-04")
+        assert report["client_id"] == "c1"

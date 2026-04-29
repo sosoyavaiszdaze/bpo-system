@@ -99,6 +99,14 @@ def run_fraud_action(client_id, fraud_results, client_config, thresholds=None,
     flagged_items.extend(tiktok_actions["flagged"])
     blocked_items.extend(tiktok_actions["blocked"])
 
+    # --- グレーゾーン判定: Slack人間判断 ---
+    pending_items = _evaluate_gray_zone(
+        client_id, flagged_items, fraud_rate, campaign_metrics
+    )
+    for item in pending_items:
+        item["action"] = "pending_human_judgment"
+        actions.append(item)
+
     # --- Slack 通知 ---
     _send_fraud_notification(
         client_id, fraud_rate, actions, flagged_items, blocked_items, client_config
@@ -223,6 +231,59 @@ def _try_slack_judgment(client_id, placement_id, platform, fraud_rate, monthly_c
     except Exception as e:
         log.warning(f"Slack判断依頼エラー: {e}")
         return "flag_and_monitor"
+
+
+# ============================================================
+# グレーゾーン判定 (Slack人間判断)
+# ============================================================
+def _evaluate_gray_zone(client_id, flagged_items, fraud_rate, campaign_metrics):
+    """flagged_itemsの中からグレーゾーン（true_cv>=1 & fake_ratio<0.80）を抽出し、
+    学習DBから自動提案 or Slack判断依頼を行う"""
+    pending = []
+    if fraud_rate < FRAUD_RATE_BLOCK_THRESHOLD:
+        return pending
+
+    for item in flagged_items:
+        true_cv = item.get("monthly_cv", 0)
+        fake_ratio = item.get("fraud_rate", 0)
+        if true_cv < 1 or fake_ratio >= 0.80:
+            continue
+
+        platform = item.get("platform", "")
+        target_id = item.get("target", "")
+        metadata = {
+            "client_id": client_id, "platform": platform,
+            "fraud_rate": fraud_rate, "true_cv_count": true_cv,
+            "fake_ratio": fake_ratio,
+        }
+
+        try:
+            from analyzers.judgment_db import JudgmentDB
+            from analyzers.slack_judgment import request_cv_fraud_judgment
+            db = JudgmentDB()
+            suggestion = db.get_auto_suggestion("cv_fraud_judgment", metadata)
+            if suggestion:
+                log.info(f"学習データから自動適用: {suggestion} ({client_id}/{platform}/{target_id})")
+                item["action"] = suggestion
+                item["decision"] = suggestion
+                continue
+
+            request_cv_fraud_judgment(
+                client_id=client_id, placement_id=target_id, platform=platform,
+                fraud_rate=fraud_rate, monthly_cv_raw=true_cv,
+                true_cv_count=true_cv, fake_cv_count=0,
+                fake_ratio=fake_ratio, cv_quality_avg=0,
+                fraud_score=item.get("fraud_score", 0),
+                top_fraud_signals=[], cpa_current=0, monthly_spend=0,
+            )
+            log.info(f"Slack判断依頼送信: {client_id}/{platform}/{target_id}")
+            pending.append(item)
+        except ImportError:
+            log.debug("Slack判断モジュール未読込。flag_and_monitorにフォールバック。")
+        except Exception as e:
+            log.warning(f"グレーゾーン判定エラー: {e}")
+
+    return pending
 
 
 # ============================================================
