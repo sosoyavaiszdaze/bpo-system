@@ -137,14 +137,26 @@ def run_fraud_action(client_id, fraud_results, client_config, thresholds=None,
 # ============================================================
 # 複合判定ロジック（共通）
 # ============================================================
-def _composite_decision(fraud_score, fraud_rate, monthly_cv, threshold):
-    """TO-07準拠の複合判定。
+def _composite_decision(fraud_score, fraud_rate, monthly_cv, threshold,
+                        cv_quality_result=None):
+    """TO-07準拠の複合判定。CV Quality Scoreがあれば強化版を使用。
 
+    Args:
+        cv_quality_result: calculate_true_cv_count()の結果（あれば強化判定）
     Returns:
-        "block" — 確信度≥閾値 & 不正率≥20% & CV=0
-        "flag_and_monitor" — それ以外（デフォルト）
-        "monitor_only" — 確信度が閾値未満
+        "block" / "flag_and_monitor" / "monitor_only"
     """
+    # CV Quality Scoreがある場合は強化版を使用
+    if cv_quality_result and cv_quality_result.get("total_cvs", 0) > 0:
+        try:
+            from analyzers.cv_quality_scorer import enhanced_composite_decision
+            return enhanced_composite_decision(
+                fraud_score, fraud_rate, monthly_cv, cv_quality_result, threshold
+            )
+        except ImportError:
+            pass
+
+    # フォールバック: 基本判定
     if fraud_score < threshold:
         return "monitor_only"
 
