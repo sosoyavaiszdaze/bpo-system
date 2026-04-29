@@ -64,7 +64,7 @@ class JudgmentDB:
         return pending
 
     def resolve_judgment(self, judgment_id, action, judge, reason, resolved_at):
-        """判断を解決済みにする"""
+        """判断を解決済みにする（JSON + Twenty CRM）"""
         record = self.get_judgment(judgment_id)
         if record:
             record["status"] = "resolved"
@@ -74,6 +74,7 @@ class JudgmentDB:
             record["resolved_at"] = resolved_at
             self._save(judgment_id, record)
             self._add_to_learning_history(record)
+            self._save_to_twenty_crm(record)
 
     def update_escalation_level(self, judgment_id, level):
         """エスカレーションレベルを更新"""
@@ -101,6 +102,36 @@ class JudgmentDB:
         path = os.path.join(JUDGMENTS_DIR, f"{judgment_id}.json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump(record, f, ensure_ascii=False, indent=2)
+
+    def _save_to_twenty_crm(self, record):
+        """Twenty CRM に判断結果を書き込み（JSONフォールバック付き）"""
+        api_url = os.environ.get("TWENTY_API_URL", "")
+        api_key = os.environ.get("TWENTY_API_KEY", "")
+        if not api_url or not api_key:
+            return
+
+        import urllib.request
+        payload = {
+            "title": f"[Fraud判断] {record['judgment_id']}",
+            "bodyV2": {"markdown": (
+                f"# Fraud Judgment: {record['judgment_id']}\n"
+                f"**Category:** {record['category']}\n"
+                f"**Action:** {record['action']}\n"
+                f"**Judge:** {record['judge']}\n"
+                f"**Reason:** {record['reason']}\n"
+                f"**Resolved:** {record['resolved_at']}\n"
+            )},
+        }
+        try:
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                f"{api_url}/notes", data=data, method="POST",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=10):
+                log.info(f"Twenty CRM保存: {record['judgment_id']}")
+        except Exception as e:
+            log.warning(f"Twenty CRM保存失敗 (JSONフォールバック済): {e}")
 
     def _add_to_learning_history(self, record):
         """判断結果を学習履歴に蓄積"""

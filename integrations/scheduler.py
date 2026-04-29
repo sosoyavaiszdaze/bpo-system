@@ -41,7 +41,27 @@ def start_scheduler():
         name="月次ベンチマーク更新",
     )
 
-    log.info("スケジューラ起動: 週次監査(日曜02:00) / 日次Fraud(06:00) / 月次ベンチ(1日00:00)")
+    # 15分毎: Slack判断エスカレーション＆タイムアウト
+    try:
+        from apscheduler.triggers.interval import IntervalTrigger
+        scheduler.add_job(
+            _run_judgment_escalation,
+            IntervalTrigger(minutes=15),
+            id="judgment_escalation",
+            name="判断エスカレーション(15分毎)",
+        )
+    except Exception as e:
+        log.warning(f"判断エスカレーションジョブ追加失敗: {e}")
+
+    # 毎週月曜09:00: 学習レビュー → 閾値調整推奨
+    scheduler.add_job(
+        _run_weekly_learning_review,
+        CronTrigger(day_of_week="mon", hour=9, minute=0),
+        id="weekly_learning_review",
+        name="週次学習レビュー",
+    )
+
+    log.info("スケジューラ起動: 週次監査(日02:00) / 日次Fraud(06:00) / 月次ベンチ(1日00:00) / 判断エスカ(15分毎) / 学習レビュー(月09:00)")
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
@@ -92,6 +112,34 @@ def _run_benchmark_update():
             log.info("ベンチマーク更新スクリプト未検出、スキップ")
     except Exception as e:
         log.error(f"ベンチマーク更新エラー: {e}")
+
+
+def _run_judgment_escalation():
+    """15分毎: Slack判断のエスカレーション＆タイムアウト"""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from analyzers.slack_judgment import check_and_escalate
+        check_and_escalate()
+    except Exception as e:
+        log.error(f"判断エスカレーションエラー: {e}")
+
+
+def _run_weekly_learning_review():
+    """毎週月曜09:00: 学習データから閾値調整推奨を生成"""
+    log.info("=== 週次学習レビュー ===")
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from analyzers.judgment_db import JudgmentDB
+        db = JudgmentDB()
+        recommendations = db.generate_threshold_adjustment_recommendations()
+        if recommendations:
+            log.info(f"閾値調整推奨: {len(recommendations)}件")
+            for r in recommendations:
+                log.info(f"  [{r['category']}] {r['suggestion']} (信頼度: {r['confidence']*100:.0f}%)")
+        else:
+            log.info("閾値調整推奨: なし (サンプル不足)")
+    except Exception as e:
+        log.error(f"週次学習レビューエラー: {e}")
 
 
 if __name__ == "__main__":

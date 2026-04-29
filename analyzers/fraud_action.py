@@ -57,6 +57,15 @@ def run_fraud_action(client_id, fraud_results, client_config, thresholds=None,
     if not fraud_results or fraud_results.get("error"):
         return {"skipped": True}
 
+    # 業界別閾値の適用
+    try:
+        from analyzers.industry_thresholds import apply_dynamic_thresholds
+        dynamic_t = apply_dynamic_thresholds(client_config)
+        if dynamic_t:
+            log.info(f"[{client_id}] 業界別閾値適用: {dynamic_t.get('industry', 'default')}")
+    except ImportError:
+        pass
+
     actions = []
     flagged_items = []
     blocked_items = []
@@ -138,21 +147,33 @@ def run_fraud_action(client_id, fraud_results, client_config, thresholds=None,
 # 複合判定ロジック（共通）
 # ============================================================
 def _composite_decision(fraud_score, fraud_rate, monthly_cv, threshold,
-                        cv_quality_result=None):
-    """TO-07準拠の複合判定。CV Quality Scoreがあれば強化版を使用。
+                        cv_quality_result=None, client_id="", placement_id="",
+                        platform="", cpa_current=0, monthly_spend=0, top_signals=None):
+    """TO-07準拠の複合判定。CV Quality Score + 学習DB + Slack判断統合。
 
     Args:
-        cv_quality_result: calculate_true_cv_count()の結果（あれば強化判定）
+        cv_quality_result: calculate_true_cv_count()の結果
+        client_id/placement_id/platform: Slack判断依頼に必要な情報
     Returns:
-        "block" / "flag_and_monitor" / "monitor_only"
+        str: "block" / "flag_and_monitor" / "monitor_only" / "pending_human_judgment"
     """
-    # CV Quality Scoreがある場合は強化版を使用
+    # CV Quality Scoreがある場合は強化版判定
     if cv_quality_result and cv_quality_result.get("total_cvs", 0) > 0:
         try:
             from analyzers.cv_quality_scorer import enhanced_composite_decision
-            return enhanced_composite_decision(
+            result = enhanced_composite_decision(
                 fraud_score, fraud_rate, monthly_cv, cv_quality_result, threshold
             )
+            # flag_and_monitor かつ Slack判断が必要な条件
+            if (result == "flag_and_monitor" and
+                    fraud_rate >= FRAUD_RATE_BLOCK_THRESHOLD and
+                    0 < cv_quality_result.get("real_cv_count", 0) < CV_SAFE_THRESHOLD and
+                    cv_quality_result.get("fake_cv_count", 0) / max(monthly_cv, 1) < 0.80):
+                return _try_slack_judgment(
+                    client_id, placement_id, platform, fraud_rate, monthly_cv,
+                    cv_quality_result, fraud_score, cpa_current, monthly_spend, top_signals
+                )
+            return result
         except ImportError:
             pass
 
@@ -167,6 +188,41 @@ def _composite_decision(fraud_score, fraud_rate, monthly_cv, threshold,
         return "flag_and_monitor"
 
     return "flag_and_monitor"
+
+
+def _try_slack_judgment(client_id, placement_id, platform, fraud_rate, monthly_cv_raw,
+                        cv_quality_result, fraud_score, cpa_current, monthly_spend, top_signals):
+    """学習DBから自動提案を試み、なければSlack判断依頼"""
+    try:
+        from analyzers.judgment_db import JudgmentDB
+        db = JudgmentDB()
+        suggestion = db.get_auto_suggestion(
+            category="cv_fraud_judgment",
+            metadata={"client_id": client_id, "placement_id": placement_id}
+        )
+        if suggestion:
+            log.info(f"学習DB自動適用: {client_id}/{placement_id} → {suggestion}")
+            return suggestion
+    except Exception as e:
+        log.debug(f"学習DB参照エラー: {e}")
+
+    try:
+        from analyzers.slack_judgment import request_cv_fraud_judgment
+        request_cv_fraud_judgment(
+            client_id=client_id, placement_id=placement_id, platform=platform,
+            fraud_rate=fraud_rate, monthly_cv_raw=monthly_cv_raw,
+            true_cv_count=cv_quality_result.get("real_cv_count", 0),
+            fake_cv_count=cv_quality_result.get("fake_cv_count", 0),
+            fake_ratio=cv_quality_result.get("fake_cv_count", 0) / max(monthly_cv_raw, 1),
+            cv_quality_avg=cv_quality_result.get("avg_quality_score", 0),
+            fraud_score=fraud_score,
+            top_fraud_signals=top_signals or [],
+            cpa_current=cpa_current, monthly_spend=monthly_spend,
+        )
+        return "pending_human_judgment"
+    except Exception as e:
+        log.warning(f"Slack判断依頼エラー: {e}")
+        return "flag_and_monitor"
 
 
 # ============================================================
