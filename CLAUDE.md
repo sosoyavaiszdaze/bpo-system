@@ -44,6 +44,13 @@ Python check_id と YAML rule_id は統一済み。`id_mapping.yaml` は廃止�
 - 重み付けは `severity_weight × category_weight × polarity_multiplier` の3層
 - 詳細: `docs/scoring_design.md`
 
+## ワークフロー
+業務フロー・役割分担の詳細は docs/workflow.md を参照。
+コード変更時は「誰が使う機能か（AI自動/社内運用/社外クライアント）」を意識すること。
+- AI自動処理 → エラー時はログ+フォールバック、人間介入不要にする
+- 社内向け機能 → Slack通知は日本語、技術詳細OK
+- 社外向け機能 → ビジネス指標のみ、技術用語は使わない
+
 ## 重要な注意事項
 - `outputs/crm_save.py`: 環境変数 `TWENTY_API_URL`, `TWENTY_API_KEY` が必要
 - `config/clients.yaml`: webhook は `webhook_env` で環境変数名を指定
