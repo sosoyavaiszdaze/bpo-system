@@ -514,7 +514,6 @@ def _send_fraud_notification(client_id, fraud_rate, actions, flagged, blocked, c
     if not webhook_url:
         return
 
-    import urllib.request
 
     if fraud_rate >= FRAUD_RATE_CRITICAL:
         _send_slack_message(webhook_url, {

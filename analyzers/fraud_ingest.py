@@ -1,7 +1,6 @@
 """Fraud データ取込 — AdTruth SDK / CSV フォールバック"""
 import os
 import csv
-import json
 import logging
 
 log = logging.getLogger("bpo")
@@ -55,7 +54,6 @@ def _fetch_adtruth(client_id, api_key, client_cfg):
     - リアルタイム不正スコア取得
     - IP レピュテーション連携
     """
-    import urllib.request
 
     # スタブ — AdTruth API接続コード
     # base_url = "https://api.adtruth.com/v1"

@@ -1,6 +1,4 @@
 """Playwright LP 実測 — Core Web Vitals + LP品質チェック (Layer 3)"""
-import os
-import json
 import logging
 
 log = logging.getLogger("bpo")

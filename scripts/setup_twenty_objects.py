@@ -13,8 +13,6 @@
 - RuleChangeLog: ルール変更記録
 """
 import os
-import json
-import urllib.request
 import sys
 
 API_URL = os.environ.get("TWENTY_API_URL", "")

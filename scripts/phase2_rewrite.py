@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Phase 2: Python check_id → YAML rule_id 書き換え + YAML追加スクリプト"""
 import os
-import re
 import yaml
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

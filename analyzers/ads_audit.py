@@ -42,16 +42,15 @@ def run_audit(client_id, data, thresholds):
     platform_scores = {}
     platform_details = {}
     platform_errors = {}
+    score = 0
+    grade = "F"
 
-    # Layer 1: モジュールインポート（明示的に初期化）
-    evaluate_checks = None
-    calc_platform_score = None
-    calc_cross_platform_score = None
-    calc_budget_shares = None
-
+    # Layer 1: モジュールインポート
+    engine_available = False
     try:
         from engine.yaml_evaluator import evaluate_checks
         from engine.scorer import calc_platform_score, calc_cross_platform_score, calc_budget_shares
+        engine_available = True
     except ImportError as e:
         log.error(f"エンジンモジュールのインポート失敗: {e}")
         failed = [c for c in all_check_results if not c.get("passed", True)]
@@ -59,7 +58,7 @@ def run_audit(client_id, data, thresholds):
         score = round((1 - len(failed) / total) * 100, 1) if total > 0 else 0
         grade = _fallback_grade(score)
 
-    if evaluate_checks:
+    if engine_available:
         severity_weights = thresholds.get("scoring", {}).get("severity_weights", {})
 
         # プラットフォーム別にチェック結果を分割（crossも含む）

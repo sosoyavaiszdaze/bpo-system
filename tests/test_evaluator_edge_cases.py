@@ -1,13 +1,12 @@
 """yaml_evaluator のエッジケーステスト — polarity, budget_first, prerequisite, enabled"""
 import os
 import sys
-import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.yaml_evaluator import (
     _resolve_context_dependent, _resolve_budget_first,
-    _find_result_scoped, _evaluate_prerequisite, evaluate_checks
+    _find_result_scoped, evaluate_checks
 )
 
 

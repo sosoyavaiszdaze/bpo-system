@@ -4,7 +4,7 @@ import logging
 log = logging.getLogger("bpo")
 
 try:
-    from pydantic import BaseModel, Field
+    from pydantic import BaseModel
     from typing import Optional, Literal
     PYDANTIC_AVAILABLE = True
 except ImportError:

@@ -25,7 +25,7 @@ except ImportError:
 from analyzers.judgment_db import JudgmentDB
 from analyzers.slack_message_templates import (
     build_cv_fraud_judgment_message, build_new_pattern_message,
-    build_bid_reset_message, build_timeout_notification, build_escalation_message,
+    build_bid_reset_message,
 )
 
 _db = JudgmentDB()

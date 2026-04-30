@@ -2,8 +2,6 @@
 import os
 import yaml
 import logging
-import json
-import urllib.request
 from datetime import datetime, timedelta
 
 log = logging.getLogger("bpo")

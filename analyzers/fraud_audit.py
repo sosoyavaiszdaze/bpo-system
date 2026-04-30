@@ -1,6 +1,5 @@
 """AdTruth 不正検知 v1.0 - 15チェック（CSV/データベース判定）"""
 import logging
-import re
 
 log = logging.getLogger("bpo")
 

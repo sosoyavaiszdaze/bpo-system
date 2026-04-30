@@ -1,5 +1,4 @@
 """SEO監査 v3.0 - Claude SEO Layer1 対応 45チェック"""
-import os
 import json
 import logging
 import urllib.request
