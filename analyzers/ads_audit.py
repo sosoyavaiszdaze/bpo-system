@@ -43,7 +43,12 @@ def run_audit(client_id, data, thresholds):
     platform_details = {}
     platform_errors = {}
 
-    # Layer 1: モジュールインポート
+    # Layer 1: モジュールインポート（明示的に初期化）
+    evaluate_checks = None
+    calc_platform_score = None
+    calc_cross_platform_score = None
+    calc_budget_shares = None
+
     try:
         from engine.yaml_evaluator import evaluate_checks
         from engine.scorer import calc_platform_score, calc_cross_platform_score, calc_budget_shares
@@ -53,8 +58,6 @@ def run_audit(client_id, data, thresholds):
         total = len(all_check_results) if all_check_results else 1
         score = round((1 - len(failed) / total) * 100, 1) if total > 0 else 0
         grade = _fallback_grade(score)
-        # 以降の処理をスキップして結果整理へ
-        evaluate_checks = None
 
     if evaluate_checks:
         severity_weights = thresholds.get("scoring", {}).get("severity_weights", {})
