@@ -93,6 +93,36 @@ OBJECTS = [
     },
 ]
 
+# Client マスターオブジェクト（7つ目）
+CLIENT_OBJECT = {
+    "name": "Client",
+    "description": "クライアントマスターデータ（SoT: Single Source of Truth）",
+    "fields": [
+        {"name": "clientId", "type": "TEXT", "description": "クライアントID (一意)"},
+        {"name": "name", "type": "TEXT", "description": "クライアント名"},
+        {"name": "active", "type": "BOOLEAN", "description": "有効フラグ"},
+        {"name": "objective", "type": "TEXT", "description": "目標 (balanced/cpa_minimize/cv_maximize/roas_target)"},
+        {"name": "targetCpa", "type": "NUMBER", "description": "目標CPA"},
+        {"name": "targetRoas", "type": "NUMBER", "description": "目標ROAS"},
+        {"name": "googleCustomerId", "type": "TEXT", "description": "Google Ads Customer ID"},
+        {"name": "googleLoginCustomerId", "type": "TEXT", "description": "Google Ads MCC ID"},
+        {"name": "metaAccountId", "type": "TEXT", "description": "Meta Account ID"},
+        {"name": "tiktokAdvertiserId", "type": "TEXT", "description": "TikTok Advertiser ID"},
+        {"name": "featuresAdtruth", "type": "BOOLEAN", "description": "AdTruth有効"},
+        {"name": "featuresSeoAudit", "type": "BOOLEAN", "description": "SEO監査有効"},
+        {"name": "featuresClaudeAnalysis", "type": "BOOLEAN", "description": "Claude分析有効"},
+        {"name": "slackChannel", "type": "TEXT", "description": "Slackチャンネル"},
+        {"name": "slackWebhookEnv", "type": "TEXT", "description": "Slack Webhook環境変数名"},
+        {"name": "scheduleCron", "type": "TEXT", "description": "スケジュール (cron)"},
+        {"name": "timezone", "type": "TEXT", "description": "タイムゾーン"},
+        {"name": "onboardedAt", "type": "TEXT", "description": "オンボーディング日"},
+        {"name": "lastAuditAt", "type": "TEXT", "description": "最終監査日時"},
+    ],
+}
+
+# 既存6オブジェクトにclient RELATION追加用
+CLIENT_RELATION_FIELD = {"name": "clientRelation", "type": "TEXT", "description": "Client ID (RELATION用、将来RELATION型に変更)"}
+
 
 def main():
     if not API_URL or not API_KEY:
@@ -100,20 +130,23 @@ def main():
         sys.exit(1)
 
     print(f"Twenty CRM: {API_URL}")
-    print(f"カスタムオブジェクト {len(OBJECTS)}件を作成します...\n")
+    all_objects = OBJECTS + [CLIENT_OBJECT]
+    print(f"カスタムオブジェクト {len(all_objects)}件を作成します...\n")
 
-    for obj in OBJECTS:
+    for obj in all_objects:
         print(f"  Creating: {obj['name']} — {obj['description']}")
         print(f"    Fields: {len(obj['fields'])}件")
-        for field in obj["fields"]:
-            print(f"      - {field['name']} ({field['type']}): {field['description']}")
-        # NOTE: Twenty Metadata API のエンドポイントは環境依存
-        # 実際のAPI呼び出しは Twenty のバージョンに合わせて調整
-        print("    → Twenty Metadata API未実装。手動作成またはAPI確認後に自動化。")
+        for fld in obj["fields"]:
+            print(f"      - {fld['name']} ({fld['type']}): {fld['description']}")
         print()
 
+    print("--- 既存オブジェクトへのRELATION追加 ---")
+    for obj in OBJECTS:
+        print(f"  {obj['name']}: + clientRelation (TEXT → 将来RELATION型)")
+    print()
+
     print("完了。Twenty の管理画面から上記オブジェクトを作成してください。")
-    print("作成後、outputs/crm_twenty.py のNotes APIをカスタムオブジェクトAPIに差し替えます。")
+    print("秘密情報（APIトークン等）はCRMに格納せず、.env + 命名規約で管理します。")
 
 
 if __name__ == "__main__":

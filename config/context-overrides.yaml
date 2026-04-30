@@ -1,7 +1,7 @@
 overrides:
 - chosen_priority: Slack経由でクライアントに確認が必要
   conflict_group: cpa_vs_volume
-  decided_at: '2026-04-30T10:23:24.597649'
+  decided_at: '2026-04-30T11:08:39.482238'
   decided_by: pending
-  expires_at: '2026-07-29T10:23:24.597649'
+  expires_at: '2026-07-29T11:08:39.482238'
 version: '1.0'

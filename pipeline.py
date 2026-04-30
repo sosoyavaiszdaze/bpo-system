@@ -47,6 +47,34 @@ def load_config():
         return yaml.safe_load(f)
 
 
+def load_client_config(client_id):
+    """クライアント設定をロード（CRM優先、YAMLフォールバック）"""
+    from engine.models import ClientConfig
+
+    # 1. CRM接続を試行
+    if os.environ.get("TWENTY_API_URL") and os.environ.get("TWENTY_API_KEY"):
+        try:
+            from outputs.crm_twenty import TwentyCRM
+            crm = TwentyCRM()
+            client = crm.get_client(client_id)
+            if client:
+                log.info(f"[{client_id}] クライアント設定: Twenty CRM から読み込み")
+                return client
+            log.debug(f"[{client_id}] CRMにクライアント未登録、YAMLフォールバック")
+        except Exception as e:
+            log.warning(f"Twenty CRM読み取り失敗: {e}、YAMLフォールバック")
+
+    # 2. YAMLフォールバック
+    cfg = load_config()
+    client_data = cfg.get("clients", {}).get(client_id)
+    if client_data:
+        log.info(f"[{client_id}] クライアント設定: clients.yaml から読み込み")
+        return ClientConfig.from_yaml(client_id, client_data)
+
+    log.warning(f"[{client_id}] クライアント設定が見つかりません")
+    return ClientConfig(client_id=client_id, name=client_id, source="default")
+
+
 def load_thresholds():
     path = os.path.join(CONFIG_DIR, "thresholds.yaml")
     with open(path, "r", encoding="utf-8") as f:

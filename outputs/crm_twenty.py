@@ -232,6 +232,87 @@ class TwentyCRM:
         results = notes if isinstance(notes, list) else notes.get("data", {}).get("notes", [])
         return results[0] if results else None
 
+    # ── Client管理 ────────────────────────────────────────
+
+    def list_clients(self, active_only=True):
+        """全クライアントを取得"""
+        from engine.models import ClientConfig
+        notes = self._rest_get("/notes", {"filter": json.dumps({"title": {"like": "%[Client]%"}})})
+        if not notes:
+            return []
+        results = notes if isinstance(notes, list) else notes.get("data", {}).get("notes", [])
+        clients = []
+        for note in results:
+            try:
+                data = self._parse_client_note(note)
+                if data and (not active_only or data.get("active", True)):
+                    clients.append(ClientConfig.from_crm(data))
+            except Exception:
+                continue
+        return clients
+
+    def get_client(self, client_id):
+        """単一クライアント取得"""
+        from engine.models import ClientConfig
+        notes = self._rest_get("/notes", {"filter": json.dumps({"title": {"like": f"%[Client] {client_id}%"}})})
+        if not notes:
+            return None
+        results = notes if isinstance(notes, list) else notes.get("data", {}).get("notes", [])
+        for note in results:
+            data = self._parse_client_note(note)
+            if data and data.get("clientId") == client_id:
+                return ClientConfig.from_crm(data)
+        return None
+
+    def update_client_last_audit(self, client_id, timestamp):
+        """監査完了時に lastAuditAt を更新"""
+        payload = {
+            "title": f"[ClientUpdate] {client_id} lastAudit",
+            "bodyV2": {"markdown": f"**lastAuditAt:** {timestamp.isoformat() if hasattr(timestamp, 'isoformat') else timestamp}"},
+        }
+        return self._graphql_mutate("createNote", payload)
+
+    def upsert_client(self, config):
+        """クライアント作成/更新（移行スクリプト用）"""
+        payload = {
+            "title": f"[Client] {config.client_id}",
+            "bodyV2": {"markdown": (
+                f"# Client: {config.client_id}\n"
+                f"**name:** {config.name}\n"
+                f"**active:** {config.active}\n"
+                f"**objective:** {config.objective}\n"
+                f"**googleCustomerId:** {config.google_customer_id}\n"
+                f"**metaAccountId:** {config.meta_account_id}\n"
+                f"**tiktokAdvertiserId:** {config.tiktok_advertiser_id}\n"
+                f"**slackChannel:** {config.slack_channel}\n"
+                f"**slackWebhookEnv:** {config.slack_webhook_env}\n"
+                f"**featuresAdtruth:** {config.features.adtruth}\n"
+                f"**featuresSeoAudit:** {config.features.seo_audit}\n"
+                f"**featuresClaudeAnalysis:** {config.features.claude_analysis}\n"
+                f"**scheduleCron:** {config.schedule_cron}\n"
+                f"**timezone:** {config.timezone}\n"
+            )},
+        }
+        return self._graphql_mutate("createNote", payload)
+
+    def _parse_client_note(self, note):
+        """NotesからClientデータをパース"""
+        body = note.get("bodyV2", {}).get("markdown", note.get("body", ""))
+        data = {}
+        for line in body.split("\n"):
+            if "**" in line and ":**" in line:
+                try:
+                    key = line.split("**")[1].rstrip(":")
+                    value = line.split(":** ")[1].strip()
+                    if value.lower() == "true":
+                        value = True
+                    elif value.lower() == "false":
+                        value = False
+                    data[key] = value
+                except (IndexError, ValueError):
+                    continue
+        return data if data.get("clientId") or data.get("name") else None
+
     # ── 共通 ──────────────────────────────────────────────
 
     def _rest_get(self, endpoint, params=None):
