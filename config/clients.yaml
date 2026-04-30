@@ -31,6 +31,19 @@ clients:
       slack:
         webhook_env: "SLACK_WEBHOOK_YAMAMOTO"
         channel: "#yamamoto-ads"
+    intent_overrides:
+      - rule_ids: ["C05", "C06"]
+        reason: "テスト期間中のため意図的に低予算設定"
+        registered_by: "運用担当"
+        registered_at: "2026-04-30"
+        expires_at: "2026-07-31"
+        suppress_action: "skip_notification"
+      - rule_ids: ["G12"]
+        reason: "東京限定キャンペーン"
+        registered_by: "クライアント"
+        registered_at: "2026-04-30"
+        expires_at: null
+        suppress_action: "add_context_note"
     crm:
       twenty:
         enabled: true

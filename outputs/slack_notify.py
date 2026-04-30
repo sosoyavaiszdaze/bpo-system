@@ -106,9 +106,12 @@ def _build_blocks(client_id, results):
 
         blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": perf_text}})
 
-    # ===== 重大問題（媒体別グループ） =====
+    # ===== 重大問題（媒体別グループ、suppressed除外） =====
     issues = audit.get("issues", [])
-    critical = [i for i in issues if i.get("severity") in ("critical", "high")]
+    # Intent Override で suppressed されたチェックは通知から除外
+    active_issues = [i for i in issues if not i.get("suppressed")]
+    # context_note があるものは注記付きで含める
+    critical = [i for i in active_issues if i.get("severity") in ("critical", "high")]
     if critical:
         blocks.append({"type": "divider"})
         blocks.append({

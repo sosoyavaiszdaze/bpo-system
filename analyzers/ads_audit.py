@@ -37,6 +37,13 @@ def run_audit(client_id, data, thresholds):
 
 
 
+    # === 1.5. Intent Override フィルター ===
+    try:
+        from engine.intent_filter import filter_checks
+        all_check_results = filter_checks(client_id, all_check_results)
+    except Exception as e:
+        log.debug(f"Intent Filter適用スキップ: {e}")
+
     # === 2. YAML ルール評価 + スコアリング（3層エラーハンドリング） ===
     budget_shares = {}
     platform_scores = {}

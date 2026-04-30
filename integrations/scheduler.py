@@ -180,6 +180,20 @@ def _run_weekly_learning_review():
             for r in recommendations:
                 lines.append(f"- [{r['category']}] {r['suggestion']} (信頼度: {r['confidence']*100:.0f}%, サンプル: {r['sample_size']})")
 
+        # Intent Override 期限チェック
+        try:
+            from engine.intent_filter import get_expiring_overrides
+            from pipeline import load_config
+            cfg = load_config()
+            for cid in cfg.get("clients", {}):
+                expiring = get_expiring_overrides(cid, days=30)
+                if expiring:
+                    lines.append(f"\n## Intent Override 期限切れ警告 ({cid})")
+                    for o in expiring:
+                        lines.append(f"- ルール {o.get('rule_ids')}: {o.get('reason')} (期限: {o.get('expires_at')})")
+        except Exception as e:
+            log.debug(f"Intent Override期限チェックスキップ: {e}")
+
         report_text = "\n".join(lines)
         log.info(report_text)
 
