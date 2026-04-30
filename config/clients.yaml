@@ -13,6 +13,7 @@ clients:
       meta:
         account_id: "act_916507360736121"
         access_token_env: "META_ACCESS_TOKEN_BANDAL"
+        lookback_days: 90
       tiktok:
         advertiser_id: "XXXXXXXXX"
         access_token_env: "TIKTOK_ACCESS_TOKEN_YAMAMOTO"
@@ -48,3 +49,17 @@ clients:
       twenty:
         enabled: true
         company_id: ""
+
+  bandal_gaming:
+    name: "BANDAL GAMING"
+    active: true
+    objective: cv_maximize
+    ads:
+      meta:
+        account_id: "act_916507360736121"
+        access_token_env: "META_ACCESS_TOKEN_BANDAL"
+        lookback_days: 90
+    notifications:
+      platform: "lark"
+      lark:
+        webhook_env: "LARK_WEBHOOK_BANDAL"

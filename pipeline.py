@@ -233,12 +233,24 @@ def output_results(client_id, client_cfg, results):
     report_dir = os.path.join(REPORTS_DIR, today)
     os.makedirs(report_dir, exist_ok=True)
 
-    # Slack通知
-    notif_cfg = client_cfg.get("notifications", {}).get("slack", {})
-    if notif_cfg.get("webhook_env") or notif_cfg.get("webhook_url"):
+    # 通知（Slack or Lark）
+    notif_cfg = client_cfg.get("notifications", {})
+    notification_platform = notif_cfg.get("platform", "slack")
+    slack_cfg = notif_cfg.get("slack", {})
+    lark_cfg = notif_cfg.get("lark", {})
+
+    if notification_platform == "lark" and lark_cfg.get("webhook_env"):
+        try:
+            from outputs.lark_notify import send_lark_notification
+            send_lark_notification(client_id, results, lark_cfg)
+            step_status["lark"] = "ok"
+        except Exception as e:
+            log.error(f"[{client_id}] Lark通知エラー: {e}")
+            step_status["lark"] = "error"
+    elif slack_cfg.get("webhook_env") or slack_cfg.get("webhook_url"):
         try:
             from outputs.slack_notify import send_notification
-            send_notification(client_id, results, notif_cfg)
+            send_notification(client_id, results, slack_cfg)
             step_status["slack"] = "ok"
         except Exception as e:
             log.error(f"[{client_id}] Slack通知エラー: {e}")
