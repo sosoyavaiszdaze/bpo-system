@@ -11,8 +11,8 @@ clients:
     objective: balanced  # cpa_minimize | cv_maximize | roas_target | balanced
     ads:
       meta:
-        account_id: "act_XXXXXXXXX"
-        access_token_env: "META_ACCESS_TOKEN_YAMAMOTO"
+        account_id: "act_916507360736121"
+        access_token_env: "META_ACCESS_TOKEN_BANDAL"
       tiktok:
         advertiser_id: "XXXXXXXXX"
         access_token_env: "TIKTOK_ACCESS_TOKEN_YAMAMOTO"
