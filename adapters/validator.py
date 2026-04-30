@@ -65,6 +65,16 @@ def validate_data(data):
                 camp[field] = default if not isinstance(default, list) else list(default)
                 issues.append(f"Campaign[{i}] '{camp.get('campaign', '?')}': 不足フィールド '{field}' にデフォルト値設定")
 
+        # platform 推定（未設定 or "unknown" の場合）
+        if not camp.get("platform") or camp["platform"] == "unknown":
+            source = data.get("source", "")
+            inferred = _infer_platform(camp, source)
+            if inferred != "unknown":
+                camp["platform"] = inferred
+            else:
+                camp["platform"] = "unknown"
+                log.warning(f"Campaign[{i}] '{camp.get('campaign', '?')}': platform推定不可、unknown設定")
+
         # 自動計算: CPA（未設定 or 0 の場合のみ）
         if not camp.get("cpa") and camp.get("conversions", 0) > 0 and camp.get("cost", 0) > 0:
             camp["cpa"] = round(camp["cost"] / camp["conversions"], 2)
@@ -100,6 +110,33 @@ def validate_data(data):
         log.info(f"Validator: {len(issues)}件のフィールド補完 (最初: {issues[0]})")
 
     return data
+
+
+def _infer_platform(camp, source):
+    """platform推定: アダプタ名 → キャンペーン名ヒューリスティック → unknown"""
+    # 1. アダプタ名（source）から確定
+    if "google" in source.lower():
+        return "google"
+    if "meta" in source.lower():
+        return "meta"
+    if "tiktok" in source.lower():
+        return "tiktok"
+
+    # 2. キャンペーン名ヒューリスティック（フォールバック、warning付き）
+    name = camp.get("campaign", "").lower()
+    inferred = None
+    if any(k in name for k in ["google", "search", "pmax", "gdn", "youtube"]):
+        inferred = "google"
+    elif any(k in name for k in ["meta", "fb", "ig", "facebook", "instagram", "reels"]):
+        inferred = "meta"
+    elif any(k in name for k in ["tiktok", "spark", "pangle"]):
+        inferred = "tiktok"
+
+    if inferred:
+        log.warning(f"platform をキャンペーン名から推定: '{camp.get('campaign')}' → {inferred}")
+        return inferred
+
+    return "unknown"
 
 
 def _recalc_totals(campaigns):
