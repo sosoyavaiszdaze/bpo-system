@@ -39,7 +39,7 @@ def run_claude_analysis(client_id, data, audit_results):
 
     config = load_model_config()
     model_cfg = config.get("model", {})
-    model = model_cfg.get("primary", "claude-sonnet-4-6")
+    model = model_cfg.get("primary", "claude-sonnet-4-5-20250514")
     max_retries = model_cfg.get("retry", {}).get("max_attempts", 3)
     backoff_base = model_cfg.get("retry", {}).get("backoff_base", 2)
 

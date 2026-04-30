@@ -1,7 +1,9 @@
 # Claude API 設定
+# モデルID最終確認日: 2026-04-30
+# 参照: https://docs.anthropic.com/en/docs/about-claude/models
 model:
-  primary: claude-sonnet-4-6
-  fallback: claude-sonnet-4-5
+  primary: claude-sonnet-4-5-20250514
+  fallback: claude-haiku-4-5-20251001
   cache:
     min_cacheable_tokens: 1024
     type: ephemeral
