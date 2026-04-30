@@ -20,7 +20,7 @@ def calc_platform_score(eval_result):
     passed = eval_result.get("weighted_pass", 0)
 
     if total == 0:
-        return {"score": 100, "grade": "A", "by_category": {}}
+        return {"score": None, "grade": "N/A", "by_category": {}}
 
     score = round(passed / total * 100, 1)
     grade = _get_grade(score)
@@ -57,18 +57,21 @@ def calc_cross_platform_score(platform_scores, budget_shares=None):
     if not platform_scores:
         return {"score": 0, "grade": "F", "platform_scores": {}}
 
+    # score が None (データなし) のプラットフォームを除外
+    valid_scores = {p: ps for p, ps in platform_scores.items() if ps.get("score") is not None}
+    if not valid_scores:
+        return {"score": 0, "grade": "F", "platform_scores": platform_scores}
+
     if budget_shares:
-        # 予算シェア加重平均
         weighted_score = 0
         total_weight = 0
-        for platform, ps in platform_scores.items():
-            share = budget_shares.get(platform, 1.0 / len(platform_scores))
-            weighted_score += ps.get("score", 0) * share
+        for platform, ps in valid_scores.items():
+            share = budget_shares.get(platform, 1.0 / len(valid_scores))
+            weighted_score += ps["score"] * share
             total_weight += share
         score = round(weighted_score / total_weight, 1) if total_weight > 0 else 0
     else:
-        # 単純平均
-        scores = [ps.get("score", 0) for ps in platform_scores.values()]
+        scores = [ps["score"] for ps in valid_scores.values()]
         score = round(sum(scores) / len(scores), 1)
 
     return {

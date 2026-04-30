@@ -178,10 +178,12 @@ PROMPT_VERSION = "1"
 
 
 def _build_cache_key(client_id, context):
-    """キャッシュキーを生成（client_id + 日付 + コンテキストハッシュ + プロンプトバージョン）"""
+    """キャッシュキーを生成（client_id + コンテキストハッシュ + プロンプトバージョン）
+    日付を含めないことで、同一データなら翌日もキャッシュヒットする。
+    TTL (CACHE_TTL_DAYS) で古いキャッシュは自動削除される。
+    """
     context_hash = hashlib.md5(context.encode()).hexdigest()[:12]
-    today = datetime.now().strftime("%Y-%m-%d")
-    return f"{client_id}_{today}_{context_hash}_v{PROMPT_VERSION}"
+    return f"{client_id}_{context_hash}_v{PROMPT_VERSION}"
 
 
 def _load_cache(cache_key, analysis_key):
