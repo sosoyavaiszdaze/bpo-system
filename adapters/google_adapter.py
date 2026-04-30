@@ -43,13 +43,14 @@ def fetch_google_ads(config):
                 "use_proto_plus": True,
             })
 
-        log.info(f"Google Ads API: アカウント {customer_id} からデータ取得中")
+        lookback_days = config.get("lookback_days", 30)
+        log.info(f"Google Ads API: アカウント {customer_id} からデータ取得中 (過去{lookback_days}日)")
 
-        campaigns = _fetch_campaigns(client, customer_id)
-        keywords = _fetch_keywords(client, customer_id)
+        campaigns = _fetch_campaigns(client, customer_id, lookback_days)
+        keywords = _fetch_keywords(client, customer_id, lookback_days)
         conversions = _fetch_conversion_actions(client, customer_id)
         assets = _fetch_asset_info(client, customer_id)
-        change_history = _fetch_change_history(client, customer_id)
+        change_history = _fetch_change_history(client, customer_id, lookback_days)
 
         # キーワード情報をキャンペーンに統合
         _merge_keyword_data(campaigns, keywords)
@@ -84,11 +85,11 @@ def fetch_google_ads(config):
         return None
 
 
-def _fetch_campaigns(client, customer_id):
+def _fetch_campaigns(client, customer_id, lookback_days=30):
     """キャンペーンレベルのデータ取得"""
     ga_service = client.get_service("GoogleAdsService")
 
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    since = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     today = datetime.now().strftime("%Y-%m-%d")
 
     query = f"""
@@ -108,7 +109,7 @@ def _fetch_campaigns(client, customer_id):
             metrics.average_cpm,
             campaign.optimization_score
         FROM campaign
-        WHERE segments.date BETWEEN '{yesterday}' AND '{today}'
+        WHERE segments.date BETWEEN '{since}' AND '{today}'
             AND campaign.status != 'REMOVED'
         ORDER BY metrics.cost_micros DESC
         LIMIT 200
@@ -210,7 +211,7 @@ def _parse_campaign_row(row):
     return camp
 
 
-def _fetch_keywords(client, customer_id):
+def _fetch_keywords(client, customer_id, lookback_days=30):
     """キーワードレベルデータ取得（QS、マッチタイプなど）"""
     ga_service = client.get_service("GoogleAdsService")
 
@@ -336,7 +337,7 @@ def _fetch_asset_info(client, customer_id):
     return assets
 
 
-def _fetch_change_history(client, customer_id):
+def _fetch_change_history(client, customer_id, lookback_days=30):
     """直近14日の変更履歴取得"""
     ga_service = client.get_service("GoogleAdsService")
 
