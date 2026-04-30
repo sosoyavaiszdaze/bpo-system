@@ -277,44 +277,61 @@ def detect_axis_conflicts(audit_details):
 
 
 def _save_overrides(conflicts):
-    """解決結果を context-overrides.yaml に保存（dedup + 期限切れ削除）"""
+    """解決結果を context-overrides.yaml に保存（dedup + 期限切れ削除 + ファイルロック）"""
     path = os.path.join(CONFIG_DIR, "context-overrides.yaml")
 
-    existing = {"version": "1.0", "overrides": []}
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            existing = yaml.safe_load(f) or existing
+    # ファイルロック（POSIX環境のみ、Windows非対応）
+    lock_path = path + ".lock"
+    lock_fd = None
+    try:
+        import fcntl
+        lock_fd = open(lock_path, "w")
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    except (ImportError, OSError):
+        pass  # fcntl が使えない環境ではロックなしで続行
 
-    now = datetime.now()
+    try:
+        existing = {"version": "1.0", "overrides": []}
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                existing = yaml.safe_load(f) or existing
 
-    # 期限切れエントリーを削除
-    existing["overrides"] = [
-        o for o in existing.get("overrides", [])
-        if _parse_iso(o.get("expires_at", "")) > now
-    ]
+        now = datetime.now()
 
-    # 既存のconflict_groupをインデックス化（dedup用）
-    existing_groups = {
-        o.get("conflict_group"): i
-        for i, o in enumerate(existing["overrides"])
-    }
+        existing["overrides"] = [
+            o for o in existing.get("overrides", [])
+            if _parse_iso(o.get("expires_at", "")) > now
+        ]
 
-    for conflict in conflicts:
-        group_id = conflict.get("conflict_group")
-        override = {
-            "conflict_group": group_id,
-            "chosen_priority": conflict.get("resolution", ""),
-            "decided_by": "auto" if conflict.get("auto_resolved") else "pending",
-            "decided_at": now.isoformat(),
-            "expires_at": (now + timedelta(days=90)).isoformat(),
+        existing_groups = {
+            o.get("conflict_group"): i
+            for i, o in enumerate(existing["overrides"])
         }
-        if group_id in existing_groups:
-            existing["overrides"][existing_groups[group_id]] = override
-        else:
-            existing["overrides"].append(override)
 
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.dump(existing, f, allow_unicode=True, default_flow_style=False)
+        for conflict in conflicts:
+            group_id = conflict.get("conflict_group")
+            override = {
+                "conflict_group": group_id,
+                "chosen_priority": conflict.get("resolution", ""),
+                "decided_by": "auto" if conflict.get("auto_resolved") else "pending",
+                "decided_at": now.isoformat(),
+                "expires_at": (now + timedelta(days=90)).isoformat(),
+            }
+            if group_id in existing_groups:
+                existing["overrides"][existing_groups[group_id]] = override
+            else:
+                existing["overrides"].append(override)
+
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.dump(existing, f, allow_unicode=True, default_flow_style=False)
+    finally:
+        if lock_fd:
+            try:
+                import fcntl
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+            except (ImportError, OSError):
+                pass
 
 
 def _parse_iso(iso_str):

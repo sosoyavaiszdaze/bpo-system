@@ -279,12 +279,16 @@ def _phase_analyze(client_id, client_cfg, data, thresholds):
         try:
             from analyzers.fraud_ingest import ingest_fraud_data
             fraud_data = ingest_fraud_data(client_id, client_cfg, data)
-            # fraud_audit の fraud_rate を fraud_data に統合（fraud_action が参照）
-            if results["fraud_audit"].get("fraud_rate"):
-                fraud_data["fraud_rate"] = results["fraud_audit"]["fraud_rate"]
-            from analyzers.fraud_action import run_fraud_action as fraud_action_run
-            results["fraud_action"] = fraud_action_run(client_id, fraud_data, client_cfg, thresholds)
-            step_status["fraud_action"] = "ok"
+            if not isinstance(fraud_data, dict):
+                log.warning(f"[{client_id}] fraud_ingest が dict を返さないためスキップ")
+                results["fraud_action"] = None
+                step_status["fraud_action"] = "skipped"
+            else:
+                if results["fraud_audit"].get("fraud_rate"):
+                    fraud_data["fraud_rate"] = results["fraud_audit"]["fraud_rate"]
+                from analyzers.fraud_action import run_fraud_action as fraud_action_run
+                results["fraud_action"] = fraud_action_run(client_id, fraud_data, client_cfg, thresholds)
+                step_status["fraud_action"] = "ok"
         except Exception as e:
             log.error(f"[{client_id}] Fraud Action エラー: {e}")
             step_status["fraud_action"] = "error"
