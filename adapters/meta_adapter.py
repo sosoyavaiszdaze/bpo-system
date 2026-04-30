@@ -24,17 +24,18 @@ def fetch_meta_ads(config):
         log.warning("Meta: account_id or access_token missing")
         return None
 
-    log.info(f"Meta API (v22.0): アカウント {account_id} からデータ取得中")
+    lookback_days = config.get("lookback_days", 90)
+    log.info(f"Meta API (v22.0): アカウント {account_id} からデータ取得中 (過去{lookback_days}日)")
 
-    # 日付範囲（昨日）
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    # 日付範囲
+    since = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     today = datetime.now().strftime("%Y-%m-%d")
 
     # 1. キャンペーンレベルのインサイト取得
-    campaigns = _fetch_campaign_insights(account_id, access_token, yesterday, today)
+    campaigns = _fetch_campaign_insights(account_id, access_token, since, today)
 
     # 2. 広告セットレベルのインサイト取得
-    adset_data = _fetch_adset_insights(account_id, access_token, yesterday, today)
+    adset_data = _fetch_adset_insights(account_id, access_token, since, today)
 
     # 3. Pixel / CAPI ステータス取得
     pixel_data = _fetch_pixel_status(account_id, access_token)
@@ -51,7 +52,7 @@ def fetch_meta_ads(config):
     result = {
         "source": "meta_api",
         "account_id": account_id,
-        "date_range": {"since": yesterday, "until": today},
+        "date_range": {"since": since, "until": today},
         "campaigns": campaigns,
         "totals": totals,
         "pixel_status": pixel_data,
