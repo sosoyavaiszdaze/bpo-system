@@ -218,12 +218,13 @@ def output_results(client_id, client_cfg, results):
     else:
         step_status["slack"] = "skipped"
 
-    # CRM保存
+    # CRM保存（TwentyCRM統合版）
     crm_cfg = client_cfg.get("crm", {}).get("twenty", {})
     if crm_cfg.get("enabled"):
         try:
-            from outputs.crm_save import save_to_crm
-            save_to_crm(client_id, results, crm_cfg)
+            from outputs.crm_twenty import TwentyCRM
+            crm = TwentyCRM()
+            crm.save_health_snapshot(client_id, results)
             step_status["crm"] = "ok"
         except Exception as e:
             log.error(f"[{client_id}] CRM保存エラー: {e}")
@@ -332,21 +333,6 @@ def _phase_analyze(client_id, client_cfg, data, thresholds):
 def _phase_report(client_id, client_cfg, results):
     """Phase 3: Report — 結果出力 + Twenty CRM保存"""
     output_results(client_id, client_cfg, results)
-
-    # Twenty CRM: ヘルススナップショット + ActionLog
-    try:
-        from outputs.crm_twenty import TwentyCRM
-        crm = TwentyCRM()
-        crm.save_health_snapshot(client_id, results)
-        audit = results.get("ads_audit") or {}
-        if audit.get("failed_checks", 0) > 0:
-            crm.save_action_log(
-                client_id=client_id, action_type="daily_audit",
-                platform="cross", title=f"Score {audit.get('score', 0)} ({audit.get('grade', '?')})",
-                description=f"チェック{audit.get('total_checks', 0)}件, 問題{audit.get('failed_checks', 0)}件",
-            )
-    except Exception as e:
-        log.debug(f"[{client_id}] Twenty CRM保存スキップ: {e}")
 
 
 def run_client(client_id, client_cfg, thresholds):
