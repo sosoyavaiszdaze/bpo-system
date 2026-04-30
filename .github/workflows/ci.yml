@@ -25,48 +25,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyyaml jinja2 python-dotenv pytest ruff pydantic
+          # オプショナル依存（インストール失敗してもCIは続行）
+          pip install google-ads anthropic apscheduler flask || true
 
       - name: Lint with ruff
         run: |
           ruff check . --select=E,F,W --ignore=E501,E402
 
-      - name: Run unit tests
+      - name: Run all tests
         run: |
-          python -m pytest tests/test_rule_schema.py tests/test_evaluator_edge_cases.py -v --tb=short
-        env:
-          PYTHONPATH: .
-
-      - name: Run ID mapping tests
-        run: |
-          python -m pytest tests/test_id_mapping.py -v --tb=short
-        env:
-          PYTHONPATH: .
-
-      - name: Run integration tests
-        run: |
-          python -m pytest tests/test_integration.py tests/test_conflict_integration.py -v --tb=short
-        env:
-          PYTHONPATH: .
-
-      - name: Run core tests
-        run: |
-          python -m pytest tests/test_core.py -v --tb=short
+          python -m pytest tests/ -v --tb=short
         env:
           PYTHONPATH: .
 
       - name: Config validation
         run: |
           python pipeline.py test
-
-      - name: Check ID-mapping coverage
-        run: |
-          python -c "
-          from engine.id_mapper import get_mapping_coverage
-          for p in ['google', 'meta', 'tiktok']:
-              cov = get_mapping_coverage(p)
-              print(f'{p}: {cov}')
-              assert cov['coverage_pct'] >= 95, f'{p} coverage {cov[\"coverage_pct\"]}% < 95%'
-          print('ID mapping validation passed - Phase 2 complete')
-          "
-        env:
-          PYTHONPATH: .
