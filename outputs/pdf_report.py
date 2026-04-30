@@ -113,16 +113,8 @@ def _build_context(client_id, results):
 
     # Quick Wins に媒体ラベルと severity 追加
     for qw in quick_wins:
-        p = qw.get("platform", "")
-        if not p:
-            campaign = qw.get("campaign", "").lower()
-            if any(k in campaign for k in ["meta", "fb", "ig", "reels"]):
-                p = "meta"
-            elif any(k in campaign for k in ["tiktok", "spark"]):
-                p = "tiktok"
-            else:
-                p = "google"
-            qw["platform"] = p
+        p = qw.get("platform", "") or "unknown"
+        qw["platform"] = p
         qw["platform_label"] = PLATFORM_LABEL.get(p, p)
         if "severity" not in qw:
             qw["severity"] = "medium"
@@ -230,18 +222,8 @@ def _build_summary_items(critical_issues, high_issues, alerts, waste_items, scor
 
 
 def _match_platform(issue, platform):
-    p = issue.get("platform", "")
-    if p == platform:
-        return True
-    if not p:
-        campaign = issue.get("campaign", "").lower()
-        if platform == "meta":
-            return any(k in campaign for k in ["meta", "fb", "ig", "facebook", "instagram", "reels"])
-        elif platform == "tiktok":
-            return any(k in campaign for k in ["tiktok", "spark", "pangle"])
-        elif platform == "google":
-            return not any(k in campaign for k in ["meta", "fb", "ig", "tiktok", "spark", "pangle"])
-    return False
+    """platformフィールドで直接マッチ（キャンペーン名推定は行わない）"""
+    return issue.get("platform", "") == platform
 
 
 def _calc_platform_score(summary, issues):

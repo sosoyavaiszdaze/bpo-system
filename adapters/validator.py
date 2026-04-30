@@ -118,3 +118,20 @@ def _recalc_totals(campaigns):
         "avg_cpa": round(total_cost / total_cv, 2) if total_cv > 0 else 0.0,
         "avg_ctr": round(total_clicks / total_imps * 100, 2) if total_imps > 0 else 0.0,
     }
+
+
+def validate_check_results(checks):
+    """チェック結果のplatformフィールド検証（警告のみ、落とさない）
+
+    Args:
+        checks: チェック結果リスト
+    Returns:
+        list: 入力をそのまま返す
+    """
+    missing_platform = []
+    for check in checks:
+        if not check.get("platform"):
+            missing_platform.append(check.get("id", "unknown"))
+    if missing_platform:
+        log.warning(f"platformフィールド未設定のチェック: {missing_platform[:10]}")
+    return checks

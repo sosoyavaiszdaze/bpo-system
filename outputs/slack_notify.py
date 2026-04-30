@@ -290,19 +290,10 @@ def _score_bar(score):
 
 
 def _group_issues_by_platform(issues):
-    """Issueを媒体別にグループ化"""
+    """Issueを媒体別にグループ化（platformフィールド直参照）"""
     grouped = {}
     for i in issues:
-        # issueのcampaign名やplatformフィールドから媒体を推定
-        platform = i.get("platform", "")
-        if not platform:
-            campaign = i.get("campaign", "").lower()
-            if any(k in campaign for k in ["meta", "fb", "ig", "facebook", "instagram", "reels", "advantage"]):
-                platform = "meta"
-            elif any(k in campaign for k in ["tiktok", "spark", "pangle", "smart+"]):
-                platform = "tiktok"
-            else:
-                platform = "google"
+        platform = i.get("platform", "") or "unknown"
         if platform not in grouped:
             grouped[platform] = []
         grouped[platform].append(i)
