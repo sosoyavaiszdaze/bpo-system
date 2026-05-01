@@ -1,0 +1,78 @@
+# =============================================================================
+# v3 Priority Score Weights — Pattern C (effort重視、クイックウィン優先)
+# =============================================================================
+# 用途: 優先アクション Top5 のスコアリング係数。
+# 設計根拠: docs/report_design/v3_priority_score_weights.md パターンC
+#
+# 使用箇所:
+#   engine/priority_ranker.py
+#
+# パラメータ調整方針:
+#   - quick_win_bonus を 1.0〜2.0 で動かして、quick_win 偏重の度合いを調整
+#   - effort_normalization を "linear" に切り替えると工数インパクトが弱まる
+#   - 別パターン（A: severity / B: confidence）に切替時は本ファイルを差替
+# =============================================================================
+
+pattern: "C"
+description: "effort重視（クイックウィン優先）— 小工数×大インパクトを上位化"
+version: "1.0"
+last_updated: "2026-05-01"
+
+# severity ごとの基本重み
+severity_weights:
+  critical: 4.8
+  high: 2.5
+  medium: 1.5
+  low: 0.5
+
+# expected_impact.confidence ごとの重み
+confidence_weights:
+  high: 1.0
+  medium: 0.7
+  low: 0.4
+
+# 工数（effort_hours）の正規化方式
+# - "linear":      score / max(effort_hours, 0.5)
+# - "square_root": score / sqrt(max(effort_hours, 0.5)) ← パターンC のデフォルト
+effort_normalization: square_root
+
+# quick_win=true のルールに掛けるボーナス倍率
+quick_win_bonus: 1.5
+
+# expected_impact 未設定ルール用フォールバック（円ベース）
+# severity に応じた仮の月次インパクト
+fallback_impact_yen:
+  critical: 50000
+  high: 20000
+  medium: 8000
+  low: 2000
+
+# 工数の標準推定値（quick_win=true のものは 0.5 時間で固定）
+# rule.category ごとに非 quick_win の標準工数を推定
+default_effort_hours_by_category:
+  計測_トラッキング: 8.0
+  計測: 8.0
+  クリエイティブ: 6.0
+  予算_入札: 3.0
+  構造_設定: 3.0
+  キーワード: 2.0
+  ターゲティング: 2.0
+  配信面: 2.0
+  フィード: 4.0
+  判断ログ: 6.0
+  performance: 3.0
+  wasted_spend: 2.0
+  learning: 4.0
+  structure: 3.0
+default_effort_hours_fallback: 4.0
+quick_win_effort_hours: 0.5
+
+# Critical Alerts セクション設定
+# Top5 とは別枠で「⚠️ 今すぐ対処すべき重大問題」を最大3件固定表示
+critical_alerts:
+  max_count: 3
+  severity_threshold: critical
+  exclude_quick_wins: false  # quick_win=true でも critical なら警告に含める
+
+# 月次広告費の参照値（クライアント実データがない場合のフォールバック）
+default_monthly_spend_yen: 750000

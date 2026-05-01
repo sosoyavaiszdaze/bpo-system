@@ -1,0 +1,186 @@
+{# v3 共通 CSS — page-break 対応、3軸チャート用 SVG ベース #}
+{# v3.1: PDF 軽量化のため Web フォント @import を削除し、システム日本語フォントを採用 #}
+<style>
+/* システムフォントスタック（Web フォント埋め込みなしで PDF を軽量化） */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Monaco", "Consolas", "DejaVu Sans Mono", "Courier New", monospace;
+  --font-display: "Avenir Next", "Helvetica Neue", "Hiragino Sans", sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #fff; color: #1a1a1a; font-family: var(--font-sans); line-height: 1.6; }
+.page { padding: 28mm 18mm; min-height: 100vh; page-break-after: always; }
+.page:last-child { page-break-after: auto; }
+.page-break { page-break-before: always; }
+
+/* === ヘッダー / フッター共通 === */
+.page-header {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  border-bottom: 0.5px solid #d0d0d0; padding-bottom: 8px; margin-bottom: 20px;
+  font-size: 10px; font-family: var(--font-mono); color: #888;
+}
+.page-header .brand { font-family: var(--font-display); font-size: 14px; color: #1a1a1a; font-weight: 500; }
+.page-footer {
+  margin-top: 30px; padding-top: 10px; border-top: 0.5px solid #e0e0e0;
+  font-size: 9px; color: #aaa; text-align: center; font-family: var(--font-mono);
+}
+
+/* === セクションラベル === */
+.section-label {
+  font-size: 10px; letter-spacing: 0.2em; color: #999;
+  font-family: var(--font-mono); text-transform: uppercase; margin-bottom: 8px;
+}
+.section-title {
+  font-size: 18px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px;
+  border-left: 2px solid #1a1a1a; padding-left: 10px;
+}
+.section-subtitle { font-size: 12px; color: #666; margin-bottom: 20px; }
+
+/* === Cover === */
+.cover { text-align: left; padding: 60mm 20mm 40mm; }
+.cover .brand-line { font-family: var(--font-display); font-size: 28px; color: #1a1a1a; letter-spacing: 0.05em; }
+.cover .brand-rule { width: 60px; height: 1px; background: #1a1a1a; margin: 20px 0; }
+.cover .doc-title-jp { font-size: 24px; font-weight: 500; margin-top: 30px; line-height: 1.3; }
+.cover .doc-title-en { font-size: 12px; color: #999; font-family: var(--font-mono); margin-top: 6px; letter-spacing: 0.1em; }
+.cover .addressee { margin-top: 60mm; font-size: 16px; line-height: 2.0; font-weight: 500; }
+.cover .meta { margin-top: 30mm; font-size: 11px; color: #555; line-height: 1.9; font-family: var(--font-mono); }
+.cover .conf-line { margin-top: 24mm; font-size: 9px; letter-spacing: 0.15em; color: #aaa; font-family: var(--font-mono); }
+
+/* === Summary === */
+.summary-3lines { background: #fafaf8; border: 0.5px solid #e5e5e2; border-radius: 8px; padding: 16px 20px; margin-bottom: 18px; }
+.summary-3lines .line { font-size: 13px; line-height: 1.9; padding: 4px 0; display: flex; gap: 10px; }
+.summary-3lines .line .num { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; background: #1a1a1a; color: #fff; font-size: 10px; font-family: var(--font-mono); align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+
+/* === 3軸円形チャート === */
+.score-circle { width: 110px; height: 110px; position: relative; flex-shrink: 0; }
+.score-circle svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.score-circle .bg { fill: none; stroke: #f0f0ed; stroke-width: 8; }
+.score-circle .arc { fill: none; stroke-width: 8; stroke-linecap: round; }
+/* B4: 業界平均（灰）/ Zynect 推奨（緑）/ 現状（オレンジ）の3点マーカー */
+.score-circle .mk-industry { fill: #B5B5B0; stroke: #fff; stroke-width: 1.2; }
+.score-circle .mk-zynect   { fill: #27500A; stroke: #fff; stroke-width: 1.2; }
+.score-circle .mk-current  { fill: #BA7517; stroke: #fff; stroke-width: 1.5; }
+.score-circle .label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+.score-circle .label .v { font-size: 22px; font-weight: 500; font-family: var(--font-mono); line-height: 1; }
+.score-circle .label .u { font-size: 9px; color: #888; font-family: var(--font-mono); margin-top: 2px; }
+.score-circle-legend { font-size: 9px; color: #888; margin-top: 6px; font-family: var(--font-mono); display: flex; gap: 10px; flex-wrap: wrap; }
+.score-circle-legend .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; vertical-align: middle; margin-right: 4px; }
+.score-circle-legend .dot-i { background: #B5B5B0; }
+.score-circle-legend .dot-z { background: #27500A; }
+.score-circle-legend .dot-c { background: #BA7517; }
+
+/* === 3軸 横棒チャート === */
+.bar3 { margin-bottom: 14px; }
+.bar3 .row { display: flex; align-items: center; gap: 12px; margin-bottom: 5px; font-size: 11px; }
+.bar3 .row .lab { width: 110px; color: #555; font-family: var(--font-mono); font-size: 10px; }
+.bar3 .row .track { flex: 1; height: 7px; background: #f3f3f1; border-radius: 4px; overflow: hidden; position: relative; }
+.bar3 .row .fill { height: 100%; border-radius: 4px; }
+.bar3 .row .val { width: 70px; text-align: right; font-family: var(--font-mono); font-size: 11px; }
+.bar3 .legend { font-size: 10px; color: #999; margin-top: 6px; font-family: var(--font-mono); }
+.fill-current.above_zynect { background: #27500A; }
+.fill-current.above_industry { background: #BA7517; }
+.fill-current.below_industry { background: #A32D2D; }
+.fill-current.no_benchmark { background: #aaa; }
+.fill-industry { background: #B5B5B0; }
+.fill-zynect { background: #1a1a1a; }
+
+/* === KPI 投影テーブル === */
+.kpi-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 14px; }
+.kpi-table th { font-size: 10px; color: #888; text-align: left; padding: 6px 8px; border-bottom: 0.5px solid #e5e5e2; font-family: var(--font-mono); font-weight: 400; text-transform: uppercase; }
+.kpi-table td { padding: 9px 8px; border-bottom: 0.5px solid #efefec; font-family: var(--font-mono); }
+.kpi-delta { font-weight: 500; }
+.kpi-delta.up { color: #27500A; }
+.kpi-delta.down { color: #A32D2D; }
+
+/* === Critical Alerts === */
+.crit-box { background: #FCEBEB; border: 0.5px solid #F09595; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+.crit-title { font-size: 12px; color: #791F1F; font-weight: 500; font-family: var(--font-mono); letter-spacing: 0.05em; margin-bottom: 8px; text-transform: uppercase; }
+.crit-list { display: flex; flex-direction: column; gap: 8px; }
+.crit-item { display: grid; grid-template-columns: 60px 1fr; gap: 10px; align-items: start; font-size: 11.5px; }
+.crit-item .id { font-family: var(--font-mono); color: #791F1F; font-weight: 500; }
+.crit-item .body strong { color: #791F1F; font-weight: 500; }
+
+/* === Top5 アクション === */
+/* B5: severity を左の主バッジ、quick_win を右上の小コーナーバッジに分離 */
+.action-item { border: 0.5px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; position: relative; }
+.action-item.is-critical { border-color: #F09595; background: linear-gradient(180deg, #FFF8F8 0%, #fff 100%); }
+.action-item.is-high { border-color: #EFB84C; }
+.action-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 8px; padding-right: 80px; }
+.action-rank { display: inline-flex; width: 26px; height: 26px; background: #1a1a1a; color: #fff; font-size: 12px; font-family: var(--font-mono); align-items: center; justify-content: center; border-radius: 4px; flex-shrink: 0; }
+.action-name { font-size: 14px; font-weight: 500; color: #1a1a1a; flex: 1; }
+.action-tags { display: flex; gap: 6px; align-items: center; }
+.tag { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-family: var(--font-mono); font-weight: 500; }
+.tag-severity { font-size: 11px; padding: 3px 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.tag-critical { background: #FCEBEB; color: #A32D2D; }
+.tag-high { background: #FAEEDA; color: #854F0B; }
+.tag-medium { background: #F5F0E8; color: #888; }
+.tag-low { background: #f0f0ed; color: #aaa; }
+.tag-conf { background: #E1F5EE; color: #085041; }
+/* quick_win バッジ: 右上コーナーに小さく配置 */
+.tag-qw-corner {
+  position: absolute; top: 10px; right: 14px;
+  background: #EAF3DE; color: #27500A; border: 0.5px solid #97C459;
+  font-size: 9px; padding: 2px 8px; border-radius: 4px;
+  font-family: var(--font-mono); font-weight: 500; letter-spacing: 0.03em;
+}
+.action-row { font-size: 11.5px; line-height: 1.8; padding: 4px 0 4px 32px; }
+.action-row .lab { color: #888; font-family: var(--font-mono); font-size: 10px; margin-right: 8px; }
+.action-row strong { color: #1a1a1a; font-weight: 500; }
+.action-steps { padding-left: 32px; margin-top: 8px; }
+.step { display: grid; grid-template-columns: 24px 80px 1fr 60px; gap: 10px; font-size: 11px; padding: 4px 0; align-items: start; line-height: 1.6; color: #555; }
+.step .step-num { font-family: var(--font-mono); font-weight: 500; color: #1a1a1a; }
+.step .actor { font-family: var(--font-mono); color: #085041; font-size: 10px; }
+.step .duration { font-family: var(--font-mono); color: #888; font-size: 10px; text-align: right; }
+
+/* === Platform Detail === */
+.pf-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; }
+.pf-head .pf-name { font-size: 18px; font-weight: 500; }
+.pf-head .pf-meta { font-size: 10px; font-family: var(--font-mono); color: #888; }
+.pf-section { margin-bottom: 18px; }
+.pf-section h3 { font-size: 12px; color: #555; font-weight: 500; margin-bottom: 8px; }
+.principle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 10.5px; }
+.principle-cell { padding: 6px 8px; border: 0.5px solid #e5e5e2; border-radius: 4px; display: flex; gap: 6px; align-items: center; }
+.principle-cell .mark { font-family: var(--font-mono); font-weight: 500; width: 14px; text-align: center; }
+.principle-cell .mark.ok { color: #27500A; }
+.principle-cell .mark.warn { color: #BA7517; }
+.principle-cell .mark.bad { color: #A32D2D; }
+.principle-cell .name { color: #555; }
+.issue-top3 .issue { padding: 8px 12px; background: #fafaf8; border-radius: 4px; margin-bottom: 6px; font-size: 11.5px; line-height: 1.6; }
+.issue-top3 .issue .num { font-family: var(--font-mono); font-weight: 500; color: #1a1a1a; margin-right: 8px; }
+.issue-top3 .issue .meta { font-size: 10px; color: #888; font-family: var(--font-mono); margin-top: 3px; }
+
+/* === Insights === */
+.insight-item { border: 0.5px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; background: linear-gradient(180deg, #fafaf8 0%, #fff 100%); }
+.insight-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.insight-pid { background: #1a1a1a; color: #fff; font-size: 11px; font-family: var(--font-mono); padding: 3px 9px; border-radius: 4px; font-weight: 500; }
+.insight-title { font-size: 13px; font-weight: 500; }
+.insight-body { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 11.5px; line-height: 1.7; }
+.insight-col h4 { font-size: 10px; color: #888; font-family: var(--font-mono); text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.05em; }
+.insight-col.industry { color: #666; }
+.insight-col.zynect { color: #1a1a1a; font-weight: 500; }
+.insight-impact { margin-top: 10px; padding-top: 8px; border-top: 0.5px dashed #e0e0e0; font-size: 11px; color: #555; }
+.insight-impact .lab { font-family: var(--font-mono); color: #888; font-size: 10px; margin-right: 6px; }
+
+/* === Appendix === */
+.term-list { font-size: 11px; line-height: 1.7; }
+.term-list dt { font-weight: 500; color: #1a1a1a; margin-top: 6px; }
+.term-list dd { margin-left: 0; color: #555; padding-bottom: 4px; }
+.principle-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 10.5px; line-height: 1.6; }
+.principle-row { padding: 6px 8px; border: 0.5px solid #e5e5e2; border-radius: 4px; }
+.principle-row .pid { font-family: var(--font-mono); font-weight: 500; color: #085041; margin-right: 6px; }
+.principle-row .pname { font-weight: 500; }
+.principle-row .pdesc { color: #666; font-size: 10px; margin-top: 2px; }
+
+/* === 共通: 情報注記 === */
+.note-hint { font-size: 10px; color: #888; font-family: var(--font-mono); margin-top: 6px; }
+
+/* === C7: データなしプレースホルダ === */
+.no-data-placeholder {
+  background: #fafaf8; border: 0.5px dashed #c5c5c2;
+  border-radius: 8px; padding: 30px 20px; text-align: center;
+  color: #888; font-size: 12px; line-height: 1.8;
+}
+.no-data-placeholder .icon { font-size: 24px; color: #ccc; margin-bottom: 8px; }
+.no-data-placeholder strong { color: #555; font-weight: 500; }
+</style>

@@ -1,0 +1,21 @@
+{# v3 表紙ページ #}
+<div class="page cover">
+  <div class="brand-line">zynect media</div>
+  <div class="brand-rule"></div>
+
+  <div class="doc-title-jp">{{ cover.report_name }}</div>
+  <div class="doc-title-en">ACCOUNT HEALTH AUDIT REPORT — {{ cover.version }}</div>
+
+  <div class="addressee">
+    {% for line in cover.addressee_lines %}{{ line }}<br>{% endfor %}
+  </div>
+
+  <div class="meta">
+    対象期間：{{ cover.period_text }}<br>
+    生成日時：{{ cover.generated_at }}<br>
+    業界カテゴリ：{{ cover.industry_label }}<br>
+    発行：Zynect Media 株式会社
+  </div>
+
+  <div class="conf-line">CONFIDENTIAL — 本書は機密保持契約に基づき作成されたものです</div>
+</div>

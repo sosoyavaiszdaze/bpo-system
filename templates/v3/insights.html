@@ -1,0 +1,39 @@
+{# v3 Zynect Insights（独自視点） #}
+<div class="page page-break">
+  <div class="page-header">
+    <div><span class="brand">zynect media</span> &nbsp;|&nbsp; {{ cover.report_name }} &nbsp;|&nbsp; {{ cover.company_name }} {{ cover.company_honorific }}</div>
+    <div>P7 / 8</div>
+  </div>
+
+  <div class="section-label">04 — Zynect Insights</div>
+  <div class="section-title">Zynect Insights（独自視点）</div>
+  <div class="section-subtitle">一般的な監査ツールが指摘しない、米満氏理論ベースの独自視点をお伝えします。</div>
+
+  {% for it in insights %}
+  <div class="insight-item">
+    <div class="insight-head">
+      <span class="insight-pid">{{ it.principle_id }}</span>
+      <div class="insight-title">{{ it.title }}{% if it.principle_name %} <span style="font-size:10px; color:#888; font-weight:400;">— {{ it.principle_name }}</span>{% endif %}</div>
+    </div>
+    <div class="insight-body">
+      <div class="insight-col industry">
+        <h4>他社監査ではこう言われがち</h4>
+        <div>{{ it.industry_view }}</div>
+      </div>
+      <div class="insight-col zynect">
+        <h4>Zynect ではこう判断する</h4>
+        <div>{{ it.zynect_view }}</div>
+      </div>
+    </div>
+    {% if it.impact_note %}
+    <div class="insight-impact"><span class="lab">想定インパクト</span>{{ it.impact_note }}</div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div style="text-align:center; padding: 40px; background: #fafaf8; border-radius:8px; color: #888; font-size: 12px;">
+    本期間では特筆すべき独自視点の指摘はありません。
+  </div>
+  {% endfor %}
+
+  <div class="page-footer">{{ footer_text }}</div>
+</div>

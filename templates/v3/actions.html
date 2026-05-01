@@ -1,0 +1,76 @@
+{# v3 優先アクションプラン Top5 + Critical Alerts #}
+<div class="page page-break">
+  <div class="page-header">
+    <div><span class="brand">zynect media</span> &nbsp;|&nbsp; {{ cover.report_name }} &nbsp;|&nbsp; {{ cover.company_name }} {{ cover.company_honorific }}</div>
+    <div>P3 / 8</div>
+  </div>
+
+  {# Critical Alerts セクション（別枠、Top5 と重複可） #}
+  {% if critical_alerts %}
+  <div class="crit-box">
+    <div class="crit-title">⚠️ 今すぐ対処すべき重大問題（{{ critical_alerts|length }} 件）</div>
+    <div class="crit-list">
+      {% for al in critical_alerts %}
+      <div class="crit-item">
+        <div class="id">{{ al.rule_id }}</div>
+        <div class="body">
+          <strong>{{ al.rule_name }}</strong>{% if al.platform %} <span style="font-size:10px; color:#888;">[{{ al.platform }}]</span>{% endif %}<br>
+          {{ al.redesign_note or '当該ルールは critical 重要度として優先対応が必要です。' }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="section-label">02 — Priority Actions</div>
+  <div class="section-title">優先アクションプラン Top {{ actions|length }}</div>
+  <div class="section-subtitle">クイックウィン（小工数 × 大インパクト）優先で並べています。各アクションは原則タグ・実行手順・想定効果を併記しています。</div>
+
+  {% for a in actions %}
+  <div class="action-item is-{{ a.severity }}">
+    {# B5: quick_win は右上コーナー小バッジに分離 #}
+    {% if a.quick_win %}<span class="tag-qw-corner">QUICK WIN</span>{% endif %}
+    <div class="action-head">
+      <div class="action-rank">{{ loop.index }}</div>
+      <div class="action-name">{{ a.narrative.action_name or a.rule_name }}</div>
+      <div class="action-tags">
+        <span class="tag tag-severity tag-{{ a.severity }}">{{ a.severity }}</span>
+        <span class="tag tag-conf">確度 {{ a.confidence_label }}</span>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <span class="lab">なぜ重要か</span>{{ a.narrative.why_important }}
+    </div>
+
+    <div class="action-steps">
+      {% for s in a.narrative.steps %}
+      <div class="step">
+        <span class="step-num">{{ s.step }}.</span>
+        <span class="actor">{{ s.actor }}</span>
+        <span>{{ s.what }}</span>
+        <span class="duration">{{ s.duration }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="action-row" style="margin-top:8px;">
+      <span class="lab">想定効果</span><strong>{{ a.expected_savings_display }}</strong>
+      &nbsp;<span style="color:#888;">/ 効果発現 約 {{ a.horizon_weeks }} 週</span>
+    </div>
+    <div class="action-row">
+      <span class="lab">関連ルールID</span>{% for rid in a.related_rule_ids %}{{ rid }}{% if not loop.last %} / {% endif %}{% endfor %}
+      {% if a.principle_tag %}<span style="margin-left:14px;"><span class="lab">原則</span>{{ a.principle_tag }}</span>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if actions|length == 0 %}
+  <div style="text-align:center; padding: 40px; background: #fafaf8; border-radius:8px; color: #888; font-size: 12px;">
+    優先アクションは検出されませんでした。健全な運用状態です。
+  </div>
+  {% endif %}
+
+  <div class="page-footer">{{ footer_text }}</div>
+</div>

@@ -1,0 +1,101 @@
+{# v3 媒体別詳細診断 — Google / Meta / TikTok 各1ページ #}
+{% for pf in platforms %}
+<div class="page page-break">
+  <div class="page-header">
+    <div><span class="brand">zynect media</span> &nbsp;|&nbsp; {{ cover.report_name }} &nbsp;|&nbsp; {{ cover.company_name }} {{ cover.company_honorific }}</div>
+    <div>P{{ loop.index + 3 }} / 8</div>
+  </div>
+
+  <div class="section-label">03 — Platform Detail</div>
+  <div class="section-title">{{ pf.label }} 詳細診断</div>
+
+  {% if not pf.has_data %}
+  {# C7: データなしプレースホルダ #}
+  <div class="no-data-placeholder">
+    <div class="icon">∅</div>
+    <strong>本媒体は分析対象外（データ未取得）</strong><br>
+    {{ pf.label }} のキャンペーンデータが取得できなかったため、本ページの分析はスキップされています。<br>
+    <span style="font-size: 10px; color: #aaa;">— 当該媒体を運用開始した場合、次回以降のレポートで自動的に分析対象となります。</span>
+  </div>
+  {% else %}
+
+  <div class="pf-head">
+    <div class="pf-name"></div>
+    <div class="pf-meta">
+      キャンペーン {{ pf.campaigns }} / 月次コスト ¥{{ pf.cost_display }} / CV {{ pf.cv }} / ROAS {{ pf.roas }}倍
+    </div>
+  </div>
+
+  {# スコアカード（3軸比較） #}
+  <div class="pf-section">
+    <h3>Health Score（3軸比較）</h3>
+    <div class="bar3">
+      <div class="row">
+        <div class="lab">業界平均</div>
+        <div class="track"><div class="fill fill-industry" style="width: {{ pf.score_3axis.industry_avg_pct }}%;"></div></div>
+        <div class="val">{{ pf.score_3axis.industry_avg_display }}</div>
+      </div>
+      <div class="row">
+        <div class="lab">Zynect 推奨</div>
+        <div class="track"><div class="fill fill-zynect" style="width: {{ pf.score_3axis.zynect_pct }}%;"></div></div>
+        <div class="val">{{ pf.score_3axis.zynect_display }}</div>
+      </div>
+      <div class="row">
+        <div class="lab">現状</div>
+        <div class="track"><div class="fill fill-current {% if pf.score >= 80 %}above_zynect{% elif pf.score >= 60 %}above_industry{% else %}below_industry{% endif %}" style="width: {{ pf.score_3axis.current_pct }}%;"></div></div>
+        <div class="val">{{ pf.score_3axis.current_display }}</div>
+      </div>
+    </div>
+  </div>
+
+  {# 主要メトリクス3軸比較 #}
+  <div class="pf-section">
+    <h3>主要メトリクス（業界平均 / Zynect 推奨 / 現状）</h3>
+    {% for m in pf.metrics %}
+    <div class="bar3">
+      <div class="row" style="font-size: 11px; font-weight: 500;">
+        <div class="lab">{{ m.label }}</div>
+        <div class="track"></div>
+        <div class="val"></div>
+      </div>
+      <div class="row">
+        <div class="lab" style="font-size:10px;">業界平均</div>
+        <div class="track"><div class="fill fill-industry" style="width: {{ m.industry_pct if m.available else 50 }}%;"></div></div>
+        <div class="val">{{ m.industry_avg_display }}</div>
+      </div>
+      <div class="row">
+        <div class="lab" style="font-size:10px;">Zynect 推奨</div>
+        <div class="track"><div class="fill fill-zynect" style="width: {{ m.zynect_pct if m.available else 80 }}%;"></div></div>
+        <div class="val">{{ m.zynect_display }}</div>
+      </div>
+      <div class="row">
+        <div class="lab" style="font-size:10px;">現状</div>
+        <div class="track"><div class="fill fill-current {{ m.status }}" style="width: {{ m.current_pct }}%;"></div></div>
+        <div class="val">{{ m.current_display }}</div>
+      </div>
+      {% if m.note %}<div class="legend">注: {{ m.note }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {# 検出された問題 TOP3 #}
+  <div class="pf-section">
+    <h3>検出された問題 TOP3{% if pf.issues_count > 3 %}（他 {{ pf.issues_count - 3 }} 件は付録参照）{% endif %}</h3>
+    <div class="issue-top3">
+      {% for issue in pf.top3_issues %}
+      <div class="issue">
+        <span class="num">{{ loop.index }}.</span>
+        <strong>[{{ issue.severity|upper }}]</strong> {{ issue.issue }}
+        <div class="meta">対象キャンペーン: {{ issue.campaign }} / 推奨アクション: {{ issue.action }}</div>
+      </div>
+      {% else %}
+      <div style="font-size:11px; color: #888;">検出された問題はありません。</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% endif %}{# end has_data #}
+
+  <div class="page-footer">{{ footer_text }}</div>
+</div>
+{% endfor %}

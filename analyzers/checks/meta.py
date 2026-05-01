@@ -1,5 +1,6 @@
-"""Meta Ads チェック — 全34ルール完全実装 (M-PI1-PI8, M-CR1-CR6, M-ST1-ST7, M-AU1-AU6, M-C01-C06, G-AD1)"""
+"""Meta Ads チェック — 既存34ルール + Phase 3 新規5ルール (M66-M70)。"""
 import logging
+import re
 
 log = logging.getLogger("bpo")
 
@@ -18,6 +19,7 @@ def run_meta_checks(campaigns, thresholds, pixel_status=None):
     results.extend(_check_structure(meta_camps, m_t))
     results.extend(_check_audience(meta_camps, m_t))
     results.extend(_check_campaign_config(meta_camps, m_t))
+    results.extend(_check_phase3_new_rules(meta_camps, m_t))
 
     return results
 
@@ -310,3 +312,169 @@ def _r(check_id, passed, campaign, message, conflict_group=None, context=None):
     if context:
         r["context"] = context
     return r
+
+
+# ========================================
+# Phase 3 新規ルール (M66-M70) — 2026-05 追加
+# PoC 段階: データが不足する場合は graceful skip し、本番運用で完全版に置換予定。
+# ========================================
+
+# M70 で seed 名から LTV 上位層キーワードを検出するための辞書
+_LTV_SEED_KEYWORDS = (
+    "top", "ltv", "vip", "premium", "high_value", "best",
+    "高ltv", "高価値", "上位", "プレミアム", "優良",
+)
+
+
+def _check_phase3_new_rules(camps, m_t):
+    """M-λ / M-β / M-δ / M-ι 系の Phase 3 新規ルール判定。
+
+    各ルールは PoC 簡易版実装で、対応データが取得できない場合は graceful skip。
+    本番版への置換ポイントは各セクションの NOTE: コメントを参照。
+    """
+    results = []
+    results.extend(_check_m66_ad_lp_alignment(camps, m_t))
+    results.extend(_check_m67_lp_reverse_generation(camps, m_t))
+    results.extend(_check_m68_learning_reset_events(camps, m_t))
+    results.extend(_check_m69_advantage_plus_exclusions(camps, m_t))
+    results.extend(_check_m70_lla_seed_ltv_focus(camps, m_t))
+    return results
+
+
+def _check_m66_ad_lp_alignment(camps, m_t):
+    """M66: 広告-LP メッセージ整合スコア。
+
+    PoC 簡易版: 広告コピー (ad_creative_text) と LP コピー (landing_page_text) の
+    単語 Jaccard 類似度を算出。閾値 0.6 以上で pass。
+    NOTE: 本番は sentence-transformers の cosine similarity で多言語対応に置換予定。
+    """
+    results = []
+    threshold = m_t.get("ad_lp_alignment_threshold", 0.6)
+    for camp in camps:
+        ad_text = (camp.get("ad_creative_text") or "").strip()
+        lp_text = (camp.get("landing_page_text") or "").strip()
+        if not ad_text or not lp_text:
+            continue  # データ不足: skip
+        score = _jaccard_similarity(ad_text, lp_text)
+        passed = score >= threshold
+        if passed:
+            msg = f"広告-LP 整合スコア {score:.2f} (閾値≥{threshold:.2f}) ✓"
+        else:
+            msg = (f"広告-LP 整合スコア {score:.2f} < {threshold:.2f} — "
+                   f"LP のヘッドラインを広告コピーに揃える改善余地あり")
+        results.append(_r("M66", passed, camp.get("campaign", ""), msg,
+                          context={"alignment_score": round(score, 3),
+                                   "implementation": "poc_jaccard"}))
+    return results
+
+
+def _check_m67_lp_reverse_generation(camps, m_t):
+    """M67: 勝ち広告 LP 逆生成プロセスの実施有無。
+
+    PoC 簡易版: クライアント設定 or campaign 側の lp_reverse_generation_enabled
+    フラグを参照。広告と LP のデータがあるが宣言が無い場合は警告 (低優先度)。
+    NOTE: 本番は LP 制作日 vs 広告配信開始日の差分比較や、勝ち広告 → LP テキスト
+    生成 AI パイプラインの稼働ログ検査に置換予定。
+    """
+    results = []
+    has_lp_data = any(c.get("landing_page_text") for c in camps)
+    if not has_lp_data:
+        return results  # LP データ不在は skip
+    process_declared = any(c.get("lp_reverse_generation_enabled") for c in camps)
+    msg = ("LP 逆生成プロセス実施宣言済み ✓" if process_declared
+           else "LP 逆生成プロセス未宣言 — 勝ち広告 → LP 逆算で CPA 改善余地")
+    results.append(_r("M67", process_declared, "全Meta", msg,
+                      context={"implementation": "poc_flag_based"}))
+    return results
+
+
+def _check_m68_learning_reset_events(camps, m_t):
+    """M68: 学習リセット要因イベント検出。
+
+    PoC 簡易版: campaign の recent_significant_edits フィールドを参照。
+    学習中 (learning_phase_active) かつ significant edit が 1 件以上で fail。
+    NOTE: 本番は Meta Marketing API の ad_set_changes endpoint から
+    予算/ターゲット/最適化目標の直近14日変更履歴を取得して判定に置換予定。
+    """
+    results = []
+    for camp in camps:
+        edits = camp.get("recent_significant_edits", None)
+        if edits is None:
+            continue  # データ不足: skip
+        learning = camp.get("learning_phase_active", False)
+        if learning and edits > 0:
+            results.append(_r("M68", False, camp.get("campaign", ""),
+                              f"学習中に直近 significant edit {edits} 件検出 — 学習リセットリスク",
+                              conflict_group="learning_vs_testing",
+                              context={"edit_count": edits,
+                                       "implementation": "poc_count_based"}))
+    return results
+
+
+def _check_m69_advantage_plus_exclusions(camps, m_t):
+    """M69: Advantage+ 利用キャンペーンの除外オーディエンス設定有無。
+
+    Advantage+ Audience を使う camp に対し excluded_custom_audiences (or
+    audience_exclusions) が設定されているか確認。Broad 推奨環境では除外リストが
+    唯一の制御手段となるため必須。
+    """
+    results = []
+    for camp in camps:
+        if not (camp.get("advantage_plus") or camp.get("advantage_targeting")):
+            continue
+        excluded = (camp.get("excluded_custom_audiences")
+                    or camp.get("audience_exclusions")
+                    or [])
+        passed = bool(excluded)
+        if passed:
+            msg = f"除外オーディエンス {len(excluded)} 件設定済み ✓"
+        else:
+            msg = "Advantage+ 利用中だが除外オーディエンス未設定 — 既存購入者重複配信リスク"
+        results.append(_r("M69", passed, camp.get("campaign", ""), msg,
+                          context={"excluded_count": len(excluded),
+                                   "implementation": "poc_field_check"}))
+    return results
+
+
+def _check_m70_lla_seed_ltv_focus(camps, m_t):
+    """M70: LLA seed の LTV Top 層集中度。
+
+    PoC 簡易版: lookalike_seed_name に LTV/Top/VIP 等のキーワードが含まれるかを
+    確認。データ不足は skip。
+    NOTE: 本番は CRM の LTV データ (Twenty 等) と seed リストを照合し、
+    seed が LTV 上位 1〜5% に絞られているかを実測値で判定する実装に置換予定。
+    """
+    results = []
+    for camp in camps:
+        lal_pct = camp.get("lookalike_percentage", 0)
+        seed_name = (camp.get("lookalike_seed_name") or "").strip()
+        if lal_pct <= 0 and not seed_name:
+            continue  # LLA 利用無し or データ不足: skip
+        if not seed_name:
+            continue  # seed 名が無いと判定不能
+        seed_lower = seed_name.lower()
+        has_ltv_kw = any(kw in seed_lower for kw in _LTV_SEED_KEYWORDS)
+        if has_ltv_kw:
+            msg = f"LLA seed '{seed_name}' に LTV 上位層キーワード検出 ✓"
+        else:
+            msg = (f"LLA seed '{seed_name}' に LTV 上位層キーワードなし — "
+                   f"Top 1〜5% LTV 顧客を seed に推奨")
+        results.append(_r("M70", has_ltv_kw, camp.get("campaign", ""), msg,
+                          context={"seed_name": seed_name,
+                                   "implementation": "poc_keyword_match"}))
+    return results
+
+
+def _jaccard_similarity(text1, text2):
+    """単語ベースの Jaccard 類似度 (0.0〜1.0)。
+
+    日本語含むテキスト前提のため `\\w+` トークナイズで形態素解析は行わない。
+    本番は sentence-transformers + 多言語モデルで cosine similarity に置換予定。
+    """
+    tokens1 = set(re.findall(r"\w+", text1.lower()))
+    tokens2 = set(re.findall(r"\w+", text2.lower()))
+    if not tokens1 or not tokens2:
+        return 0.0
+    intersection = tokens1 & tokens2
+    union = tokens1 | tokens2
+    return len(intersection) / len(union) if union else 0.0

@@ -1,5 +1,9 @@
-name: Meta Ads Audit Rules v2.0
-version: '2.0'
+name: Meta Ads Audit Rules v2.2
+version: '2.2'
+# Phase 3 redesign v2 (2026-05): + 新規ルール5件 (M66-M70) + category_type 追加 + disabled 精査
+# severity 変更 7件: M58/M47/M59 (medium→high), M49/M44 (high→critical), M62/M61 (medium→high)
+# M64 (地域精度) を未分類→ M-ε 主紐付けに救済
+# 詳細: docs/principles/meta_principles.md, docs/principles/meta_rule_mapping.md
 category_weights:
   クリエイティブ: 0.36
   構造_設定: 0.24
@@ -24,10 +28,27 @@ rules:
   conflicts: []
   dependencies:
   - M02-M08
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 計測の前提
+  redesign_note: |
+    主原則: M-α 計測=シグナル基盤原則 — 全運用判断の前提として Pixel + CAPI のデュアル計測を最上位に置く。
+    業界常識: Pixel が動いていれば計測 OK。設定後は放置気味で月次の発火率確認は形式的。
+    当社の判断: Pixel 発火停止は全シグナル送出の途絶を意味し、全自動入札の学習が即時破綻する。月次監査で発火率 99%+ を確認、未満なら緊急対応。critical 維持。
+    Andromeda 後の補正: 基盤レイヤーは Andromeda 影響を受けず。ただし Pixel 単独では iOS14 後シグナル欠損を補えないため CAPI (M02) との同時運用が前提。
+    米満氏理論との関係: Google P1 (計測精度=学習シグナル精度) と同一思想。
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 35
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: Pixel未発火では Meta自動入札が学習材料を失い最適化が不可能。修復で全運用判断の前提が成立し、後続のEMQ・CAPI改善も意味を持つ。最優先で対応すべきcritical項目。
   enabled: true
+  meta_principle_alignment:
+    primary: M-α
+    secondary: [M-θ]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M02
   name: CAPI実装状況
   category: 計測_トラッキング
@@ -47,10 +68,27 @@ rules:
   dependencies:
   - M03
   - M06
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: iOS時代の必須
+  redesign_note: |
+    主原則: M-α — Pixel + CAPI のデュアル + EMQ 監視は 2026 年における必須インフラ。
+    業界常識: CAPI は「設定が面倒な追加施策」として後回しにされがち。Pixel のみで運用継続するケース多数。
+    当社の判断: CAPI 単独運用ではシグナル精度が不足し自動入札の学習が遅延。iOS14 後は実質必須インフラ。critical 維持。
+    Andromeda 後の補正: Andromeda は CAPI 経由のシグナル質に依存度を高めており、未実装は致命的。
+    米満氏理論との関係: Google P1 同一 + Meta 固有の M-θ (iOS14 計測欠損前提) 副紐付け。
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 18
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: CAPI未実装はiOS14以降の計測欠損を補えずCV数を15〜25%失っている状態。実装でPixel欠損分が補われReported CVが回復し、AI入札の学習データも厚くなる。
   enabled: true
+  meta_principle_alignment:
+    primary: M-α
+    secondary: [M-θ]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M03
   name: イベントマッチ品質
   category: 計測_トラッキング
@@ -61,17 +99,34 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite:
   - M02
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: シグナル精度の指標
+  redesign_note: |
+    主原則: M-α — EMQ は Meta 固有の定量スコア (0-10)。Purchase 8.8〜9.3、AddToCart 8.0+、PageView 6.5〜7.5 が目標。
+    業界常識: EMQ という指標自体が認知されておらず管理対象外。
+    当社の判断: 月次で EMQ ≥ 7.0 (Purchase) を閾値運用。8.0 を超えたら追加投資より他項目に注力 (上限追求は弊害)。high 維持。
+    Andromeda 後の補正: なし (基盤レイヤー)。
+    米満氏理論との関係: Google P1 同一思想 (シグナル品質の定量化)。
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -12
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: Purchase EMQ 6.0→8.0の改善で CPA約10〜15%改善（Triple Whale実証）。ハッシュ化メール常時送信が最も効果的な改善策で実装難易度も中程度。
   enabled: true
+  meta_principle_alignment:
+    primary: M-α
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M04
   name: ドメイン検証
   category: 計測_トラッキング
@@ -82,17 +137,34 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies:
   - M05
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 8イベント枠の前提
+  redesign_note: |
+    主原則: M-θ iOS14 計測欠損前提運用 — AEM (Aggregated Event Measurement) の前提条件。
+    業界常識: 「設定済み」というチェック項目程度で意義の理解が薄い。
+    当社の判断: ドメイン未検証は AEM 機能停止と同義で iOS14 計測が完全破綻する。critical 維持。月次の検証ステータス監査必須。
+    Andromeda 後の補正: 2025/6 の AEM 8 イベント上限撤廃後も、ドメイン検証は前提条件のまま継続。
+    米満氏理論との関係: Meta 固有 (M-θ)。Google には対応概念なし。
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 15
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: ドメイン検証はAEM（Aggregated Event Measurement）の前提条件。未検証ではiOS14後のCV計測が機能せず、優先度イベント設定も活きない。設定自体は数十分で完了。
   enabled: true
+  meta_principle_alignment:
+    primary: M-θ
+    secondary: [M-α]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M05
   name: 優先度イベントの設定
   category: 計測_トラッキング
@@ -110,10 +182,27 @@ rules:
   - M04
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 学習優先順位の人的設計
+  redesign_note: |
+    主原則: M-θ — 学習優先順位の人的設計。AEM の優先度設定は iOS14 ATT 文脈で重要。
+    業界常識: デフォルト Purchase のまま放置、戦略的設定は稀。
+    当社の判断: 業種・KPI に応じた優先度設計が学習効率を左右。high 維持。AEM 上限撤廃後も重要度は変わらず。
+    Andromeda 後の補正: 8 イベント上限撤廃で柔軟性向上したが、戦略的順位付けの必要性は継続。
+    米満氏理論との関係: Meta 固有 (M-θ)。
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 8
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: AEMの優先度を事業価値順に設計するとiOS環境でも上位イベントのCV計測が確保される。デフォルト放置から最適配置でCV数約8%回復が見込める。
   enabled: true
+  meta_principle_alignment:
+    primary: M-θ
+    secondary: [M-α]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M06
   name: 重複イベント排除
   category: 計測_トラッキング
@@ -124,7 +213,7 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite:
@@ -132,10 +221,27 @@ rules:
   - M02
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: Pixel/CAPI二重計測防止
+  redesign_note: |
+    主原則: M-α — Pixel/CAPI 二重計測防止。event_id でのデデュプは EMQ 向上の中核施策。
+    業界常識: CAPI 導入時の見落としで二重計測が放置されがち、CV 数の水増しに気付かず。
+    当社の判断: 二重計測は CV 数を水増しし学習を誤った方向に導く。high 維持。CAPI 導入時の必須チェック項目。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P1 同一思想 (計測の物理的正確性)。
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 20
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: event_idでのデデュプ未実装はPixel/CAPI二重計測を発生させ、学習データが歪む。実装で計測精度が確保されEMQも上昇する。実装は通常1〜2営業日で完了。
   enabled: true
+  meta_principle_alignment:
+    primary: M-α
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M07
   name: カスタムコンバージョン設定
   category: 計測_トラッキング
@@ -146,17 +252,30 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite:
   - M01
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: シグナル定義の柔軟化
+  redesign_note: |
+    主原則: M-α — シグナル定義の柔軟化。標準イベントで補えない CV 種別を捉える補完手段。
+    業界常識: 標準 CV のみで運用、カスタム設定は使われない。
+    当社の判断: B2B や複雑な購買フローではカスタム CV が学習シグナルの質を上げる。medium 維持 (任意施策)。
+    Andromeda 後の補正: AEM 上限撤廃でカスタム CV の制約が緩和、活用余地拡大。
+    米満氏理論との関係: Google P1 派生。
   enabled: false
+  meta_principle_alignment:
+    primary: M-α
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
+  # disabled 維持理由 (2026-05): context_dependent
+  disabled_reason: context_dependent
 - id: M08
   name: iOS14+の影響計測
   category: 計測_トラッキング
@@ -174,10 +293,27 @@ rules:
   - M02
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 計測欠損の認識
+  redesign_note: |
+    主原則: M-θ iOS14 計測欠損前提運用 — 計測欠損の認識自体が運用判断の前提。
+    業界常識: Reported CV を真値と扱い、欠損の存在を意識しない。
+    当社の判断: iOS 比率 × ATT オプトアウト率 (推定 70〜85%) を月次計測欠損係数として算出。high 維持。
+    Andromeda 後の補正: Modeled Conversions と Lift テストの併用が標準化されつつある。
+    米満氏理論との関係: Meta 固有 (M-θ)。Google には対応概念なし。
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 10
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: iOS14欠損の認識自体が運用判断の前提。Reported vs Modeled CVの差分把握で過小評価CPAに振り回されず、合理的な意思決定が可能になる。直接の数値改善より判断品質改善。
   enabled: true
+  meta_principle_alignment:
+    primary: M-θ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M09
   name: 学習フェーズ脱出率
   category: 予算_入札
@@ -196,10 +332,27 @@ rules:
   - M13
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: Meta特有の50CV/週基準
+  redesign_note: |
+    主原則: M-β 学習フェーズ保護原則 — Meta 特有の 50CV/週基準。これを下回ると最適化不安定。
+    業界常識: 学習フェーズ自体を意識せず予算・ターゲットを頻繁に変更し、学習を繰り返しリセット。
+    当社の判断: 学習中の広告セット数 / 全広告セット数を月次メトリクス化。critical 維持。
+    Andromeda 後の補正: Advantage+ は手動より約 30% 速く学習脱出するため、ASC 化が脱出加速の手段。
+    米満氏理論との関係: Google P2 (機械学習保護) 派生 — Meta 固有の 50CV/週基準を伴う。
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -22
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 学習フェーズ滞留中の広告セットは CPA変動±35%。脱出後は±12%程度に収束しCPA約20%改善。50CV/週基準を満たすには予算集中または広告セット集約が必要。
   enabled: true
+  meta_principle_alignment:
+    primary: M-β
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M10
   name: 1広告セットあたりCV数
   category: 予算_入札
@@ -218,10 +371,28 @@ rules:
   - M15
   dependencies:
   - M09
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: Meta特有の集約推奨基準
-  enabled: false
+  redesign_note: |
+    主原則: M-β — 学習脱出基準 (50CV/週) を支える指標。集約 (M-ε) と密接連動。
+    業界常識: 広告セットを細かく分けて A/B テスト、1AS あたり CV 数を意識しない。
+    当社の判断: 50CV/週を確保できる広告セット構成を逆算 (CPA × 50 で必要日予算決定)。high 維持。
+    Andromeda 後の補正: 広い広告セット × 少数構成が脱出加速の標準パターン。集約しないと永続的に学習中。
+    米満氏理論との関係: Google P2 派生 + P6 (集約) 接続。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -15
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 50CV/週未満の広告セットは集約で学習脱出を加速。8広告セット→3広告セットの統合で各セットが学習脱出し、CPA約15%改善。集約は数日で実装可能。
+  enabled: true
+  meta_principle_alignment:
+    primary: M-β
+    secondary: [M-ε]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M11
   name: CBO vs ABO選択
   category: 予算_入札
@@ -238,10 +409,21 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 予算配分の制御方式選択
+  redesign_note: |
+    主原則: M-η Advantage+/ASC+ 自動化前提原則 — CBO は Meta 自動化機能の中核。
+    業界常識: ABO で個別広告セットの予算を細かく管理することがベストプラクティスと信じられている。
+    当社の判断: 自動化前提時代では CBO デフォルト。ABO は手動上書きの判断基準 (B2B / リターゲ等) のみ。medium 維持。
+    Andromeda 後の補正: CBO + ASC の組合せが標準化。
+    米満氏理論との関係: Google P8 (自動化前提) 派生。
   enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M12
   name: 目標費用設定
   category: 予算_入札
@@ -259,10 +441,27 @@ rules:
   - M09
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: Meta版の深度制御
+  redesign_note: |
+    主原則: M-η — Advantage+ の bid strategy 設定。Meta 版の深度制御。
+    業界常識: 目標 CPA を強気に設定して配信を絞り込む発想。学習が回らないまま停止判断。
+    当社の判断: 目標値は学習挙動を直接左右する。緩めから始め段階的に絞る。学習中の頻繁変更は避ける。high 維持。
+    Andromeda 後の補正: 目標 ROAS / 目標 CPA の選択が Andromeda 後の主要レバー。
+    米満氏理論との関係: Google P8 派生 (自動入札の目標値設定)。
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -10
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: 目標CPAが厳しすぎると学習が回らない。実績CPA×1.2〜1.5倍に設定すると学習が機能しCPAが10%改善。慣性で「強気設定」になっている運用に多い改善パターン。
   enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: [M-β]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M13
   name: 予算変更の頻度
   category: 予算_入札
@@ -280,10 +479,28 @@ rules:
   conflicts: []
   dependencies:
   - M09
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 学習リセット防止
-  enabled: false
+  redesign_note: |
+    主原則: M-β — 学習リセット防止。予算変更は学習再開トリガー。
+    業界常識: 数値が悪ければ即時に予算変更で対応するのが標準。
+    当社の判断: 学習中の広告セットへの予算変更は文脈依存で要承認。±30% 超は学習リセット要因として警告。high 維持。
+    Andromeda 後の補正: AI 解析で原因分解後に介入する現場知見運用 (運用成熟度高) では条件付きで許容。
+    米満氏理論との関係: Google P2 同一思想 (短期判断による長期破壊回避)。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 18
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 予算変更は学習リセット要因。月内変更回数を3回以下に抑えると学習継続性が担保され最適化が前進。短期判断の積み重ねを抑制する運用ルール化が必要。
+  enabled: true
+  meta_principle_alignment:
+    primary: M-β
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M14
   name: キャンペーン目的の適正
   category: 構造_設定
@@ -300,10 +517,27 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 目的とKPIの整合
+  redesign_note: |
+    主原則: M-η — Campaign Objective は Meta 自動最適化の方向性を決定する根幹設定。
+    業界常識: 「とりあえず Conversion 目的」で設定し、Awareness や Engagement の戦略的活用が薄い。
+    当社の判断: 業種・KPI・予算規模で Objective を選び分け。Brand × Performance 並走で 22% 効果向上 (Meta 公式)。high 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P8 派生。
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -12
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: Conversion設定でも最終CV種別が事業目的とずれていると最適化が誤る。Sales/Lead/Trafficの正しい選択でCPA約10〜15%改善。設定変更で学習リセットが発生するため判断ログ必須。
   enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M15
   name: 広告セット過多
   category: 構造_設定
@@ -321,10 +555,27 @@ rules:
   - M10
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: Meta版TO-01
+  redesign_note: |
+    主原則: M-ε 広告セット集約・オーバーラップ排除原則 — 広告セット過多は学習脱出を阻害。
+    業界常識: 細かい興味・年齢・性別ターゲットで広告セットを大量に分けて A/B テスト。
+    当社の判断: 8 つの狭い広告セット → 2〜3 の広い広告セットへ集約。学習データを集中させる。medium 維持。
+    Andromeda 後の補正: Detailed Targeting が 2025/6 サジェスチョン化されたことで集約推奨が公式化。
+    米満氏理論との関係: Google P6 (集約優先) 派生。
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -12
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 広告セット過多（5以上）で学習データが分散し各セットが学習脱出に届かない。3〜5セットへの集約でCV数集中→学習脱出加速→CPA約12%改善。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ε
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M16
   name: ポリシー違反・不承認
   category: 構造_設定
@@ -335,16 +586,27 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 配信前提
-  enabled: false
+  redesign_note: |
+    運用衛生項目 (思想原則紐付けなし)。配信前提の規制チェック。原則とは独立した業界共通の運用衛生として保持。enabled=false のままで月次監査時のチェックリスト項目として運用。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 10
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: 不承認広告は配信されずCV機会を喪失。修正提出は通常1〜2営業日で承認再取得でき、停止していた配信が復活してCV数 約10%回復。事業継続のための運用衛生項目。
+  enabled: true
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: operational_hygiene
 - id: M17
   name: アカウント品質スコア
   category: 構造_設定
@@ -355,16 +617,35 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-04
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: monitor_only
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 結果指標として参照のみ
+  redesign_note: |
+    主原則: M-γ 結果指標非依存原則 — 品質ランキングは結果指標。停止判断の根拠にしない。
+    業界常識: 品質ランキング Below Average の広告は即停止。
+    当社の判断: polarity: monitor_only のまま参照のみ。原因変数 (Hook/サウンド/フォーマット/Hook Rate/Hold Rate) に分解して打ち手構築。high 維持 (監視重要)。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P3 (結果指標非依存) 派生。
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 5
+    confidence: low
+    impact_horizon_weeks: 8
+    rationale: 品質ランキングは結果指標のため停止判断には使わずモニタリングのみ。原因変数（CTR/CVR/Hook Rate）に分解して打ち手を決めるためのトリガーとして活用する。
   enabled: false
+  meta_principle_alignment:
+    primary: M-γ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
+  # disabled 維持理由 (2026-05): monitor_only_low_audit_priority
+  disabled_reason: monitor_only_low_audit_priority
 - id: M18
   name: 広告アカウント制限リスク
   category: 構造_設定
@@ -375,16 +656,27 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 事業継続性の前提
-  enabled: false
+  redesign_note: |
+    運用衛生項目 (思想原則紐付けなし)。事業継続性の前提。BAN/凍結の予防チェックは原則というより事業リスク管理。critical 維持 (BAN は事業停止)。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 100
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: BAN/凍結が発生すると配信が完全停止し全広告費が機会損失化。事業継続性の前提条件であり、リスク予防チェックは原則ではなく事業リスク管理として最優先で扱う。
+  enabled: true
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: operational_hygiene
 - id: M19
   name: ビジネスマネージャー権限
   category: 構造_設定
@@ -395,16 +687,20 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: セキュリティ
+  redesign_note: |
+    運用衛生項目 (思想原則紐付けなし)。組織アクセス管理・セキュリティ。広告運用思想とは独立した IT セキュリティ項目。
   enabled: true
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: operational_hygiene
 - id: M20
   name: カタログ連携状態
   category: 構造_設定
@@ -422,10 +718,28 @@ rules:
   conflicts: []
   dependencies:
   - M44-M48
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: Advantage+前提
-  enabled: false
+  redesign_note: |
+    主原則: M-η — Advantage+ Shopping Campaigns (ASC) の前提条件。
+    業界常識: カタログは EC 担当の責任で広告運用と分離、広告チームが整合性を確認しない。
+    当社の判断: カタログ連携不全は ASC 機能停止と同義。high 維持。週次監査でフィードエラー確認。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Meta 固有 (M-η)。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  expected_impact:
+    primary_metric: roas_change_pct
+    primary_value: 12
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: カタログ連携の不備でASCが機能停止または部分動作。連携整備で動的広告が活性化しROAS約12%改善。EC担当との連携と Pixelイベントの整備が前提。
+  enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M21
   name: FBフィードCTR
   category: クリエイティブ
@@ -442,10 +756,23 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  redesign_note: |
+    主原則: M-ζ クリエイティブ量産・多様性最大化原則 — クリエイティブのパフォーマンス指標。
+    業界常識: CTR を絶対値で評価して停止判断に使う。
+    当社の判断: 結果指標として参照、Hook Rate / Hold Rate と併せて原因分解。medium 維持。
+    Andromeda 後の補正: クリエイティブが配信パフォーマンスの 80% を支配する Andromeda 環境では CTR モニタリングは不可欠。
+    米満氏理論との関係: Google P7 (バリエーション幅) 派生。
   enabled: false
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
+  # 判断保留 (2026-05): 有効化前に追加検証が必要
+  review_required: true
 - id: M22
   name: テキスト量過多
   category: クリエイティブ
@@ -456,16 +783,28 @@ rules:
   detection_layer: Layer4
   quick_win: true
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: Meta特有制約
-  enabled: false
+  redesign_note: |
+    主原則: M-ζ — Meta 特有のテキスト量制約 (旧 20% ルール撤廃後も視認性影響あり)。
+    業界常識: 旧 20% ルール撤廃後はテキスト量を意識せず、画像内の文字情報を盛り込みすぎる。
+    当社の判断: テキスト過多は視認性低下→ Hook Rate 低下に直結。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P7 派生。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M23
   name: プレースメント手動最適化
   category: 構造_設定
@@ -482,10 +821,22 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 自動最適化阻害の例
-  enabled: false
+  redesign_note: |
+    主原則: M-η — 自動最適化阻害の典型例。Advantage+ Placements を手動で阻害する状態。
+    業界常識: プレースメントは手動制御が無難という旧来の発想で全プレースメント自動を「ブラックボックス」と忌避。
+    当社の判断: Advantage+ Placements デフォルト ON。手動上書きはニッチケースのみ。medium 維持。
+    Andromeda 後の補正: 自動プレースメントは手動より 16.7% 多い収益、CPC 15% 減・CV 20% 増 (公式実証)。
+    米満氏理論との関係: Google P8 同一思想 (旧式手動運用の知識を捨てる)。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M24
   name: 動画/画像の使い分け
   category: クリエイティブ
@@ -496,16 +847,27 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: フォーマット多様性
+  redesign_note: |
+    主原則: M-ζ — フォーマット多様性 (動画/静止画/カルーセル/UGC の 4 系統以上)。
+    業界常識: 「ベストパフォーマー 1 本」を見つけて回す、フォーマット別検証は実施せず。
+    当社の判断: 同一商品でも複数フォーマットを並走させて Meta に選ばせる。low 維持 (個別重要度は低いが網羅性として必要)。
+    Andromeda 後の補正: フォーマット多様性は Andromeda 報酬対象。静止画/動画でユーザー層が異なる (X: 長橋真吾)。
+    米満氏理論との関係: Google P7 派生 (Meta では強度大)。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M25
   name: 1:1と4:5のアスペクト比
   category: クリエイティブ
@@ -516,16 +878,28 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 表示面積最大化
-  enabled: false
+  redesign_note: |
+    主原則: M-ζ — 表示面積最大化。フィード内で目立つアスペクト比の選択。
+    業界常識: 制作の都合で 1:1 のみ作成、4:5 の存在を意識せず。
+    当社の判断: 4:5 はフィード占有率が高く CTR 寄与。両方並走で配信最適化に委ねる。low 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P7 派生。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M26
   name: IGフィードのビジュアル品質
   category: クリエイティブ
@@ -536,16 +910,29 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-06
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ブランド整合性
+  redesign_note: |
+    主原則: M-ζ — IG フィード特有のブランド整合性要求。視覚品質が低いとブランド毀損。
+    業界常識: 広告は「広告らしさ」優先で IG オーガニックとの差が大きく、ネイティブ感が薄い。
+    当社の判断: ネイティブ感のある高品質ビジュアルが Hook Rate を上げる。medium 維持。
+    Andromeda 後の補正: ネイティブ感の高い CR が Andromeda 評価で上位。
+    米満氏理論との関係: Google P7 派生。
   enabled: false
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
+  # 判断保留 (2026-05): 有効化前に追加検証が必要
+  review_required: true
 - id: M27
   name: エンゲージメント率
   category: クリエイティブ
@@ -562,10 +949,22 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 結果指標
-  enabled: false
+  redesign_note: |
+    主原則: M-γ — 結果指標。停止判断の直接根拠にせず、原因変数で分解。
+    業界常識: エンゲージメント率の低い広告は早期停止。
+    当社の判断: 参照値として保持、Hook Rate / Hold Rate / Frequency と併せて原因分解。medium 維持。
+    Andromeda 後の補正: 「疲弊は CTR に CPA より数日早く現れる」(X リサーチ) — 原因変数優先で予兆検知。
+    米満氏理論との関係: Google P3 派生 + M-ζ 副紐付け (クリエイティブ評価で参照)。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-γ
+    secondary: [M-ζ]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M28
   name: UGC風素材の活用
   category: クリエイティブ
@@ -582,10 +981,23 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 訴求軸の多様化
+  redesign_note: |
+    主原則: M-ζ — 訴求軸の多様化。UGC 風素材は Hook 多様性の中核。
+    業界常識: ブランド主導の高品質映像のみで UGC は格下扱い。
+    当社の判断: UGC 風素材は Andromeda 環境で高評価。月次量産メニューに必ず含める。medium 維持。
+    Andromeda 後の補正: 「ルーチン構築・生活最適化スタイル」が現状の高 CVR 系 (X: Sanchez 4/29)。
+    米満氏理論との関係: Google P7 派生 (Meta では強度大)。
   enabled: false
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
+  # 判断保留 (2026-05): 有効化前に追加検証が必要
+  review_required: true
 - id: M29
   name: キャプション文字数
   category: クリエイティブ
@@ -596,16 +1008,28 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 訴求網羅
-  enabled: false
+  redesign_note: |
+    主原則: M-ζ — 訴求網羅。キャプションは長尺で訴求要素を盛る or 短尺でフックに集中の二択戦略。
+    業界常識: テンプレート的な短文で済ませる、ペルソナ別の使い分けがない。
+    当社の判断: ペルソナ × 訴求軸で複数パターン用意。low 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P7 派生。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M30
   name: プロフィール誘導の整合
   category: クリエイティブ
@@ -616,16 +1040,29 @@ rules:
   detection_layer: Layer3
   quick_win: false
   primary_axis: TO-06
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 導線整合
+  redesign_note: |
+    主原則: M-λ 広告-LP メッセージ完全一致原則 — 広告 → プロフィール → CV の経路一致。
+    業界常識: 広告 LP とプロフィールは別タイミングで設計、整合性は意識せず。
+    当社の判断: IG フィード経由で誘導する場合、プロフィール側のメッセージ整合が CVR に直結。low 維持 (placement 限定)。
+    Andromeda 後の補正: 広告-LP 一致で CPA 30% 改善実証 (X: Carlson 4/27) — 同思想がプロフィール誘導にも適用。
+    米満氏理論との関係: Meta 固有 (M-λ)。
   enabled: false
+  meta_principle_alignment:
+    primary: M-λ
+    secondary: [M-ζ]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
+  # 判断保留 (2026-05): 有効化前に追加検証が必要
+  review_required: true
 - id: M31
   name: リール動画尺
   category: クリエイティブ
@@ -636,17 +1073,29 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies:
   - M34
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: プラットフォーム最適尺
-  enabled: false
+  redesign_note: |
+    主原則: M-ζ — プラットフォーム最適尺 (リールは 15〜30 秒が標準)。
+    業界常識: TVCM 流用で長尺をそのまま配信、リールの視聴特性を考慮せず。
+    当社の判断: 尺別の Hold Rate 分析で最適尺を発見。複数尺バリエーション併用。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P7 派生。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M32
   name: 縦型9:16フル画面対応
   category: クリエイティブ
@@ -663,10 +1112,22 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: セーフゾーン
-  enabled: false
+  redesign_note: |
+    主原則: M-ζ — フォーマット網羅。9:16 セーフゾーンは IG リール / ストーリーズの必須仕様。
+    業界常識: 既存の 16:9 や 1:1 を流用、UI に隠れる領域を意識せず。
+    当社の判断: 9:16 セーフゾーン対応は最低ライン。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P7 派生。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M33
   name: サウンド有無
   category: クリエイティブ
@@ -677,16 +1138,28 @@ rules:
   detection_layer: Layer4
   quick_win: true
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: リール特性
-  enabled: false
+  redesign_note: |
+    主原則: M-ζ — リール特性。サウンド ON 視聴が前提のリール環境では音楽・テロップ設計が CTR を左右。
+    業界常識: 無音前提でテロップだけ用意、音楽は後付けまたは無し。
+    当社の判断: サウンド前提設計 + テロップで両対応が標準。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P7 派生。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M34
   name: 動画完了率
   category: クリエイティブ
@@ -704,10 +1177,22 @@ rules:
   - M31
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 結果指標
-  enabled: false
+  redesign_note: |
+    主原則: M-γ — 結果指標。停止判断の直接根拠にせず、Hook Rate / Hold Rate に分解。
+    業界常識: 動画完了率の低い広告は早期停止。
+    当社の判断: 3 秒視聴率 (Hook Rate) と 15 秒視聴率 (Hold Rate) で予兆検知、完了率は最終確認に使う。medium 維持。
+    Andromeda 後の補正: 結果指標は予兆として CTR より遅い (X リサーチ)。
+    米満氏理論との関係: Google P3 派生 + M-ζ 副紐付け。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-γ
+    secondary: [M-ζ]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M35
   name: UGC/Spark系素材
   category: クリエイティブ
@@ -718,16 +1203,27 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: オーガニック融合
+  redesign_note: |
+    主原則: M-ζ — オーガニック融合。Spark Ads / Branded Content Ads 含む UGC 形式は素材多様化の中核。
+    業界常識: Spark Ads は TikTok 専用と誤解、Meta では従来 UGC のみ。
+    当社の判断: 月次新規コンセプトの 30%+ を UGC 系で構成推奨。medium 維持。
+    Andromeda 後の補正: ネイティブ感が Andromeda 評価で上位。
+    米満氏理論との関係: Google P7 派生 (Meta では強度大)。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M36
   name: ストーリーズフルスクリーン活用
   category: クリエイティブ
@@ -738,16 +1234,28 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
-  enabled: false
+  redesign_note: |
+    主原則: M-ζ — IG/FB ストーリーズのフォーマット最適化。フルスクリーン未対応は表示面積損失。
+    業界常識: IG フィード用素材を流用、ストーリーズ専用設計を行わない。
+    当社の判断: フルスクリーン対応 + 9:16 セーフゾーン両対応が必須。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P7 派生。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M37
   name: スワイプアップ/CTA訴求
   category: クリエイティブ
@@ -758,16 +1266,28 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-06
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
-  enabled: false
+  redesign_note: |
+    主原則: M-λ — CTA → LP の連携整合。CTA 表現が LP メッセージと一致しないと CVR 劣化。
+    業界常識: 「詳しくはこちら」等の汎用 CTA で済ませる、LP との意味整合を意識せず。
+    当社の判断: CTA 表現を LP ファーストビューと意味整合させる。low 維持 (placement 限定)。
+    Andromeda 後の補正: 広告-LP 一致で CPA 30% 改善 (X: Carlson 4/27) — CTA も整合対象。
+    米満氏理論との関係: Meta 固有 (M-λ)。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-λ
+    secondary: [M-ζ]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M38
   name: FBストーリーズのCTR
   category: クリエイティブ
@@ -784,10 +1304,23 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  redesign_note: |
+    主原則: M-ζ — placement 別パフォーマンス指標。FB ストーリーズは IG ストーリーズと挙動が異なる。
+    業界常識: ストーリーズはまとめて運用、FB と IG を別評価しない。
+    当社の判断: placement 別 CTR を月次監視、低調 placement は Advantage+ Placements に委ねる。low 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P7 派生。
   enabled: false
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
+  # 判断保留 (2026-05): 有効化前に追加検証が必要
+  review_required: true
 - id: M39
   name: AN品質管理
   category: 構造_設定
@@ -798,16 +1331,34 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: preserve
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ネガティブ保持
-  enabled: false
+  redesign_note: |
+    主原則: M-δ ネガティブシグナル保持原則 — Audience Network の低品質配置除外。
+    業界常識: AN は何となく ON のまま、または何となく OFF。除外運用は実施せず。
+    当社の判断: 低品質配置を明示的に除外リスト化、ネガティブシグナルとして保持 (polarity: preserve)。high 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P4 (ネガティブシグナル保持) 同一思想。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 8
+    confidence: medium
+    impact_horizon_weeks: 2
+    rationale: Audience Networkの低品質配置による誤クリック・自動再生課金で広告費が浪費されている。除外管理で約8%節約。同時にネガティブシグナル保持で学習も改善。
+  enabled: true
+  meta_principle_alignment:
+    primary: M-δ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M40
   name: ブランドセーフティ除外
   category: 構造_設定
@@ -824,10 +1375,22 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
-  enabled: false
+  redesign_note: |
+    主原則: M-δ — ブランドセーフティリスト・コンテキストカテゴリで除外管理。
+    業界常識: ブランドセーフティは大手広告主のみの懸念事項として中小は無視。
+    当社の判断: 業種に応じて適切な除外リスト保持 (preserve)。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P4 同一思想。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-δ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M41
   name: AN専用クリエイティブ
   category: クリエイティブ
@@ -838,16 +1401,29 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  redesign_note: |
+    主原則: M-ζ — AN プレースメント別クリエイティブ仕様。
+    業界常識: 全プレースメント共通素材で済ませる、AN の独自表示形式を意識せず。
+    当社の判断: AN は表示形式が独特なため、可能なら専用素材を用意。low 維持 (placement 限定)。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P7 派生。
   enabled: false
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
+  # 判断保留 (2026-05): 有効化前に追加検証が必要
+  review_required: true
 - id: M42
   name: Messenger配信のCV計測
   category: 計測_トラッキング
@@ -865,10 +1441,23 @@ rules:
   - M01
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  redesign_note: |
+    主原則: M-θ — Messenger は iOS14 ATT の影響を強く受け、CV 計測がさらに困難。
+    業界常識: Messenger 配信自体が稀で計測課題が認識されない。
+    当社の判断: Messenger を使うなら CAPI 経由の計測整備必須。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Meta 固有 (M-θ + M-α)。
   enabled: false
+  meta_principle_alignment:
+    primary: M-θ
+    secondary: [M-α]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
+  # 判断保留 (2026-05): 有効化前に追加検証が必要
+  review_required: true
 - id: M43
   name: 自動応答フロー
   category: 構造_設定
@@ -879,20 +1468,33 @@ rules:
   detection_layer: Layer3
   quick_win: false
   primary_axis: TO-06
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: LP-広告連続性
+  redesign_note: |
+    主原則: M-λ — Messenger 自動応答は LP の代替着地点。広告 → 応答メッセージの整合が必要。
+    業界常識: テンプレ応答で済ませる、広告コピーとの意味整合は意識せず。
+    当社の判断: 広告コピーと応答メッセージの意味整合をチェック。medium 維持。
+    Andromeda 後の補正: 広告-LP 一致思想 (X: Carlson) が Messenger フローにも適用。
+    米満氏理論との関係: Meta 固有 (M-λ)。
   enabled: false
+  meta_principle_alignment:
+    primary: M-λ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
+  # 判断保留 (2026-05): 有効化前に追加検証が必要
+  review_required: true
 - id: M44
   name: Advantage+カタログ整合
   category: 構造_設定
-  severity: high
+  severity: critical
   weight: 1.0
   platform: meta
   placement: Advantage+ Shopping
@@ -906,10 +1508,29 @@ rules:
   - M20
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ASC前提
+  # severity 変更 (2026-05): high → critical
+  # 理由: ASC 前提崩壊は M-η 全体の機能停止を意味、M-ε と並ぶ Andromeda 後の中核
+  redesign_note: |
+    主原則: M-η — ASC の前提条件。カタログ整合崩壊で M-η 全体が機能停止。
+    業界常識: カタログ整合は EC 担当の責任で広告チームが監視しない。
+    当社の判断: ASC を運用するなら週次でカタログエラー監査。critical (ASC 化が進む Andromeda 後では事業 ROAS を直接棄損)。
+    Andromeda 後の補正: ASC 普及で重要性激増。ASC 集約推奨 (1〜2 キャンペーン) 環境ではカタログ単一障害点化。
+    米満氏理論との関係: Meta 固有 (M-η)。
+  expected_impact:
+    primary_metric: roas_change_pct
+    primary_value: 18
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: ASCの前提条件。カタログ整合崩壊で動的広告が機能停止しROAS悪化。整合復旧で動的最適化が再開し、ROAS約15〜20%回復。EC担当との連携が必要なため工数中。
   enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M45
   name: 入札上限の適正
   category: 予算_入札
@@ -920,16 +1541,33 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-03
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 深度制御
+  redesign_note: |
+    主原則: M-η — Advantage+ Shopping の bid cap。深度制御。
+    業界常識: 強気の上限設定で配信を絞り込む発想、学習が回らないまま停止判断。
+    当社の判断: 緩い上限から始め段階的に絞る。学習中の頻繁変更は避ける。high 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P8 派生。
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 12
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: 強気の入札上限で配信が絞り込まれ学習が回らないケースが多い。上限緩和またはbid cap外しで配信量が回復しCV数約12%増加。CPA上昇リスクは要監視。
   enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M46
   name: 既存顧客予算キャップ
   category: クリエイティブ
@@ -946,30 +1584,61 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 新規/既存配分の人的制御
-  enabled: false
+  redesign_note: |
+    主原則: M-η — ASC 内の自動化制御 (新規/既存配分の人的設計)。
+    業界常識: ASC 内の予算配分は意識せず、Meta に完全委任。新規/既存の比率が成り行き。
+    当社の判断: 新規獲得型業態では既存顧客への配分上限を設定 (例: 30%)。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P8 派生 + M-δ 副紐付け (除外的シグナル運用)。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: [M-δ]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M47
   name: クリエイティブバリエーション
   category: クリエイティブ
-  severity: medium
+  severity: high
   weight: 1.0
   platform: meta
   placement: Advantage+ Shopping
   detection_layer: Layer4
   quick_win: true
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  # severity 変更 (2026-05): medium → high
+  # 理由: M-ζ クリエイティブ重要性 (Andromeda 80% 支配) + ASC は 15〜50+ アクティブ CR が前提
+  redesign_note: |
+    主原則: M-ζ — ASC 内のクリエイティブ多様性。15〜50+ アクティブ CR が ASC 最適化の前提。
+    業界常識: ベストパフォーマー 1 本を残す発想で新規 CR 投入が低頻度。
+    当社の判断: 月次新規コンセプト 30+ 投入を ASC 運用の必須プロセス化。
+    Andromeda 後の補正: クリエイティブ多様性が Andromeda 報酬の主要レバー (Foxwell)。
+    米満氏理論との関係: Google P7 派生 (Meta では強度大) + M-η 副紐付け。
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 18
+    confidence: high
+    impact_horizon_weeks: 3
+    rationale: ASC内アクティブCRが15本未満では多様性が不足し疲弊が早まる。15〜50本まで増やすとCTR約15〜20%改善。M-ζ原則の中核で量産プロセス化が必要。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: [M-η]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M48
   name: ASC+との共存
   category: 構造_設定
@@ -986,14 +1655,26 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 予算競合の構造解消
-  enabled: false
+  redesign_note: |
+    主原則: M-ε — 標準キャンペーンと ASC の予算競合・自社オーバーラップ排除。
+    業界常識: ASC を追加で立ち上げても既存キャンペーンを停止せず、自社競合状態のまま。
+    当社の判断: ASC 化したら標準キャンペーンを縮小 or 停止、または明示的に分離。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P6 (集約・分離) 派生 + M-η 副紐付け。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ε
+    secondary: [M-η]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M49
   name: オーディエンスオーバーラップ
   category: ターゲティング
-  severity: high
+  severity: critical
   weight: 1.0
   platform: meta
   placement: 共通
@@ -1006,10 +1687,29 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: Meta版自社競合解消
+  # severity 変更 (2026-05): high → critical
+  # 理由: Andromeda 後 M-ε オーバーラップは入札単価吊上げで直接 ROAS 棄損 (Meta 版自社競合の中核)
+  redesign_note: |
+    主原則: M-ε — Meta 版自社競合解消。同一ユーザーが複数広告セットの対象になる問題。
+    業界常識: 細かい興味ターゲットで広告セットを分けて運用、オーバーラップを意識せず自社競合状態。
+    当社の判断: Audience Overlap Tool で 30% 超は集約候補、必須月次監査項目。critical (Andromeda 後の中核問題)。
+    Andromeda 後の補正: オーバーラップは自社入札単価吊上げ要因。Andromeda 環境で重要度激増。
+    米満氏理論との関係: Google P6 派生 + Meta 固有のオーバーラップ問題。
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -15
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: 同一ユーザーに複数広告セットから配信されると自社競合でCPC上昇。オーバーラップ解消（広告セット統合）でCPC約10%下がりCPA約15%改善。学習集約による効果も併発。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ε
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M50
   name: LLA(類似オーディエンス)の鮮度
   category: ターゲティング
@@ -1020,16 +1720,27 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: シグナル鮮度
+  redesign_note: |
+    主原則: M-ι ファーストパーティデータ・カスタムオーディエンス鮮度原則 — LLA seed の鮮度が精度を左右。
+    業界常識: LLA は 1 回作って放置、seed の中身を意識せず作成。
+    当社の判断: 年 2 回以上の seed 再作成、Top 1〜5% LTV 顧客で構成。medium 維持。
+    Andromeda 後の補正: 1P データの重要性が iOS14 後で激増。
+    米満氏理論との関係: Meta 固有 (M-ι、Google P1 派生)。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ι
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M51
   name: カスタムオーディエンス更新頻度
   category: ターゲティング
@@ -1040,17 +1751,28 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies:
   - M50
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ファーストパーティ鮮度
+  redesign_note: |
+    主原則: M-ι — Customer File は月次更新、最低四半期。
+    業界常識: 1 回作って放置、更新頻度は意識せず。
+    当社の判断: マッチ率 60% 未満ならハッシュ化形式・データ完全性を再確認。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Meta 固有 (M-ι)。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ι
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M52
   name: 広すぎる/狭すぎる設定
   category: ターゲティング
@@ -1068,10 +1790,28 @@ rules:
   - M10
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: Meta版粒度判定
-  enabled: false
+  redesign_note: |
+    主原則: M-ε — 広告セット粒度判定。広すぎ/狭すぎは集約とその逆の境界判定。
+    業界常識: 「ぴったりのターゲット」を狭く絞り込むのが正しいと信じる。
+    当社の判断: Advantage+ Audience の Broad 推奨と整合。狭すぎは学習データ希薄化、広すぎは無駄配信。high 維持。
+    Andromeda 後の補正: Detailed Targeting サジェスチョン化で「広い基盤」が公式推奨。
+    米満氏理論との関係: Google P6 派生。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -10
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: ターゲットが狭すぎると学習データ希薄、広すぎると無駄配信。適正粒度（推定リーチ100万〜1000万）への調整でCPA約10%改善。Advantage+前提なら広めが原則。
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ε
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M53
   name: 既存顧客除外設定
   category: ターゲティング
@@ -1088,10 +1828,21 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 新規獲得時のネガ保持
+  redesign_note: |
+    主原則: M-δ — 新規獲得時のネガティブシグナル保持。既存顧客の除外。
+    業界常識: 既存顧客除外を設定せず、リターゲと新規獲得の境界が曖昧。
+    当社の判断: 新規獲得型キャンペーンでは既存顧客カスタムオーディエンスを除外オーディエンスに指定 (preserve)。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P4 同一思想。
   enabled: true
+  meta_principle_alignment:
+    primary: M-δ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M54
   name: Advantage詳細ターゲット+設定
   category: ターゲティング
@@ -1108,10 +1859,21 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: 自動拡張の制御
+  redesign_note: |
+    主原則: M-η — Advantage+ Detailed Targeting の挙動制御。
+    業界常識: Detailed Targeting を厳密フィルタとして使う旧運用、Advantage+ 拡張を OFF にする発想。
+    当社の判断: 2025/6 サジェスチョン化以降、絞り込みフィルタとして依存しない。Advantage+ 拡張を許容。medium 維持。
+    Andromeda 後の補正: Detailed Targeting "サジェスチョン化" は公式仕様変更で旧運用無効化。
+    米満氏理論との関係: Google P8 派生。
   enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M55
   name: 年齢/性別の過剰絞り込み
   category: ターゲティング
@@ -1129,10 +1891,22 @@ rules:
   conflicts: []
   dependencies:
   - M52
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: Meta版マッチタイプ開放議論
-  enabled: false
+  redesign_note: |
+    主原則: M-ε — Meta 版マッチタイプ開放議論。年齢・性別で過剰に絞ると学習データ希薄。
+    業界常識: ペルソナに合わせて狭く絞る、20-35 歳女性等の典型ターゲット指定。
+    当社の判断: Advantage+ Audience の Broad 設定を基本、属性は最低限 (法令上の必要性のみ)。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P6 派生。
+  # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ε
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M56
   name: Aggregated Event Measurement
   category: 計測_トラッキング
@@ -1143,16 +1917,27 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  redesign_note: |
+    主原則: M-θ — AEM は iOS14 計測欠損対応の中核機能。
+    業界常識: AEM 自体が認知されず、設定確認も形式的。
+    当社の判断: 2025/6 上限撤廃後も基盤として継続管理。medium 維持。
+    Andromeda 後の補正: 8 イベント上限撤廃で柔軟性向上、優先度設定の戦略性は継続必要。
+    米満氏理論との関係: Meta 固有 (M-θ)。
   enabled: true
+  meta_principle_alignment:
+    primary: M-θ
+    secondary: [M-α]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M57
   name: フリークエンシー疲弊
   category: クリエイティブ
@@ -1163,56 +1948,111 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  redesign_note: |
+    主原則: M-ζ — Frequency 2.5-3.0 で警告、3.5+ で必須リフレッシュ、CTR 20%+ 低下で疲弊シグナル。
+    業界常識: Frequency を意識せず、CPA が悪化してから対応 (常に手遅れ)。
+    当社の判断: Frequency と CTR の複合監視で予兆段階で介入。high 維持。
+    Andromeda 後の補正: 「疲弊は CTR に CPA より数日早く現れる」(X: AdStellar / Carlson)。
+    米満氏理論との関係: Google P7 派生 (Meta では疲弊検知が独自運用化)。
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 15
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: Frequency 3.5+でCTRが20%以上低下する疲弊シグナル。新クリエイティブ追加または対象拡大で疲弊解消後、CTR約15%回復。週次のフリークエンシー監視が必須。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M58
   name: クリエイティブ入替日数
   category: クリエイティブ
-  severity: medium
+  severity: high
   weight: 1.0
   platform: meta
   placement: 共通
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-07
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  # severity 変更 (2026-05): medium → high
+  # 理由: M-ζ 週次刷新が業界標準 (X: Sanchez + Carlson 合意) を反映
+  redesign_note: |
+    主原則: M-ζ — クリエイティブの入替サイクル。週次刷新が業界標準。
+    業界常識: 月 1〜2 本の入替で十分、ベストパフォーマーは長期間回す。
+    当社の判断: 週次〜隔週刷新を標準化。月次新規コンセプト 30+ 前提。
+    Andromeda 後の補正: 「週次刷新が標準」(X: Sanchez + Carlson 合意)。CR 多様性が Andromeda 報酬。
+    米満氏理論との関係: Google P7 派生 (Meta では強度大)。
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 12
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: 週次刷新サイクル運用で疲弊前に新CRを投入できる。月1〜2本→週次刷新でCTR約12%改善。CR制作体制の確立が必要なため工数大、運用設計の根幹改修。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M59
   name: Dynamic Creative Optimization
   category: クリエイティブ
-  severity: medium
+  severity: high
   weight: 1.0
   platform: meta
   placement: 共通
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  # severity 変更 (2026-05): medium → high
+  # 理由: M-ζ 量産前提時代の標準機能 (15-50+ アセット投入で機能発揮)
+  redesign_note: |
+    主原則: M-ζ — DCO はクリエイティブ多様性の自動化機能。15〜50+ アセット投入で機能発揮。
+    業界常識: DCO を「実験的機能」として小規模で使うか、未活用。
+    当社の判断: 月次量産プロセスと DCO を一体運用。
+    Andromeda 後の補正: 量産 + 自動最適化が Andromeda 環境で必須。
+    米満氏理論との関係: Google P7 派生 + M-η 副紐付け。
+  expected_impact:
+    primary_metric: roas_change_pct
+    primary_value: 12
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: DCO本格運用（15〜50アセット投入）で組み合わせ最適化が機能しROAS約12%改善。小規模実験運用ではAIの最適化が回らないため一定規模での投入が前提。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ζ
+    secondary: [M-η]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M60
   name: Advantage+クリエイティブ
   category: 構造_設定
@@ -1223,56 +2063,105 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  redesign_note: |
+    主原則: M-η — Advantage+ Creative は自動化機能の中核。明るさ調整・テンプレート適用等を Meta が自動実行。
+    業界常識: 自動加工は「ブランド毀損の懸念」で OFF にする発想。
+    当社の判断: ブランドガイドライン抵触のないものは ON 推奨。medium 維持。
+    Andromeda 後の補正: Advantage+ Creative は Andromeda 評価対象。
+    米満氏理論との関係: Google P8 派生 + M-ζ 副紐付け。
   enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: [M-ζ]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M61
   name: ファーストパーティデータ活用
   category: ターゲティング
-  severity: medium
+  severity: high
   weight: 1.0
   platform: meta
   placement: 共通
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  # severity 変更 (2026-05): medium → high
+  # 理由: M-ι 中核 + iOS14 後の重要性激増 (公式: 高品質 1P シグナル供給依存)
+  redesign_note: |
+    主原則: M-ι — 1P データ供給はターゲティング精度を支配。マッチ率 60%+ が最低ライン。
+    業界常識: 1P データを Meta に供給する発想自体が薄い、興味ターゲット依存。
+    当社の判断: Customer File / Engagement Custom Audience を月次運用。マッチ率を月次 KPI 化。
+    Andromeda 後の補正: 「2026 年における最も効果的な Meta ターゲティングは高品質 1P シグナル供給に依存する」(公式)。
+    米満氏理論との関係: Meta 固有 (M-ι、Google P1 派生)。
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -15
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 1Pデータ供給でターゲティング精度が向上、マッチ率60%以上が最低ライン。Customer File定期更新でカスタムオーディエンスとLLAの精度が改善しCPA約15%減。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ι
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M62
   name: アトリビューション設定
   category: 計測_トラッキング
-  severity: medium
+  severity: high
   weight: 1.0
   platform: meta
   placement: 共通
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  # severity 変更 (2026-05): medium → high
+  # 理由: M-θ iOS14 判断ロジックの核心 (7日 / 28日選択は CV 数全体に直結)
+  redesign_note: |
+    主原則: M-θ — アトリビューション設定 (7 日 / 28 日) は iOS14 後の判断ロジックの核心。
+    業界常識: デフォルト 7 日のまま比較せず、CV 数の解釈に欠損係数を入れない。
+    当社の判断: 7 日基本、28 日と並べて参照。Lift テストで補正係数算出。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Meta 固有 (M-θ)。
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 8
+    confidence: low
+    impact_horizon_weeks: 4
+    rationale: アトリビューション設定（7日 vs 28日）の違いで評価軸が大きく変わる。事業のCV経路に合わせた設定でAI最適化方向が事業価値と一致。判断品質改善が主、数値直接改善は副次的。
   enabled: true
+  meta_principle_alignment:
+    primary: M-θ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M63
   name: 配信最適化目標の妥当性
   category: 構造_設定
@@ -1283,16 +2172,27 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-06
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  redesign_note: |
+    主原則: M-η — Conversion / Landing Page Views / Add To Cart 等の配信最適化目標選択。
+    業界常識: 「とりあえず Conversion」で深層イベント最適化を試さず。
+    当社の判断: CV ボリュームに応じて Add To Cart → Initiate Checkout → Purchase と段階的に深層化。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P8 派生。
   enabled: true
+  meta_principle_alignment:
+    primary: M-η
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M64
   name: 地域ターゲティング精度
   category: 構造_設定
@@ -1303,16 +2203,28 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  # 紐付け変更 (2026-05): 未分類 → M-ε 主紐付け (粒度判定の地域版として救済)
+  redesign_note: |
+    主原則: M-ε — 広告セット粒度判定の地域版。商圏外配信は無駄、商圏絞り過ぎは学習データ希薄。
+    業界常識: 全国配信で済ませる、または市区町村レベルで過剰絞り込み。
+    当社の判断: 商圏 + 周辺地域の段階的拡張。Advantage+ Audience の地理拡張を許容。medium 維持。
+    Andromeda 後の補正: なし。
+    米満氏理論との関係: Google P6 派生。
   enabled: true
+  meta_principle_alignment:
+    primary: M-ε
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: principle_based
 - id: M65
   name: 支払い方法ステータス
   category: 構造_設定
@@ -1323,13 +2235,189 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
-  redesign_note: ''
+  redesign_note: |
+    運用衛生項目 (思想原則紐付けなし)。事業継続要件。配信停止リスク予防として保持。
   enabled: true
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1
+  category_type: operational_hygiene
+- id: M66
+  name: 広告-LPメッセージ整合スコア
+  category: クリエイティブ
+  severity: high
+  weight: 1.0
+  platform: meta
+  placement: 共通
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis: TO-08
+  axis_position: neutral
+  polarity: neutral
+  prerequisite: []
+  conflicts: []
+  dependencies: []
+  conflict_group:
+  yonemitsu_alignment: 新設
+  redesign_note: |
+    主原則: M-λ 広告-LP メッセージ完全一致原則 — 広告コピー・動画トランスクリプトと LP ヘッドライン・ファーストビューのメッセージ整合度を NLP 類似度でスコア化 (0〜100%)。
+    業界常識: 広告クリエイティブと LP は別チームが別タイミングで作る、整合性の定量化は実施しない。
+    当社の判断: 月次監査で整合スコア 70% 未満は警告、50% 未満は critical。不整合検出時は LP 改善提案を Slack 通知。AI 逆生成 (勝ち広告 → LP) を運用フローに組込み。high。
+    Andromeda 後の補正: Eric Carlson 実証で広告-LP 一致により CPA 30% 低下 (X: theericcarlson 4/27)。Andromeda 後はクリエイティブ依存度 80% に達するため整合性の重要度激増。
+    米満氏理論との関係: Meta 固有 (M-λ)。Google P3 (結果指標非依存) 思想と接続するが独立原則。
+  expected_impact:
+    primary_metric: cvr_change_pct
+    primary_value: 20
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 広告コピー・動画TR↔LPヘッドラインのメッセージ整合がCVRを支配。整合スコア改善でCVR約15〜25%改善。LP制作との連携が必要なため難易度中。
+  enabled: true
+  meta_principle_alignment:
+    primary: M-λ
+    secondary: [M-ζ]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1_new_rules
+  category_type: principle_based
+- id: M67
+  name: 勝ち広告LP逆生成プロセス
+  category: クリエイティブ
+  severity: medium
+  weight: 1.0
+  platform: meta
+  placement: 共通
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-06
+  secondary_axis:
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - M66
+  conflicts: []
+  dependencies: []
+  conflict_group:
+  yonemitsu_alignment: 新設
+  redesign_note: |
+    主原則: M-λ — 勝ちクリエイティブ (CPA 上位 20%) のコピー・動画トランスクリプトを AI に投入し LP を逆生成するプロセスの実施有無を監査。
+    業界常識: LP は汎用的に作っておき、複数広告を流し込む。広告ごとに LP を最適化する発想がない。
+    当社の判断: AI 逆生成 LP プロセスの稼働を月次確認、未実施なら新規 CV 獲得効率の上限が低下と判定。medium。
+    Andromeda 後の補正: Eric Carlson 実証で CPA 30% 改善実績、量産プロセスとの一体運用が前提。
+    米満氏理論との関係: Meta 固有 (M-λ)。
+  enabled: true
+  meta_principle_alignment:
+    primary: M-λ
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1_new_rules
+  category_type: principle_based
+- id: M68
+  name: 学習リセット要因イベント検出
+  category: 予算_入札
+  severity: high
+  weight: 1.0
+  platform: meta
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-10
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: preserve
+  prerequisite:
+  - M09
+  conflicts: []
+  dependencies:
+  - M13
+  conflict_group:
+  yonemitsu_alignment: 新設
+  redesign_note: |
+    主原則: M-β 学習フェーズ保護原則 — 学習フェーズ中の significant edit 発生を検出。
+    業界常識: 数値が悪ければ即時に予算・ターゲット・最適化イベントを変更、学習リセットを意識せず。
+    当社の判断: 直近 7 日間に「予算 ±20% 超変更」「ターゲット 25% 超変更」「最適化イベント変更」「ピクセル変更」のいずれかが学習中広告セットで発生したかを検出。high。
+    Andromeda 後の補正: AI 解析と組合せた現場知見運用 (運用成熟度高) では原因分解後の介入を許容、検出後は判断ログに記録。
+    米満氏理論との関係: Google P2 (機械学習保護) 派生。Meta 固有の 50CV/週基準と連動。
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 15
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 学習中の significant edit を検出・抑制するルールで学習継続性が担保される。月次の介入回数を可視化し、必要な介入のみ判断ログとして残す運用設計の中核。
+  enabled: true
+  meta_principle_alignment:
+    primary: M-β
+    secondary: [M-η]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1_new_rules
+  category_type: principle_based
+- id: M69
+  name: Advantage+文脈の除外オーディエンス
+  category: ターゲティング
+  severity: medium
+  weight: 1.0
+  platform: meta
+  placement: 共通
+  detection_layer: Layer2
+  quick_win: true
+  primary_axis: TO-02
+  secondary_axis: TO-11
+  axis_position: neutral
+  polarity: preserve
+  prerequisite: []
+  conflicts: []
+  dependencies:
+  - M53
+  conflict_group:
+  yonemitsu_alignment: 新設
+  redesign_note: |
+    主原則: M-δ ネガティブシグナル保持原則 — Advantage+ Audience は Broad 推奨だが、既存顧客・直近購入者・スタッフ等の除外設定は M-δ の観点で必須。
+    業界常識: Advantage+ Audience を Broad 設定すれば全自動と誤解、除外オーディエンス設定を実施せず。
+    当社の判断: Advantage+ 利用キャンペーンに対し、新規獲得型ならば既存購入者カスタムオーディエンスを除外オーディエンスに指定する設定有無を監査。medium。
+    Andromeda 後の補正: Andromeda 環境では除外リストが Meta 自動拡張への唯一の制御手段となる。
+    米満氏理論との関係: Google P4 (ネガティブシグナル保持) 同一思想 + M-η (自動化前提) 接続。
+  enabled: true
+  meta_principle_alignment:
+    primary: M-δ
+    secondary: [M-η]
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1_new_rules
+  category_type: principle_based
+- id: M70
+  name: LLA seed の LTV Top 層集中度
+  category: ターゲティング
+  severity: medium
+  weight: 1.0
+  platform: meta
+  placement: 共通
+  detection_layer: Layer4
+  quick_win: false
+  primary_axis: TO-02
+  secondary_axis:
+  axis_position: neutral
+  polarity: neutral
+  prerequisite:
+  - M50
+  conflicts: []
+  dependencies: []
+  conflict_group:
+  yonemitsu_alignment: 新設
+  redesign_note: |
+    主原則: M-ι ファーストパーティデータ・カスタムオーディエンス鮮度原則 — LLA seed リストが LTV Top 1〜5% 顧客で構成されているかを監査。
+    業界常識: LLA seed は「全購入者」や「過去 180 日購入者」等で作成、LTV ベースの絞り込みなし。
+    当社の判断: アクティブ LLA キャンペーンの seed が LTV Top 5% 以下に絞られているかを確認、未絞込みなら再構築推奨。medium。
+    Andromeda 後の補正: 「LLA は Top 1〜5% の LTV 顧客で seed する」(EasyInsights 業界実務者ガイド) — iOS14 後の 1P データ重要性激増。
+    米満氏理論との関係: Meta 固有 (M-ι、Google P1 派生)。
+  enabled: true
+  meta_principle_alignment:
+    primary: M-ι
+    secondary: []
+  last_redesign: '2026-05'
+  redesign_source: phase3_meta_principles_v1_new_rules
+  category_type: principle_based

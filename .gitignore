@@ -13,6 +13,10 @@ venv/
 # Environment
 .env
 
+# Local backups (clients.yaml.*.bak.* など、コミット対象外)
+*.bak.*
+*.bak
+
 # IDE
 .vscode/
 .idea/

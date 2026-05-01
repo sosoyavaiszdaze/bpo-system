@@ -31,9 +31,15 @@ rules:
   - G06
   dependencies:
   - G11
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 計測の正しさは全運用判断の前提。最優先項目
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 25
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: CV重複計測を解消すると自動入札が学習する真のCV単価が確定。短期的にレポート上のCV数は減るが、AI学習シグナル精度が大幅向上。長期的にCPAが安定し誤った入札を防止できる。
   enabled: false
 - id: G02
   name: コンバージョンカテゴリ設定
@@ -54,9 +60,15 @@ rules:
   dependencies:
   - G06
   - G11
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ポジ/ネガ両方のシグナルを学習に与える土台
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 12
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: メイン/セカンダリCVの分類で AIが優先度の高いCV種類を学習対象にできる。誤った優先度設定では学習が散漫化。整理後は学習効率が向上しCPAも徐々に改善。
   enabled: true
 - id: G03
   name: 拡張コンバージョン実装状況
@@ -76,9 +88,15 @@ rules:
   conflicts: []
   dependencies:
   - G11
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 計測精度向上 = 学習シグナル精度向上
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 8
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: ハッシュ化メール送信で計測欠損が補われCV数 約5〜10% 増加（業界実績）。同時に学習シグナル精度も向上し自動入札が改善。Google公式機能で実装も難しくないquick_win。
   enabled: true
 - id: G04
   name: GA4連携状態
@@ -98,9 +116,15 @@ rules:
   conflicts: []
   dependencies:
   - G09
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 外部シグナルの取り込み土台
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 10
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: GA4連携が外部シグナル取り込みの土台。連携で得られるエンゲージメント・ファネル指標が広告最適化シグナルとして活用可能になる。設定後すぐではなく蓄積後に効果が現れる。
   enabled: true
 - id: G05
   name: タグ発火エラー
@@ -119,9 +143,15 @@ rules:
   conflicts: []
   dependencies:
   - G01-G10全て
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: G01-10の前提となる物理的な発火確認
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 15
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: 発火エラー解消で計測されていなかったCVが取り込まれ、CV数 約10〜20% 増加。同時にAI入札の学習データが正確化し最適化が進む。即時の数値改善が見込めるquick_win。
   enabled: false
 - id: G06
   name: コンバージョン価値設定
@@ -142,9 +172,15 @@ rules:
   conflicts: []
   dependencies:
   - G11(tROAS)
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: tROAS運用の前提条件
+  expected_impact:
+    primary_metric: roas_change_pct
+    primary_value: 15
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: CV価値が未設定だとtROAS運用そのものが成立しない。価値設定後は売上目線での最適化が可能になり、収益性の高いユーザー獲得にAIが寄与。ROAS 10〜20% 改善見込み。
   enabled: true
 - id: G07
   name: クロスデバイスコンバージョン
@@ -156,14 +192,14 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: preserve
   prerequisite:
   - G01
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ポジティブシグナルの取りこぼし防止
   enabled: false
@@ -186,9 +222,15 @@ rules:
   conflicts: []
   dependencies:
   - G11
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: シグナル評価の基準軸そのもの
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 7
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: ラストクリック→DDAへの切替で経路貢献度の評価が変わり、上流接点への入札が強化されCV総数が約5〜10%増加。アトリビューション切替直後は数値変動が大きいため4週観察。
   enabled: true
 - id: G09
   name: オーディエンスリスト同期
@@ -207,7 +249,7 @@ rules:
   - G04
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ファーストパーティデータをシグナルとして注入
   enabled: true
@@ -229,9 +271,15 @@ rules:
   conflicts: []
   dependencies:
   - G11
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: B2B長期CVを学習に与える
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -15
+    confidence: medium
+    impact_horizon_weeks: 6
+    rationale: B2B長期商談など真の事業価値を学習に与えられる。フォーム送信ではなく契約成立をCVとすれば学習対象が事業ゴールと一致し、CPA（=契約獲得単価）約15%改善。蓄積に6週要。
   enabled: false
 - id: G11
   name: 入札戦略と目標値の整合
@@ -254,9 +302,15 @@ rules:
   dependencies:
   - G12
   - G44
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: TO-03の中核。tCPA/tMaxConv選択の妥当性
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -12
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: tCPA/tMaxConvの選択が事業目的とずれていると AIの最適化方向が事業価値と乖離。整合させることで学習が事業ゴール方向に収束しCPA約10〜15%改善が見込める。学習脱出に約4週要する。
   enabled: true
 - id: G12
   name: 学習フェーズ滞留
@@ -277,9 +331,15 @@ rules:
   - G14
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 学習未完了 = 短期判断を急いで長期最適化を毀損
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -20
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 学習フェーズ脱出で AIの判断精度が安定。脱出前は ±30% のばらつきが脱出後 ±10% に収束しCPA約20%改善が見込める。予算増額または統合で脱出を促進する。
   enabled: true
 - id: G13
   name: 予算制限による機会損失
@@ -299,9 +359,15 @@ rules:
   conflicts: []
   dependencies:
   - G44
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: TO-09の中核。Budget Lost先行解消
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 25
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: Budget Lostが大きいキャンペーンに予算追加すると、機会損失していたCVが取り込まれCV数 20〜30% 増加。同単価で取れているCPAは維持されることが多くROAS悪化リスクは低い。
   enabled: true
 - id: G14
   name: 入札戦略の頻繁な変更
@@ -322,9 +388,15 @@ rules:
   - G11
   dependencies:
   - G12
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 短期判断の積み重ねが長期学習を破壊
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 15
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 入札戦略変更ごとに学習がリセットされる。変更頻度を減らせば学習が安定し最適化が前進。短期判断の積み重ねを抑制することで CPA安定性が15%程度改善。
   enabled: false
 - id: G15
   name: 共有予算の適切性
@@ -343,7 +415,7 @@ rules:
   - G13
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: Budget Lost解消の手段の一つ
   enabled: true
@@ -365,7 +437,7 @@ rules:
   conflicts:
   - G14
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 計画的な人的介入として正当
   enabled: false
@@ -387,9 +459,15 @@ rules:
   dependencies:
   - G39
   - G40
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 1コンテンツ1AG原則の上位概念
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -10
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: キャンペーン目的と配信タイプ（Search/Display/PMax/Discovery）の不一致は最適化方向のズレを生む。整合させることでAIの学習方向が事業目的と合致しCPA約10%改善。
   enabled: true
 - id: G18
   name: 広告スケジュール最適化
@@ -408,7 +486,7 @@ rules:
   - G11
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 頻度の幅(時間)制御。自動入札時は不要な場合多し
   enabled: false
@@ -429,7 +507,7 @@ rules:
   - G11
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 要再定義
   redesign_note: 自動入札時は調整比は無効。tCPA調整比として動作
   enabled: false
@@ -451,9 +529,15 @@ rules:
   conflicts: []
   dependencies:
   - G21
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ネガティブシグナル(低パフォ地域)の保持
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 7
+    confidence: medium
+    impact_horizon_weeks: 2
+    rationale: 低パフォーマンス地域の入札-100%除外で無駄配信が約7%削減。同時にネガティブシグナルとして学習に保持されることで地域別最適化が強化される。
   enabled: true
 - id: G21
   name: 除外地域の適切性
@@ -465,14 +549,14 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies:
   - G20
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 明確に商圏外なら除外
   enabled: false
@@ -493,7 +577,7 @@ rules:
   conflicts: []
   dependencies:
   - G34
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 目立ち度向上 = pCTR向上 = Ad Rank向上
   enabled: true
@@ -507,15 +591,21 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 配信前提条件のチェック
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 12
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: 不承認広告は配信されないため CV機会を完全に失っている状態。承認取得で停止していた配信が復活し10〜15%のCV回復。修正提出は通常1〜3営業日で承認される。
   enabled: false
 - id: G24
   name: キャンペーン/広告グループ停止忘れ
@@ -533,7 +623,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 意図のない予算消費を防ぐ
   enabled: false
@@ -547,13 +637,13 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 分析時の障害除去
   enabled: true
@@ -577,9 +667,15 @@ rules:
   dependencies:
   - G26-NEW1
   - G26-NEW2
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 概念的に問題
   redesign_note: '重要: 米満氏noteによれば品質スコアはAd Rank算出に使われない結果指標。停止判断の根拠にしない。モニタリングのみ'
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 5
+    confidence: low
+    impact_horizon_weeks: 8
+    rationale: 品質スコアは結果指標のためZynectでは停止判断に使わない。モニタリングのみとし原因変数（推定CTR/関連性/LP体験）に分解して打ち手を打つ。直接的な数値改善は限定的。
   enabled: true
 - id: G27
   name: ネガティブキーワード不足
@@ -599,9 +695,15 @@ rules:
   dependencies:
   - G28
   - G29
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ネガティブシグナルの保持は学習有意差を高める
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 12
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: 無関係クエリへの配信を除外することで広告費 約10〜15% の無駄を削減。同時に学習がポジ/ネガ両建てで強化されCVR改善も期待できる。除外KWは即時反映されるquick_win。
   enabled: true
 - id: G28
   name: 検索語句レポート未反映
@@ -621,9 +723,15 @@ rules:
   conflicts: []
   dependencies:
   - G27
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: クエリ→KW追加→可視化のサイクル
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 10
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: 検索語句レポート→KW追加/除外のサイクルが回ると、無駄配信の継続的削減（月次10%相当）と意図に合うKWの取り込みが両立。最低月次運用で運用代行作業として組み込む。
   enabled: true
 - id: G29
   name: マッチタイプの偏り
@@ -643,9 +751,15 @@ rules:
   - G27
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 自動入札+除外整備済みなら部分一致(インテントマッチ)推奨
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 12
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: 完全一致偏重は機会損失。除外整備済みなら部分一致（インテントマッチ）への切替で配信意図の幅が広がりCV数 約10〜15% 増加。CPA上昇リスクはあるため除外運用の整備が前提。
   enabled: true
 - id: G30
   name: 重複キーワード
@@ -664,7 +778,7 @@ rules:
   conflicts: []
   dependencies:
   - G39
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 細分化由来の自社競合
   enabled: false
@@ -684,9 +798,15 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 評価軸が異なるので分離が正しい
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -18
+    confidence: high
+    impact_horizon_weeks: 3
+    rationale: ブランド（高CVR・低CPA）と一般（低CVR・高CPA）が混在すると平均値で評価されAIの最適化が誤る。分離後は各KW群が独立に最適化されCPA15〜20%改善。
   enabled: true
 - id: G32
   name: 低インプレッションKW
@@ -704,7 +824,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 要再定義
   redesign_note: 削除でなく分析ノイズ低減策へ。低IMP=ネガティブシグナル候補
   enabled: true
@@ -726,7 +846,7 @@ rules:
   dependencies:
   - G44
   - G45
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: オークションインサイト活用
   enabled: false
@@ -748,9 +868,15 @@ rules:
   - G38
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 短い見出し x 多バリエーションを評価
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 12
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: RSA広告強度を「優」まで引き上げ（短い見出し+多バリエーション）するとCTR 約10〜15% 改善。Ad Rank向上にも寄与しCPCが下がる二次効果も期待。
   enabled: true
 - id: G35
   name: 3x Kill Rule違反
@@ -771,9 +897,15 @@ rules:
   - G34
   dependencies:
   - G26-NEW1
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 要再定義
   redesign_note: '重要: 自動入札時は止めずに編集。手動入札時のみ停止検討。文脈依存'
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 18
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: 自動入札時に機械的停止すると学習データを失う。停止ではなく編集に切り替えることで学習継続性を保ち、長期最適化を毀損させない。短期数値悪化のリスクと引き換えに学習品質を確保。
   enabled: false
 - id: G36
   name: 広告文の重複
@@ -791,7 +923,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ABテスト機会と統計的有意差の確保
   enabled: false
@@ -812,7 +944,7 @@ rules:
   conflicts: []
   dependencies:
   - G34
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: バリエーション最大化の前提
   enabled: true
@@ -833,7 +965,7 @@ rules:
   conflicts: []
   dependencies:
   - G34
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: システム最適化の阻害要因
   enabled: false
@@ -854,7 +986,7 @@ rules:
   conflicts: []
   dependencies:
   - G40
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 20KW超は過密。集約 or 細分化判断
   enabled: true
@@ -876,7 +1008,7 @@ rules:
   - G39
   dependencies:
   - G39
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: SKAGは粒度過剰でデータ希薄。集約推奨が妥当
   enabled: false
@@ -898,9 +1030,15 @@ rules:
   conflicts: []
   dependencies:
   - G44
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 深度の天井で機会損失
+  expected_impact:
+    primary_metric: impression_share_recovery_pct
+    primary_value: 15
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: 入札上限の天井で機会損失が発生している場合、上限緩和で IS が15%程度回復。CPA上昇リスクと機会獲得のトレードオフのため、tCPA設定との併用が推奨される。
   enabled: true
 - id: G42
   name: 検索パートナー配信
@@ -912,13 +1050,13 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ノイズ流入の除外判断
   enabled: true
@@ -939,9 +1077,15 @@ rules:
   - G27
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: DSAは集約型。除外整備が前提
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 8
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: DSAは集約型でカテゴリ単位ターゲット設定が前提。除外整備済みなら静的KWでは取れていなかったロングテールクエリを取り込みCV数 約8%増加。
   enabled: false
 - id: G44
   name: インプレッションシェア上位損失率
@@ -961,9 +1105,15 @@ rules:
   conflicts: []
   dependencies:
   - G45
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: TO-09の中核。Budget/Ad Rank分解の入口
+  expected_impact:
+    primary_metric: impression_share_recovery_pct
+    primary_value: 18
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: Budget Lost と Ad Rank Lost を分解しBudget Lostを先に解消することで IS が約18%回復。Budget Lostは予算追加で即時改善するためquick_win効果が高い。
   enabled: false
 - id: G45
   name: 絶対トップIS損失率
@@ -982,7 +1132,7 @@ rules:
   - G44
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ページ最上部IS。米満氏が広告クリエイティブ評価軸として強調
   enabled: false
@@ -996,15 +1146,21 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: Shopping配信の前提
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 18
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: Shoppingフィードエラーの解消で停止されていた商品の配信が復活。エラー商品比率にもよるがCV数15〜20%回復が見込める。Merchant Center上で即時対応可能なquick_win。
   enabled: false
 - id: G47
   name: タイトル最適化
@@ -1022,9 +1178,15 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 商品KW × 訴求要素のバランス
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 10
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: Shoppingタイトルに商品KW×訴求要素をバランスさせるとCTR 約10%改善。商品マッチ精度も向上し関連性が高まる。商品数が多い場合は段階的最適化が現実的。
   enabled: false
 - id: G48
   name: 画像品質
@@ -1036,15 +1198,21 @@ rules:
   detection_layer: Layer3
   quick_win: false
   primary_axis: TO-06
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ユーザー認知の前提
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 8
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: Shopping画像の解像度・背景白抜き・商品占有率の改善でCTR 約5〜10% 上昇。視覚認知の前提条件であり、低品質画像の入替は短期で効果が現れる。
   enabled: false
 - id: G49
   name: 在庫切れ商品の配信
@@ -1062,9 +1230,15 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: LP整合性の保証
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 5
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: 在庫切れ商品への配信は直接的な無駄。フィード自動更新の設定で在庫切れ即時除外され広告費約5%節約。LP整合性も保証されCVR悪化リスクも回避できる。
   enabled: false
 - id: G50
   name: 価格競争力
@@ -1082,7 +1256,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: Ad Rank的要因(競争力)
   enabled: false
@@ -1102,9 +1276,15 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: Shoppingでも構造粒度のトレードオフ
+  expected_impact:
+    primary_metric: roas_change_pct
+    primary_value: 8
+    confidence: low
+    impact_horizon_weeks: 6
+    rationale: 商品グループの粒度設計で利益率や在庫量に応じた入札制御が可能になる。過剰細分化は学習データ希薄化、適切な粒度ではROAS約8%改善。試行と検証が必要なため低信頼度。
   enabled: false
 - id: G52
   name: プロモーション拡張の設定
@@ -1116,13 +1296,13 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 目立ち度向上
   enabled: false
@@ -1143,9 +1323,15 @@ rules:
   conflicts:
   - G70
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: Standard vs PMAX重複の構造調停
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 6
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: Standard ShoppingとPMaxの優先度が衝突すると同一商品で重複配信が起きる。優先度設計で重複解消し広告費約6%効率化。PMax優先・Standard補完が定石。
   enabled: true
 - id: G54
   name: 低品質プレースメント除外
@@ -1163,9 +1349,15 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ネガティブシグナル保持
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 8
+    confidence: medium
+    impact_horizon_weeks: 2
+    rationale: GDN/YouTubeで低品質プレースメントを除外することで無効クリック・誤クリック由来の浪費を約8%削減。同時にネガティブシグナルとして学習が強化されCV質も改善。
   enabled: true
 - id: G55
   name: アプリ面除外設定
@@ -1177,15 +1369,21 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: preserve
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 誤クリック由来のノイズ除外
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 5
+    confidence: medium
+    impact_horizon_weeks: 2
+    rationale: GDNのアプリ面では誤クリック由来のノイズが多い。アプリ面除外で約5%の広告費節約。同時にCV質が向上しCVRも改善する副次効果が期待できる。
   enabled: false
 - id: G56
   name: ビューアビリティ
@@ -1197,13 +1395,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 視認性の物理的測定
   enabled: false
@@ -1223,9 +1421,15 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 拡張は学習を促進 過拡張は無駄配信
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 10
+    confidence: low
+    impact_horizon_weeks: 4
+    rationale: 適切な拡張設定で配信母集団が拡大しCV数 約10% 増加。過拡張ではCPA悪化リスクがあるため、拡張率と CPA変動を週次で監視する運用が必要。
   enabled: false
 - id: G58
   name: レスポンシブディスプレイ広告の素材数
@@ -1237,13 +1441,13 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: RSA同様 バリエーション幅
   enabled: false
@@ -1264,9 +1468,15 @@ rules:
   conflicts: []
   dependencies:
   - G63
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 視聴維持 = pCTR/pVTR向上
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 7
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 視聴維持率改善でpCTR/pVTRが向上しYouTube広告のAd Rankが上昇。完了率15%→25%程度の改善でCTR約7%向上が期待される。動画素材の編集が必要なため工数中。
   enabled: true
 - id: G60
   name: CPV効率
@@ -1278,14 +1488,14 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-03
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite:
   - G11
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 深度のCPV版
   enabled: true
@@ -1299,13 +1509,13 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-06
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ブランドセーフティ
   enabled: false
@@ -1325,7 +1535,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 目的とフォーマットの整合
   enabled: false
@@ -1345,7 +1555,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 動画版の見出し相当
   enabled: false
@@ -1368,9 +1578,15 @@ rules:
   - G67
   dependencies:
   - G73
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: PMAX内構造の粒度
+  expected_impact:
+    primary_metric: roas_change_pct
+    primary_value: 12
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: PMax単一アセットグループから3〜5グループ化することでテーマ別の最適化が進み、各グループ内でROAS約10〜15%改善。アセットグループ別分析(P9)も可能になる二次効果あり。
   enabled: false
 - id: G65
   name: 画像アセット数
@@ -1382,14 +1598,14 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies:
   - G64
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: バリエーション幅
   enabled: true
@@ -1409,7 +1625,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: システム自動化に任せすぎるリスク
   enabled: true
@@ -1423,14 +1639,14 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies:
   - G64
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: テキスト版バリエーション幅
   enabled: false
@@ -1451,9 +1667,15 @@ rules:
   - G09
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 学習初期値の人的設計
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 15
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: PMaxにオーディエンスシグナルを与えると学習初期値が改善し、コールドスタートから本配信までの期間が短縮。学習脱出後の最適化精度が15%程度向上する。
   enabled: true
 - id: G69
   name: URL拡張の設定
@@ -1471,7 +1693,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: LP個別最適 vs 統一
   enabled: false
@@ -1493,7 +1715,7 @@ rules:
   - G31
   dependencies:
   - G53
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: Search/PMAX重複防止
   enabled: true
@@ -1507,14 +1729,14 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite:
   - G46
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: PMAXのEC前提条件
   enabled: false
@@ -1528,14 +1750,14 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: preserve
   prerequisite:
   - G09
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ネガティブシグナル
   enabled: false
@@ -1556,7 +1778,7 @@ rules:
   - G64
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: PMAX内ブラックボックスの可視化
   enabled: false
@@ -1576,7 +1798,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: プレースメント別フォーマット
   enabled: true
@@ -1590,14 +1812,14 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-03
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite:
   - G11
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 深度x頻度バランス
   enabled: true
@@ -1611,14 +1833,14 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite:
   - G09
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 学習シグナルの拡張
   enabled: true
@@ -1632,13 +1854,13 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: バリエーション幅
   enabled: true
@@ -1659,9 +1881,15 @@ rules:
   conflicts: []
   dependencies:
   - G79
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: App前提条件
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 30
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: Appキャンペーンの前提条件。インストールCV未計測では自動入札が機能せず、CPA最適化が成立しない。実装後はTrue CPAが取得でき入札AIが正常動作する。
   enabled: true
 - id: G79
   name: アプリ内イベント最適化
@@ -1680,7 +1908,7 @@ rules:
   - G78
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 深層イベントを学習に与える
   enabled: true
@@ -1694,13 +1922,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-06
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: LP-広告整合性のApp版
   enabled: true
@@ -1723,9 +1951,15 @@ rules:
   dependencies:
   - G34
   - G37
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 新設
   redesign_note: '新設: G26を結果指標から原因変数に置き換え。pCTR低/CPC低/品質スコア低の3分解'
+  expected_impact:
+    primary_metric: impression_share_recovery_pct
+    primary_value: 20
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 品質スコア結果指標から原因変数（pCTR/CPC/QS）に分解し、視認性と関連性の課題を個別に手当て。Ad Rank Lost部分のIS回復が見込め表示機会20%程度の取り戻しが期待される。
   enabled: false
 - id: G26-NEW2
   name: 推定CTR低文字列特定 (新設)
@@ -1745,7 +1979,7 @@ rules:
   conflicts: []
   dependencies:
   - G34
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 新設
   redesign_note: '新設: 品質スコア構成要素の推定CTR低KW群から視認性課題の文字列を特定'
   enabled: false
@@ -1767,7 +2001,7 @@ rules:
   conflicts: []
   dependencies:
   - G45
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 新設
   redesign_note: '新設: 米満氏note06が強調する評価軸。競合動向と並べてモニタリング'
   enabled: false
@@ -1787,9 +2021,15 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 新設
   redesign_note: '新設: Zynect独自の説明責任インフラ。月次レポートに搭載'
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 5
+    confidence: low
+    impact_horizon_weeks: 8
+    rationale: 判断ログ自体は短期的な数値改善に直結しないが、PMaxブラックボックスの可視化と再現可能な意思決定に貢献。長期的に運用品質ばらつきを抑え、属人化を防ぐ間接効果。
   enabled: false
 - id: G82-NEW
   name: オークションインサイト分析 (新設)
@@ -1809,7 +2049,7 @@ rules:
   conflicts: []
   dependencies:
   - G45-NEW
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 新設
   redesign_note: '新設: 競合の入札強化/参入を月次で切り分け'
   enabled: false
@@ -1823,13 +2063,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-04
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: monitor_only
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -1843,13 +2083,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-04
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: monitor_only
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -1863,13 +2103,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-04
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: monitor_only
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -1883,13 +2123,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-04
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: monitor_only
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -1903,13 +2143,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -1923,13 +2163,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -1943,13 +2183,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-03
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -1963,13 +2203,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -1983,13 +2223,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-09
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: budget_first
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -2003,13 +2243,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -2023,13 +2263,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -2043,13 +2283,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -2063,13 +2303,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -2083,13 +2323,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-01
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -2103,13 +2343,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-09
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -2123,13 +2363,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -2143,13 +2383,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -2163,13 +2403,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -2183,13 +2423,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -2203,13 +2443,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-05
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -2223,13 +2463,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -2243,14 +2483,14 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-01
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite:
   - G70
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -2264,13 +2504,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true

@@ -4,16 +4,30 @@ defaults:
   schedule: "0 9 * * *"
   anthropic_model: "claude-sonnet-4-6"
 
+  anthropic_model_premium: claude-opus-4-7
 clients:
   yamamoto_demo:
+    company:
+      name: '山本テクノロジー株式会社'
+      honorific: 御中
+      industry: 'ec_retail'
+      industry_label: 'EC・通販'
+    contact:
+      name: '山本 太郎'
+      honorific: 様
+      title: 'マーケティング部 部長'
+    report:
+      display_name: 広告アカウント健康診断レポート
+      include_zynect_insights: true
+      include_appendix: true
+      premium_model_for_insights: false
+      report_period_days: 30
     name: "山本デモ"
     active: true
     objective: balanced  # cpa_minimize | cv_maximize | roas_target | balanced
+
+#     # yamamoto_demo は CSV デモ専用。Meta/TikTok/Google API 連携なし（data/yamamoto_demo*.csv からロード）
     ads:
-      meta:
-        account_id: "act_916507360736121"
-        access_token_env: "META_ACCESS_TOKEN_BANDAL"
-        lookback_days: 90
       tiktok:
         advertiser_id: "XXXXXXXXX"
         access_token_env: "TIKTOK_ACCESS_TOKEN_YAMAMOTO"
@@ -24,7 +38,7 @@ clients:
     seo:
       site_url: "https://example.com"
       landing_pages:
-        - "https://example.com/lp1"
+      - "https://example.com/lp1"
     adtruth:
       enabled: false
       api_key_env: "ADTRUTH_API_KEY_YAMAMOTO"
@@ -33,24 +47,39 @@ clients:
         webhook_env: "SLACK_WEBHOOK_YAMAMOTO"
         channel: "#yamamoto-ads"
     intent_overrides:
-      - rule_ids: ["C05", "C06"]
-        reason: "テスト期間中のため意図的に低予算設定"
-        registered_by: "運用担当"
-        registered_at: "2026-04-30"
-        expires_at: "2026-07-31"
-        suppress_action: "skip_notification"
-      - rule_ids: ["G12"]
-        reason: "東京限定キャンペーン"
-        registered_by: "クライアント"
-        registered_at: "2026-04-30"
-        expires_at: null
-        suppress_action: "add_context_note"
+    - rule_ids: ["C05", "C06"]
+      reason: "テスト期間中のため意図的に低予算設定"
+      registered_by: "運用担当"
+      registered_at: "2026-04-30"
+      expires_at: "2026-07-31"
+      suppress_action: "skip_notification"
+    - rule_ids: ["G12"]
+      reason: "東京限定キャンペーン"
+      registered_by: "クライアント"
+      registered_at: "2026-04-30"
+      expires_at:
+      suppress_action: "add_context_note"
     crm:
       twenty:
         enabled: true
         company_id: ""
 
   bandal_gaming:
+    company:
+      name: '株式会社バンダルゲーミング'  # TODO: 正式企業名を要確認
+      honorific: 御中
+      industry: 'ec_retail'
+      industry_label: 'EC・通販'
+    contact:
+      name: '担当 太郎'  # 仮置き、後で実名に差し替え予定
+      honorific: 様
+      title: ''
+    report:
+      display_name: 広告アカウント健康診断レポート
+      include_zynect_insights: true
+      include_appendix: true
+      premium_model_for_insights: false
+      report_period_days: 30
     name: "BANDAL GAMING"
     active: true
     objective: cv_maximize
@@ -63,3 +92,32 @@ clients:
       platform: "lark"
       lark:
         webhook_env: "LARK_WEBHOOK_BANDAL"
+  pilotton:
+    company:
+      name: 株式会社パイロットン
+      honorific: 御中
+      industry: ec_retail  # TODO: 業界カテゴリは確認のうえ調整可能
+      industry_label: EC・通販
+    contact:
+      name: '[要入力: 担当者氏名]'
+      honorific: 様
+      title: ''
+    report:
+      display_name: 広告アカウント健康診断レポート
+      include_zynect_insights: true
+      include_appendix: true
+      premium_model_for_insights: false
+      report_period_days: 30
+    name: 株式会社パイロットン
+    active: true
+    objective: balanced
+    ads:
+      meta:
+        account_id: act_566972639374407
+        access_token_env: META_ACCESS_TOKEN_BANDAL  # BANDAL システムユーザートークンで参照可能（疎通確認済 2026-05-02）
+        lookback_days: 90
+    notifications:
+      platform: lark
+      lark:
+        webhook_env: LARK_WEBHOOK_PILOTTON
+    intent_overrides: []

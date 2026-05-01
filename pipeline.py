@@ -224,8 +224,12 @@ def run_seo_audit(client_id, client_cfg, thresholds):
         return {"error": str(e)}
 
 
-def output_results(client_id, client_cfg, results):
-    """結果出力: Slack, CRM, PDF, JSON。各ステップの成否をstep_statusに記録。"""
+def output_results(client_id, client_cfg, results, report_version="v2"):
+    """結果出力: Slack, CRM, PDF, JSON。各ステップの成否をstep_statusに記録。
+
+    report_version: "v2" | "v3" | "both"
+        v2 のみ生成 / v3 のみ生成 / 両方生成
+    """
     step_status = results.get("step_status", {})
 
     # レポートディレクトリ
@@ -272,15 +276,26 @@ def output_results(client_id, client_cfg, results):
     else:
         step_status["crm"] = "skipped"
 
-    # PDF/HTML生成
-    try:
-        from outputs.pdf_report import generate_pdf
-        pdf_path = os.path.join(report_dir, f"{client_id}_report.pdf")
-        generate_pdf(client_id, results, pdf_path)
-        step_status["pdf"] = "ok"
-    except Exception as e:
-        log.error(f"[{client_id}] PDF生成エラー: {e}")
-        step_status["pdf"] = "error"
+    # PDF/HTML生成 — report_version に応じて v2 / v3 / 両方を生成
+    if report_version in ("v2", "both"):
+        try:
+            from outputs.pdf_report import generate_pdf
+            pdf_path = os.path.join(report_dir, f"{client_id}_report.pdf")
+            generate_pdf(client_id, results, pdf_path)
+            step_status["pdf_v2"] = "ok"
+        except Exception as e:
+            log.error(f"[{client_id}] v2 PDF生成エラー: {e}")
+            step_status["pdf_v2"] = "error"
+
+    if report_version in ("v3", "both"):
+        try:
+            from outputs.pdf_report_v3 import generate_pdf_v3
+            pdf_path_v3 = os.path.join(report_dir, f"{client_id}_report_v3.pdf")
+            ok = generate_pdf_v3(client_id, client_cfg, results, pdf_path_v3)
+            step_status["pdf_v3"] = "ok" if ok else "error"
+        except Exception as e:
+            log.error(f"[{client_id}] v3 PDF生成エラー: {e}")
+            step_status["pdf_v3"] = "error"
 
     # JSON保存（最後に実行: step_statusが全て揃った状態で保存）
     json_path = os.path.join(report_dir, f"{client_id}_results.json")
@@ -374,12 +389,12 @@ def _phase_analyze(client_id, client_cfg, data, thresholds):
     return results
 
 
-def _phase_report(client_id, client_cfg, results):
+def _phase_report(client_id, client_cfg, results, report_version="v2"):
     """Phase 3: Report — 結果出力 + Twenty CRM保存"""
-    output_results(client_id, client_cfg, results)
+    output_results(client_id, client_cfg, results, report_version=report_version)
 
 
-def run_client(client_id, client_cfg, thresholds):
+def run_client(client_id, client_cfg, thresholds, report_version="v2"):
     """1クライアント分の全パイプライン実行（3フェーズ: Extract → Analyze → Report）"""
     log.info(f"{'='*50}")
     log.info(f"[{client_id}] パイプライン開始: {client_cfg.get('name', '')}")
@@ -406,7 +421,7 @@ def run_client(client_id, client_cfg, thresholds):
         log.warning(f"[{client_id}] データ取得失敗、スキップ")
         results["error"] = "No data available"
         results["step_status"]["extract"] = "error"
-        _phase_report(client_id, client_cfg, results)
+        _phase_report(client_id, client_cfg, results, report_version=report_version)
         return results
     results["step_status"]["extract"] = "ok"
 
@@ -415,7 +430,7 @@ def run_client(client_id, client_cfg, thresholds):
     results.update(analyze_results)
 
     # Phase 3: Report
-    _phase_report(client_id, client_cfg, results)
+    _phase_report(client_id, client_cfg, results, report_version=report_version)
 
     score = ""
     if results["ads_audit"] and "score" in results["ads_audit"]:
@@ -425,13 +440,88 @@ def run_client(client_id, client_cfg, thresholds):
     return results
 
 
+def _parse_args(argv):
+    """超軽量な引数パーサ。argparse を使うほどでもないため自作。
+
+    Usage:
+        pipeline.py test
+        pipeline.py run <client_id|all> [--report-version v2|v3|both] [--dry-run]
+    """
+    args = list(argv[1:])
+    report_version = "v2"  # 後方互換のためデフォルトは v2
+    dry_run = False
+    if "--dry-run" in args:
+        dry_run = True
+        args.remove("--dry-run")
+    if "--report-version" in args:
+        idx = args.index("--report-version")
+        if idx + 1 < len(args):
+            report_version = args[idx + 1].lower()
+            del args[idx : idx + 2]
+        else:
+            print("Error: --report-version の値が指定されていません")
+            sys.exit(1)
+    if report_version not in ("v2", "v3", "both"):
+        print(f"Error: --report-version='{report_version}' は v2|v3|both のいずれかで指定してください")
+        sys.exit(1)
+    return args, report_version, dry_run
+
+
+def run_client_dry(client_id: str, client_cfg: dict) -> dict:
+    """ドライラン: 設定検証 + Meta API 疎通のみ実施。データ取得・監査・レポート生成は行わない。"""
+    log.info(f"[{client_id}] DRY-RUN 開始")
+    out = {"client_id": client_id, "checks": {}}
+
+    # 必須フィールド検証
+    name = client_cfg.get("name") or (client_cfg.get("company") or {}).get("name", "")
+    out["checks"]["name"] = "ok" if name else "missing"
+
+    # Ads 設定確認
+    ads_cfg = client_cfg.get("ads", {})
+    out["checks"]["ads_platforms"] = list(ads_cfg.keys()) if ads_cfg else []
+
+    # Meta API 疎通（access_token_env が設定されていれば）
+    meta_cfg = ads_cfg.get("meta", {})
+    if meta_cfg.get("account_id") and meta_cfg.get("access_token_env"):
+        token = os.environ.get(meta_cfg["access_token_env"], "")
+        if not token:
+            out["checks"]["meta_api"] = f"token_env_unset: {meta_cfg['access_token_env']}"
+        else:
+            try:
+                import urllib.request, urllib.parse, json as _json
+                url = (
+                    f"https://graph.facebook.com/v22.0/{meta_cfg['account_id']}?"
+                    + urllib.parse.urlencode({"fields": "name,account_status", "access_token": token})
+                )
+                with urllib.request.urlopen(url, timeout=10) as resp:
+                    data = _json.loads(resp.read().decode("utf-8"))
+                out["checks"]["meta_api"] = f"ok / name={data.get('name')} / status={data.get('account_status')}"
+            except Exception as e:
+                out["checks"]["meta_api"] = f"error: {e}"
+
+    # CRM / 通知の存在確認のみ
+    out["checks"]["notification"] = (
+        client_cfg.get("notifications", {}).get("platform") or
+        ("slack" if client_cfg.get("notifications", {}).get("slack") else None) or
+        "(none)"
+    )
+    out["checks"]["v3_company_block"] = "ok" if client_cfg.get("company", {}).get("name") else "missing(任意)"
+
+    log.info(f"[{client_id}] DRY-RUN 結果: {out['checks']}")
+    return out
+
+
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 pipeline.py run <client_id|all>")
+        print("Usage: python3 pipeline.py run <client_id|all> [--report-version v2|v3|both]")
         print("       python3 pipeline.py test")
         sys.exit(1)
 
-    command = sys.argv[1]
+    args, report_version, dry_run = _parse_args(sys.argv)
+    if not args:
+        print("Usage: python3 pipeline.py run <client_id|all> [--report-version v2|v3|both]")
+        sys.exit(1)
+    command = args[0]
 
     if command == "test":
         log.info("テストモード: config読み込みチェック")
@@ -445,11 +535,11 @@ def main():
         log.info("テスト完了")
         return
 
-    if command != "run" or len(sys.argv) < 3:
-        print("Usage: python3 pipeline.py run <client_id|all>")
+    if command != "run" or len(args) < 2:
+        print("Usage: python3 pipeline.py run <client_id|all> [--report-version v2|v3|both]")
         sys.exit(1)
 
-    target = sys.argv[2]
+    target = args[1]
     cfg = load_config()
     thr = load_thresholds()
     clients = cfg.get("clients", {})
@@ -462,11 +552,14 @@ def main():
         log.error(f"クライアント '{target}' が見つかりません")
         sys.exit(1)
 
-    log.info(f"実行対象: {list(targets.keys())}")
+    log.info(f"実行対象: {list(targets.keys())} / report_version={report_version} / dry_run={dry_run}")
     all_results = {}
     for cid, ccfg in targets.items():
         try:
-            all_results[cid] = run_client(cid, ccfg, thr)
+            if dry_run:
+                all_results[cid] = run_client_dry(cid, ccfg)
+            else:
+                all_results[cid] = run_client(cid, ccfg, thr, report_version=report_version)
         except Exception as e:
             log.error(f"[{cid}] 致命的エラー: {e}")
             all_results[cid] = {"error": str(e)}

@@ -1,0 +1,123 @@
+{# v3 エグゼクティブサマリ #}
+{% macro circular(score, color, label_top='現状', max=100, markers=None) -%}
+{% set radius = 42 %}
+{% set circumference = 263.89 %}
+{% set arc_len = (score / max) * circumference if score is not none else 0 %}
+<div class="score-circle">
+  <svg viewBox="0 0 100 100">
+    <circle class="bg" cx="50" cy="50" r="{{ radius }}"></circle>
+    <circle class="arc" cx="50" cy="50" r="{{ radius }}" stroke="{{ color }}"
+            stroke-dasharray="{{ arc_len|round(2) }} {{ (circumference - arc_len)|round(2) }}"
+            stroke-dashoffset="0"></circle>
+    {# B4: 3点マーカー（業界平均=灰、Zynect 推奨=緑、現状=オレンジ） #}
+    {% if markers %}
+      {% if markers.industry %}<circle class="mk-industry" cx="{{ markers.industry.x }}" cy="{{ markers.industry.y }}" r="3.2"></circle>{% endif %}
+      {% if markers.zynect %}<circle class="mk-zynect" cx="{{ markers.zynect.x }}" cy="{{ markers.zynect.y }}" r="3.2"></circle>{% endif %}
+      {% if markers.current %}<circle class="mk-current" cx="{{ markers.current.x }}" cy="{{ markers.current.y }}" r="3.8"></circle>{% endif %}
+    {% endif %}
+  </svg>
+  <div class="label">
+    <div class="v">{{ score if score is not none else '—' }}</div>
+    <div class="u">{{ label_top }}</div>
+  </div>
+</div>
+{%- endmacro %}
+
+<div class="page">
+  <div class="page-header">
+    <div><span class="brand">zynect media</span> &nbsp;|&nbsp; {{ cover.report_name }} &nbsp;|&nbsp; {{ cover.company_name }} {{ cover.company_honorific }}</div>
+    <div>P2 / 8</div>
+  </div>
+
+  <div class="section-label">01 — Executive Summary</div>
+  <div class="section-title">エグゼクティブサマリ</div>
+  <div class="section-subtitle">15 秒で全体の健康状態と最大インパクトの打ち手を把握できる構成です。</div>
+
+  {# 3行要約 #}
+  <div class="summary-3lines">
+    <div class="line"><span class="num">1</span><span>{{ summary.summary_3lines.line1 }}</span></div>
+    <div class="line"><span class="num">2</span><span>{{ summary.summary_3lines.line2 }}</span></div>
+    <div class="line"><span class="num">3</span><span>{{ summary.summary_3lines.line3 }}</span></div>
+  </div>
+
+  {# Health Score 円形 + 3軸横棒 #}
+  <div style="display:flex; gap:24px; align-items:center; margin: 12px 0 18px;">
+    {% set hs = summary.health_score_3axis %}
+    {% set hs_color = '#27500A' if summary.score >= 75 else '#BA7517' if summary.score >= 50 else '#A32D2D' %}
+    <div>
+      {{ circular(summary.score, hs_color, 'Score', markers={'industry': hs.industry_marker, 'zynect': hs.zynect_marker, 'current': hs.current_marker}) }}
+      <div class="score-circle-legend">
+        <span><span class="dot dot-i"></span>業界平均</span>
+        <span><span class="dot dot-z"></span>Zynect 推奨</span>
+        <span><span class="dot dot-c"></span>現状</span>
+      </div>
+    </div>
+    <div style="flex:1;">
+      <div style="font-size:13px; font-weight:500; margin-bottom:4px;">Health Score 比較（3軸）</div>
+      <div class="bar3">
+        <div class="row">
+          <div class="lab">業界平均</div>
+          <div class="track">
+            <div class="fill fill-industry" style="width: {{ hs.industry_avg_pct }}%;"></div>
+          </div>
+          <div class="val">{{ hs.industry_avg_display }}</div>
+        </div>
+        <div class="row">
+          <div class="lab">Zynect 推奨</div>
+          <div class="track">
+            <div class="fill fill-zynect" style="width: {{ hs.zynect_pct }}%;"></div>
+          </div>
+          <div class="val">{{ hs.zynect_display }}</div>
+        </div>
+        <div class="row">
+          <div class="lab">現状（{{ summary.grade }}評価）</div>
+          <div class="track">
+            <div class="fill fill-current {% if summary.score >= 80 %}above_zynect{% elif summary.score >= 60 %}above_industry{% else %}below_industry{% endif %}" style="width: {{ hs.current_pct }}%;"></div>
+          </div>
+          <div class="val">{{ hs.current_display }}</div>
+        </div>
+        <div class="legend">{{ summary.industry_label }} 業界・{{ summary.platform_count }} 媒体 / 検出問題 {{ summary.issue_count }}件（うち重大 {{ summary.critical_count }}件）{% if not hs.has_industry_data %} / 業界平均は社内集計値を 2026-Q3 から反映予定{% endif %}</div>
+      </div>
+    </div>
+  </div>
+
+  {# KPI 投影 #}
+  <div class="section-label" style="margin-top:18px;">推定改善インパクト（Top5 全件実行時）</div>
+  <table class="kpi-table">
+    <thead>
+      <tr>
+        <th>指標</th>
+        <th style="text-align:right;">現状</th>
+        <th style="text-align:right;">改善後（見込み）</th>
+        <th style="text-align:right;">差分</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set p = summary.kpi_projection %}
+      <tr>
+        <td>月次広告費</td>
+        <td style="text-align:right;">¥{{ "{:,}".format(p.current.monthly_cost) }}</td>
+        <td style="text-align:right;">¥{{ "{:,}".format(p.projected.monthly_cost) }}</td>
+        <td style="text-align:right;" class="kpi-delta {% if p.delta.monthly_cost < 0 %}up{% else %}down{% endif %}">{% if p.delta.monthly_cost <= 0 %}▼{% else %}▲{% endif %} ¥{{ "{:,}".format(p.delta.monthly_cost|abs) }}</td>
+      </tr>
+      <tr>
+        <td>月次CV</td>
+        <td style="text-align:right;">{{ p.current.monthly_cv }} 件</td>
+        <td style="text-align:right;">{{ p.projected.monthly_cv }} 件</td>
+        <td style="text-align:right;" class="kpi-delta {% if p.delta.monthly_cv >= 0 %}up{% else %}down{% endif %}">{% if p.delta.monthly_cv >= 0 %}▲{% else %}▼{% endif %} {{ p.delta.monthly_cv|abs }} 件</td>
+      </tr>
+      <tr>
+        <td>平均CPA（顧客獲得単価）</td>
+        <td style="text-align:right;">¥{{ "{:,}".format(p.current.avg_cpa) }}</td>
+        <td style="text-align:right;">¥{{ "{:,}".format(p.projected.avg_cpa) }}</td>
+        <td style="text-align:right;" class="kpi-delta {% if p.delta.avg_cpa <= 0 %}up{% else %}down{% endif %}">{% if p.delta.avg_cpa <= 0 %}▼{% else %}▲{% endif %} ¥{{ "{:,}".format(p.delta.avg_cpa|abs) }}</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="note-hint">
+    試算信頼度: {{ summary.confidence_summary }} / 効果が現れるまでの目安: 最大 {{ summary.horizon_weeks_max }} 週<br>
+    総月次改善見込み: <strong>{{ summary.total_savings_display }}</strong>
+  </div>
+
+  <div class="page-footer">{{ footer_text }}</div>
+</div>

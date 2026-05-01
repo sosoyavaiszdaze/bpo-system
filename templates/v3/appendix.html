@@ -1,0 +1,40 @@
+{# v3 付録 — 用語集と原則解説 #}
+<div class="page page-break">
+  <div class="page-header">
+    <div><span class="brand">zynect media</span> &nbsp;|&nbsp; {{ cover.report_name }} &nbsp;|&nbsp; {{ cover.company_name }} {{ cover.company_honorific }}</div>
+    <div>P8 / 8</div>
+  </div>
+
+  <div class="section-label">05 — Appendix</div>
+  <div class="section-title">付録：用語集と米満氏理論 原則解説</div>
+  <div class="section-subtitle">本文中で参照された専門用語と米満氏理論の原則を解説します。</div>
+
+  <div class="pf-section">
+    <h3>用語集（主要 {{ appendix.terminology|length }} 語）</h3>
+    <dl class="term-list" style="columns: 2; column-gap: 24px;">
+      {% for t in appendix.terminology %}
+      <dt>{{ t.term }}</dt>
+      <dd>{{ t.desc }}</dd>
+      {% endfor %}
+    </dl>
+  </div>
+
+  <div class="pf-section">
+    <h3>米満氏理論 9 + 10 原則（要約）</h3>
+    <div class="principle-list">
+      {% for p in appendix.principles %}
+      <div class="principle-row">
+        <div><span class="pid">{{ p.id }}</span><span class="pname">{{ p.name }}</span></div>
+        <div class="pdesc">{{ p.desc }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="note-hint" style="margin-top: 18px;">
+    本書記載の業界平均値は AdEspresso / Databox / WordStream / Varos / Powered by Search の各 2024-2025 年ベンチマークレポートを参照しています。
+    出典の詳細は config/benchmarks.yaml を参照ください。Zynect 推奨水準は米満氏理論をベースに当社が独自設計した値です。
+  </div>
+
+  <div class="page-footer">{{ footer_text }}</div>
+</div>

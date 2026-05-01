@@ -229,18 +229,38 @@ def run_audit(client_id, data, thresholds):
 
 
 def _build_platform_summary(campaigns, issues, platform_scores):
-    """プラットフォーム別サマリーを構築"""
+    """プラットフォーム別サマリーを構築。
+
+    v3 レポート向けに avg_ctr / avg_cvr / avg_cpc / avg_cpa / avg_roas / avg_frequency を出力する。
+    """
     summary = {}
+    # 集計用の中間カラム
+    aggregates = {}
+
     for camp in campaigns:
         p = camp.get("platform", "unknown")
         if p not in summary:
             summary[p] = {
                 "campaigns": 0, "cost": 0, "conversions": 0, "roas": 0,
                 "issues": 0, "critical": 0, "score": 0, "grade": "?",
+                "avg_ctr": 0, "avg_cvr": 0, "avg_cpc": 0,
+                "avg_cpa": 0, "avg_roas": 0, "avg_frequency": 0,
+                "impressions": 0, "clicks": 0, "revenue": 0,
             }
-        summary[p]["campaigns"] += 1
-        summary[p]["cost"] += camp.get("cost", 0)
-        summary[p]["conversions"] += camp.get("conversions", 0)
+            aggregates[p] = {"freq_weighted": 0.0, "freq_weight_sum": 0.0}
+        s = summary[p]
+        s["campaigns"] += 1
+        s["cost"] += float(camp.get("cost", 0) or 0)
+        s["conversions"] += float(camp.get("conversions", 0) or 0)
+        s["impressions"] += float(camp.get("impressions", 0) or 0)
+        s["clicks"] += float(camp.get("clicks", 0) or 0)
+        s["revenue"] += float(camp.get("revenue", 0) or 0)
+        # frequency はインプレッションで加重平均（インプ無しならスキップ）
+        impr = float(camp.get("impressions", 0) or 0)
+        freq = float(camp.get("frequency", 0) or 0)
+        if impr > 0 and freq > 0:
+            aggregates[p]["freq_weighted"] += freq * impr
+            aggregates[p]["freq_weight_sum"] += impr
 
     # issue count
     for issue in issues:
@@ -250,11 +270,33 @@ def _build_platform_summary(campaigns, issues, platform_scores):
             if issue.get("severity") == "critical":
                 summary[p]["critical"] += 1
 
-    # ROAS & score
+    # 各種平均指標 — 計算不能（除数 0）の場合は None を返し、後段で「—」表示にする
     for p, s in summary.items():
-        if s["cost"] > 0:
-            total_rev = sum(c.get("revenue", 0) for c in campaigns if c.get("platform") == p)
-            s["roas"] = round(total_rev / s["cost"], 1) if s["cost"] > 0 else 0
+        impr = s["impressions"]
+        clicks = s["clicks"]
+        cost = s["cost"]
+        cv = s["conversions"]
+        rev = s["revenue"]
+
+        # CTR (%) = clicks / impressions * 100
+        s["avg_ctr"] = round(clicks / impr * 100, 2) if impr > 0 else None
+        # CVR (%) = conversions / clicks * 100
+        s["avg_cvr"] = round(cv / clicks * 100, 2) if clicks > 0 else None
+        # CPC = cost / clicks
+        s["avg_cpc"] = round(cost / clicks, 0) if clicks > 0 else None
+        # CPA = cost / conversions
+        s["avg_cpa"] = round(cost / cv, 0) if cv > 0 else None
+        # ROAS = revenue / cost (倍率)
+        s["avg_roas"] = round(rev / cost, 2) if cost > 0 else None
+        s["roas"] = s["avg_roas"] if s["avg_roas"] is not None else 0  # 後方互換: 既存 roas は数値必須
+
+        # frequency: インプレッション加重平均
+        agg = aggregates.get(p, {})
+        if agg.get("freq_weight_sum", 0) > 0:
+            s["avg_frequency"] = round(agg["freq_weighted"] / agg["freq_weight_sum"], 2)
+        else:
+            s["avg_frequency"] = None
+
         ps = platform_scores.get(p, {})
         s["score"] = ps.get("score", 0)
         s["grade"] = ps.get("grade", "?")

@@ -24,9 +24,15 @@ rules:
   conflicts: []
   dependencies:
   - T02-T05
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 35
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: Pixel未発火ではTikTok入札AIが学習材料を失い最適化が不可能。修復で全運用判断の前提が成立。M01同様、最優先のcritical項目。
   enabled: true
 - id: T02
   name: Events API実装
@@ -45,9 +51,15 @@ rules:
   - T01
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 15
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: TikTok Events API（CAPI相当）未実装でCV計測欠損が10〜20%発生。実装で欠損が補われCV数が回復、自動入札も精度向上。M02と同型のメリット。
   enabled: true
 - id: T03
   name: イベント最適化設定
@@ -66,9 +78,15 @@ rules:
   - T01
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 深層イベント
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -10
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: 深層イベント（Purchase等）を最適化目標に設定すると AIが事業価値の高いCVに向けて学習。表層イベント（PageView等）からの切替でCPA約10%改善。
   enabled: true
 - id: T04
   name: CVイベントの優先度
@@ -87,7 +105,7 @@ rules:
   - T03
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -101,7 +119,7 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite:
@@ -109,9 +127,15 @@ rules:
   - T02
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -10
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: TikTok版EMQ。マッチ品質改善でユーザー特定精度が向上し最適化シグナルが強化。Meta M03と同型でハッシュ化メール常時送信が最大効果の施策。
   enabled: false
 - id: T06
   name: 学習フェーズ停滞
@@ -131,9 +155,15 @@ rules:
   - T09
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -20
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: TikTok学習フェーズ脱出でCPAばらつきが収束。50CV/週相当の基準で予算集中・広告グループ集約による脱出促進が定石。M09と同型の効果規模。
   enabled: true
 - id: T07
   name: 1広告グループあたりCV数
@@ -152,9 +182,15 @@ rules:
   conflicts: []
   dependencies:
   - T06
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: TikTok版集約基準
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -12
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: TikTok版集約基準。50CV/週未満の広告グループは集約で学習脱出を加速。M10と同型のメリット規模、CPA約12%改善。
   enabled: false
 - id: T08
   name: 入札戦略の適合性
@@ -166,15 +202,21 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-03
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -8
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: 入札戦略（Cost Cap/Lowest Cost/Bid Cap）が事業フェーズに合っているか。立ち上げ期はLowest Cost推奨でCPA約8%改善が見込める。
   enabled: true
 - id: T09
   name: 予算変更の頻度
@@ -193,9 +235,15 @@ rules:
   conflicts: []
   dependencies:
   - T06
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: learning_signal_quality_pct
+    primary_value: 15
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 頻繁な予算変更は学習リセット要因。月内3回以下に抑制で学習継続性が確保される。M13と同型の運用ルール化が必要。
   enabled: false
 - id: T10
   name: キャンペーン目的の整合
@@ -213,7 +261,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -227,15 +275,21 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: cv_count_change_pct
+    primary_value: 10
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: 不承認広告は配信されずCV機会を喪失。修正提出で1〜3営業日で再承認、停止していた配信が回復しCV数約10%増加。運用衛生項目だが効果は確実。
   enabled: false
 - id: T12
   name: アカウント警告
@@ -247,15 +301,21 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 100
+    confidence: high
+    impact_horizon_weeks: 1
+    rationale: アカウント警告/凍結で配信が完全停止し全広告費が機会損失化。事業継続性の前提条件。警告原因の特定と是正が最優先。
   enabled: false
 - id: T13
   name: クリエイティブ疲労
@@ -274,9 +334,15 @@ rules:
   conflicts:
   - T14
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: TikTok特有の疲労速度
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 18
+    confidence: high
+    impact_horizon_weeks: 2
+    rationale: TikTokは Meta以上にCR疲弊が早く、3〜5日でCTRが急速に低下する。新CR投入サイクル確立で疲弊前リフレッシュが可能になりCTR約18%回復。
   enabled: false
 - id: T14
   name: クリエイティブ本数
@@ -295,9 +361,15 @@ rules:
   conflicts: []
   dependencies:
   - T13
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 週5本投入
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 12
+    confidence: medium
+    impact_horizon_weeks: 2
+    rationale: 週5本投入が目安。CR本数不足ではTikTok特有の早期疲弊に追いつけない。週次刷新サイクル確立でCTR約12%維持または改善。
   enabled: true
 - id: T15
   name: Creative Center活用
@@ -315,7 +387,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -329,15 +401,21 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 8
+    confidence: medium
+    impact_horizon_weeks: 2
+    rationale: TikTok最適尺は9〜15秒。長尺（30秒以上）の流用ではCTR低下。最適尺への調整でCTR約8%改善。既存素材編集で対応可能なquick_win。
   enabled: true
 - id: T17
   name: サウンドオン前提の設計
@@ -355,9 +433,15 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 10
+    confidence: medium
+    impact_horizon_weeks: 2
+    rationale: TikTokはサウンドON視聴が前提（90%超）。音楽・ナレーションを意識した設計でCTR約10%改善。BGM追加と音声説明の挿入で対応可能。
   enabled: false
 - id: T18
   name: CTRのベンチマーク比
@@ -375,7 +459,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 結果指標
   enabled: false
@@ -395,7 +479,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 冒頭3秒
   enabled: true
@@ -409,13 +493,13 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -429,13 +513,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-04
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: monitor_only
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -449,13 +533,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-03
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 頻度x深度のリーチ版
   enabled: false
@@ -469,14 +553,14 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies:
   - T24-T26
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: オーガニック融合の前提
   enabled: true
@@ -497,7 +581,7 @@ rules:
   - T23
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -511,13 +595,13 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: リスク分散
   enabled: false
@@ -531,13 +615,13 @@ rules:
   detection_layer: Layer4
   quick_win: false
   primary_axis: TO-06
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -557,7 +641,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: TikTok版検索広告
   enabled: false
@@ -571,13 +655,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-03
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -597,9 +681,15 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ネガ保持
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 6
+    confidence: medium
+    impact_horizon_weeks: 2
+    rationale: TikTok Search Ads/コンテキスト除外でネガティブシグナル保持。無関係配信を約6%削減。G27と同型の効果、運用作業として組み込む。
   enabled: false
 - id: T30
   name: Pangle品質管理
@@ -611,15 +701,21 @@ rules:
   detection_layer: Layer2
   quick_win: true
   primary_axis: TO-02
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: preserve
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: GDN AN相当
+  expected_impact:
+    primary_metric: spend_efficiency_pct
+    primary_value: 8
+    confidence: medium
+    impact_horizon_weeks: 2
+    rationale: Pangle（GDN AN相当）の低品質配置除外で誤クリック由来の浪費を約8%削減。Meta M39 ANと同型。除外リスト作成で即時反映可能。
   enabled: true
 - id: T31
   name: Pangleブランドセーフティ
@@ -637,7 +733,7 @@ rules:
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: false
@@ -658,9 +754,15 @@ rules:
   conflicts: []
   dependencies:
   - T33-T35
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: PMAX相当
+  expected_impact:
+    primary_metric: roas_change_pct
+    primary_value: 12
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: Smart+（PMAX相当）の正しい設定で配信面・オーディエンス・CRの自動最適化が機能。手動運用からSmart+移行でROAS約12%改善が見込める。
   enabled: false
 - id: T33
   name: Smart+ROAS目標
@@ -679,9 +781,15 @@ rules:
   - T32
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: roas_change_pct
+    primary_value: 10
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: Smart+のROAS目標値を実績ROASの90%に設定すると学習が回りやすい。強気の目標設定（実績の120%等）では学習が滞留しがちで効率が出ない。
   enabled: false
 - id: T34
   name: Smart+クリエイティブプール
@@ -700,9 +808,15 @@ rules:
   - T32
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: 学習素材プール
+  expected_impact:
+    primary_metric: roas_change_pct
+    primary_value: 10
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: Smart+の学習素材プール拡充（10本以上）で組み合わせ最適化が機能しROAS約10%改善。プール3本以下では多様性不足でAI最適化が回らない。
   enabled: false
 - id: T35
   name: Smart+とマニュアル共存
@@ -722,7 +836,7 @@ rules:
   - G53
   - M48
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: PMAX/ASC同構造
   enabled: false
@@ -736,15 +850,21 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 25
+    confidence: high
+    impact_horizon_weeks: 3
+    rationale: TikTokは動画ファースト媒体で静止画CR配信ではCTR大幅低下。動画CR投入でCTRが20〜30%改善。CR制作工数は中だが効果は確実。
   enabled: true
 - id: T37
   name: 動画完視聴率
@@ -756,13 +876,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -776,13 +896,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-08
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -796,13 +916,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-09
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -816,13 +936,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -836,13 +956,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-01
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -856,13 +976,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-01
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -876,13 +996,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-01
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -896,13 +1016,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-01
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -916,13 +1036,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
@@ -936,13 +1056,13 @@ rules:
   detection_layer: Layer2
   quick_win: false
   primary_axis: TO-11
-  secondary_axis: null
+  secondary_axis:
   axis_position: neutral
   polarity: neutral
   prerequisite: []
   conflicts: []
   dependencies: []
-  conflict_group: null
+  conflict_group:
   yonemitsu_alignment: 整合
   redesign_note: ''
   enabled: true
