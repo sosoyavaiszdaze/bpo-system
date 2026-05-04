@@ -15,7 +15,7 @@ VALID_POSITIONS = {"left", "right", "neutral"}
 
 YAML_FILES = [
     ("google_rules.yaml", 108),
-    ("meta_rules.yaml", 65),
+    ("meta_rules.yaml", 70),
     ("tiktok_rules.yaml", 46),
     ("seo_rules.yaml", 45),
     ("adtruth_rules.yaml", 15),

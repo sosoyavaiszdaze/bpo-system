@@ -650,6 +650,12 @@ class TestFraudAction:
         result = run_fraud_action("test", None, {}, {})
         assert result.get("skipped") is True
 
+    def test_pipeline_fraud_rate_percent_to_fraction(self):
+        """fraud_audit の 0-100 表現を fraud_action の 0-1 表現に変換"""
+        from pipeline import _percent_to_fraction
+        assert _percent_to_fraction(20.0) == 0.2
+        assert _percent_to_fraction(0.15) == 0.15
+
 
 class TestValidatorSync:
     """バリデータの conversion_value/revenue 同期テスト"""
@@ -961,11 +967,11 @@ class TestV2RuleCounts:
         rules = load_rules("google")
         assert len(rules["rules"]) == 108
 
-    def test_meta_55_rules(self):
-        """Meta YAML = 55件"""
+    def test_meta_70_rules(self):
+        """Meta YAML = 70件"""
         from engine.yaml_evaluator import load_rules
         rules = load_rules("meta")
-        assert len(rules["rules"]) == 65
+        assert len(rules["rules"]) == 70
 
     def test_tiktok_35_rules(self):
         """TikTok YAML = 35件"""

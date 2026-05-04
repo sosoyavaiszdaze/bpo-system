@@ -33,6 +33,7 @@ from engine.impact_estimator import (
     build_kpi_projection,
     estimate_for_rule,
 )
+from engine.longterm_projector import build_longterm_projection
 from engine.priority_ranker import (
     compute_critical_alerts,
     compute_top_actions,
@@ -393,6 +394,7 @@ def build_v3_context(
     estimates = [a["impact"] for a in actions]
     aggregate = aggregate_top5_impact(estimates)
     kpi_proj = build_kpi_projection(audit, aggregate)
+    longterm = build_longterm_projection(actions, audit)
 
     critical_alerts = compute_critical_alerts(detected_ids, rules_by_id, weights)
 
@@ -446,12 +448,14 @@ def build_v3_context(
         "client_id": client_id,
         "cover": cover,
         "summary": summary,
+        "longterm": longterm,
         "actions": actions,
         "critical_alerts": critical_alerts,
         "platforms": platforms,
         "insights": insight_items,
         "appendix": appendix,
         "llm_stats": llm_stats,
+        "total_pages": 9,
         "footer_text": "本書は機密保持契約に基づき作成されました / © 2026 Zynect Media 株式会社",
     }
 

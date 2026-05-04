@@ -81,8 +81,8 @@ class TestLarkNotifyNoWebhook:
 
     def test_no_crash_without_webhook(self):
         from outputs.lark_notify import send_lark_notification
-        send_lark_notification("test", {}, {"lark_webhook_env": ""})
-        # エラーにならないこと
+        assert send_lark_notification("test", {}, {"webhook_env": ""}) is None
+        assert send_lark_notification("test", {}, {"lark_webhook_env": ""}) is None
 
     def test_pipeline_notification_routing(self):
         """pipeline.pyの通知ルーティングがlark対応していること"""

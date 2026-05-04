@@ -127,10 +127,22 @@ class ClientConfig:
 
     # メタデータ
     source: str = "yaml"  # "crm" or "yaml"
+    raw_config: dict = dataclass_field(default_factory=dict)
+
+    def get(self, key, default=None):
+        """既存の dict ベース pipeline からも参照できる互換 accessor。"""
+        if key in self.raw_config:
+            return self.raw_config.get(key, default)
+        if hasattr(self, key):
+            return getattr(self, key)
+        return default
 
     @classmethod
     def from_yaml(cls, client_id, data):
         """clients.yaml の dict から生成"""
+        raw_config = dict(data or {})
+        raw_config.setdefault("client_id", client_id)
+
         ads = data.get("ads", {})
         seo_cfg = data.get("seo", {})
         adtruth_cfg = data.get("adtruth", {})
@@ -156,6 +168,7 @@ class ClientConfig:
             schedule_cron=data.get("schedule", "0 9 * * *"),
             timezone=data.get("timezone", "Asia/Tokyo"),
             source="yaml",
+            raw_config=raw_config,
         )
 
     @classmethod
@@ -166,9 +179,40 @@ class ClientConfig:
             seo_audit=crm_record.get("featuresSeoAudit", True),
             claude_analysis=crm_record.get("featuresClaudeAnalysis", True),
         )
+        client_id = crm_record.get("clientId", "")
+        slack_channel = crm_record.get("slackChannel", "")
+        slack_webhook_env = crm_record.get("slackWebhookEnv", "")
+        lark_webhook_env = crm_record.get("larkWebhookEnv", "")
+        notification_platform = crm_record.get("notificationPlatform", "slack")
+        schedule_cron = crm_record.get("scheduleCron", "0 9 * * *")
+        timezone = crm_record.get("timezone", "Asia/Tokyo")
+        raw_config = {
+            "client_id": client_id,
+            "name": crm_record.get("name", ""),
+            "active": crm_record.get("active", True),
+            "objective": crm_record.get("objective", "balanced"),
+            "ads": {
+                "google": {
+                    "customer_id": crm_record.get("googleCustomerId", ""),
+                    "login_customer_id": crm_record.get("googleLoginCustomerId", ""),
+                },
+                "meta": {"account_id": crm_record.get("metaAccountId", "")},
+                "tiktok": {"advertiser_id": crm_record.get("tiktokAdvertiserId", "")},
+            },
+            "seo": {"site_url": crm_record.get("seoSiteUrl", "")},
+            "adtruth": {"enabled": features.adtruth},
+            "notifications": {
+                "platform": notification_platform,
+                "slack": {"channel": slack_channel, "webhook_env": slack_webhook_env},
+                "lark": {"webhook_env": lark_webhook_env},
+            },
+            "crm": {"twenty": {"enabled": True}},
+            "schedule": schedule_cron,
+            "timezone": timezone,
+        }
 
         return cls(
-            client_id=crm_record.get("clientId", ""),
+            client_id=client_id,
             name=crm_record.get("name", ""),
             active=crm_record.get("active", True),
             objective=crm_record.get("objective", "balanced"),
@@ -179,9 +223,10 @@ class ClientConfig:
             meta_account_id=crm_record.get("metaAccountId", ""),
             tiktok_advertiser_id=crm_record.get("tiktokAdvertiserId", ""),
             features=features,
-            slack_channel=crm_record.get("slackChannel", ""),
-            slack_webhook_env=crm_record.get("slackWebhookEnv", ""),
-            schedule_cron=crm_record.get("scheduleCron", "0 9 * * *"),
-            timezone=crm_record.get("timezone", "Asia/Tokyo"),
+            slack_channel=slack_channel,
+            slack_webhook_env=slack_webhook_env,
+            schedule_cron=schedule_cron,
+            timezone=timezone,
             source="crm",
+            raw_config=raw_config,
         )

@@ -85,9 +85,10 @@ def analyze_coverage(check_results):
 
     # 2.5. 静的スキャン: 条件依存で結果が emit されない実装も「実装済み」として扱う
     # (例: M44 は advantage_plus=True 時のみ、M49 は同一 type が >2 件時のみ発火)
-    for sid in _scan_implemented_rule_ids():
-        if sid in all_yaml_ids:
-            all_yaml_ids[sid]["has_check"] = True
+    if check_results:
+        for sid in _scan_implemented_rule_ids():
+            if sid in all_yaml_ids:
+                all_yaml_ids[sid]["has_check"] = True
 
     # 3. カバレッジ集計
     covered = [rid for rid, info in all_yaml_ids.items() if info["has_check"]]

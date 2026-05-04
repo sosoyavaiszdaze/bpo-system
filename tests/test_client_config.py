@@ -34,6 +34,8 @@ class TestClientConfigFromYaml:
         assert config.features.seo_audit is True
         assert config.slack_channel == "#test"
         assert config.source == "yaml"
+        assert config.get("ads")["google"]["customer_id"] == "123-456-7890"
+        assert config.get("notifications")["slack"]["webhook_env"] == "SLACK_WH_TEST"
 
     def test_minimal_data(self):
         from engine.models import ClientConfig
@@ -63,6 +65,9 @@ class TestClientConfigFromYaml:
         assert config.features.adtruth is True
         assert config.features.seo_audit is False
         assert config.source == "crm"
+        assert config.get("ads")["google"]["customer_id"] == "111-222-3333"
+        assert config.get("notifications")["slack"]["channel"] == "#crm-test"
+        assert config.get("crm")["twenty"]["enabled"] is True
 
 
 class TestSecrets:
