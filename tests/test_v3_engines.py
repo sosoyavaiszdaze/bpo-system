@@ -288,6 +288,18 @@ class TestLongtermProjector:
         assert ctx["longterm"]["has_projection"] is True
         assert ctx["longterm"]["total_12m"]["realistic"] > 0
 
+    def test_v3_total_pages_tracks_platform_page_count(self, monkeypatch):
+        import engine.report_generator_v3 as report_v3
+
+        monkeypatch.setattr(report_v3, "_build_platform_compare", lambda audit, industry, bm: [{"key": "google"}])
+
+        ctx = report_v3.build_v3_context(
+            "test_client",
+            {"name": "Test", "company": {"name": "Test Co", "industry": "ec_retail"}},
+            {"ads_audit": {"score": 70, "grade": "B", "total_cost": 1_000_000, "issues": []}},
+        )
+        assert ctx["total_pages"] == 7
+
 
 # =============================================================================
 # priority_ranker

@@ -444,6 +444,8 @@ def build_v3_context(
         f"calls={llm_stats['total_calls']}, cost=¥{llm_stats['estimated_cost_jpy']}"
     )
 
+    total_pages = 6 + len(platforms)
+
     return {
         "client_id": client_id,
         "cover": cover,
@@ -455,7 +457,7 @@ def build_v3_context(
         "insights": insight_items,
         "appendix": appendix,
         "llm_stats": llm_stats,
-        "total_pages": 9,
+        "total_pages": total_pages,
         "footer_text": "本書は機密保持契約に基づき作成されました / © 2026 Zynect Media 株式会社",
     }
 
