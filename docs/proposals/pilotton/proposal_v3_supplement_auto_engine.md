@@ -145,6 +145,79 @@ Zynect Media:    30 client    (自動運用エンジンによる 3-6 倍効率�
 
 ---
 
+## §4. TO-12 軸「不正ブロック実行 vs CV 保全」(2026-05-05 新設)
+
+既存 11 軸に **TO-12** を追加 (`config/rules/tradeoff_axes.yaml`):
+
+```
+左極 (block_aggressive)             右極 (cv_preservation)
+不正完全遮断・広告費節約最大       CV 保全最優先・ブロックは記録のみ
+                  中央 (investigate)
+                  一定期間モニタリング後判断
+```
+
+媒体別ブロック手段:
+
+| 媒体 | 主要手段 | IP 除外 |
+|------|---------|--------|
+| Meta | Custom Audience exclusion + Audience Network 除外 | ❌ 非対応 |
+| Google | IP 除外 (最大 500) + キーワード/プレースメント除外 | ✅ |
+| TikTok | Custom Audience + プレースメント除外 | ❌ 非対応 |
+| LP 共通 | AdTruth タグ → cloaking page (媒体非依存) | (LP 側) |
+
+**「不正は止めるが CV は守る」を数値で約束**: ブロック前後 14 日の CV 推移を `engine/cv_preservation_monitor.py` で自動計測、損失 15% 超で閾値自動緩和提案。月次レポートに **CV 保全率** を必須掲載。
+
+---
+
+## §5. 二層判断フレーム (ADR-009 Accepted)
+
+### 第一層: 運用憲章 (Operating Charter) — kickoff day で初期合意
+
+```yaml
+operating_charter:
+  primary_kpi: cv_max | cpa_min | roas_max | balanced
+  cv_loss_tolerance_pct: 5 | 10 | 15 | 20
+  delegation_scope: black_only | grey_threshold | full_review
+  charter_version: "1.0"
+```
+
+### 第二層: 都度確認 + Zynect 推奨
+
+灰ゾーン (不正シグナル高 × CV 発生中) 検知時:
+- `engine/recommendation_engine.py` が運用憲章 + 過去類似判断 5 件から推奨生成
+- ChatWork で 5 択提示 (推奨採用 / 別案 / モニタリング / 詳細要求 / 憲章見直し)
+
+### 一貫性担保 3 仕組み
+
+1. **判断ログ全件記録** (`outputs/client_preferences/{client}_decisions.yaml`)
+2. **月次整合性レポート** (charter 整合率 + 過去判断整合率を ChatWork に併記)
+3. **四半期憲章レビュー** (`_quarterly_charter_review.md.j2` で運用方針見直し)
+
+### 競合比較
+
+| 観点 | 競合代理店 | **Zynect Media** |
+|------|----------|----------------|
+| 顧客方針の扱い | 「丸投げ」or「一律設定」 | **運用憲章で構造化、四半期更新** |
+| 灰ゾーン判断 | 営業主観 (ばらつき) | **Zynect 推奨 + 顧客 5 択 + 履歴ログ** |
+| 一貫性 | 時系列で破綻 | **整合率を月次計測、ズレ時に能動提案** |
+
+---
+
+## §6. AdTruth (ADR-006 連携) — Zynect 独自 4 要素
+
+ADR-006 (AdTruth) MVP 実装は **Phase B Week 2-3 から着手** (5/14-)、pilotton が初期パイロット顧客。
+
+| # | エンジン | 役割 | 実装状況 |
+|---|---------|------|--------|
+| 1 | `engine/recommendation_engine.py` | Zynect 推奨生成 | ✅ 中身 (5/5) |
+| 2 | `engine/adtruth_blocker.py` | 媒体別ブロック実行 | ✅ 骨格 (5/5)、API 接続は Phase B |
+| 3 | `engine/threshold_optimizer.py` | fraud × CV 動的閾値最適化 | ✅ 中身 (5/5) |
+| 4 | `engine/cv_preservation_monitor.py` | CV 保全監視 + 自動緩和 | ✅ 中身 (5/5) |
+
+→ AdTruth タグ本体 (papa-torb/adtruth fork + 独自カスタム) は Phase B Week 2-3 で別タスク
+
+---
+
 ## 5. 自動運用エンジン 概念図 (P9 新規ページ案)
 
 ```

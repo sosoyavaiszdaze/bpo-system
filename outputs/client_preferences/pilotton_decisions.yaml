@@ -1,0 +1,29 @@
+# パイロットン 判断ログ (ADR-009 §3-1)
+# 灰ゾーン判断の全件記録、整合性算出 + ML 学習用データ蓄積
+
+client_id: pilotton
+
+decisions: []   # Phase B Week 2 以降に蓄積される実判断データ
+
+# 集計サマリ (engine/recommendation_engine.py が更新)
+summary:
+  total_count: 0
+  by_action:
+    block: 0
+    monitor: 0
+    investigate: 0
+    custom_audience_exclude: 0
+  by_media:
+    meta: 0
+    google: 0
+    tiktok: 0
+  by_consistency:
+    consistent_with_charter: 0
+    inconsistent_with_charter: 0
+    consistent_with_past: 0
+    inconsistent_with_past: 0
+
+metadata:
+  created_at: 2026-05-05T00:00:00+09:00
+  last_updated: null
+  schema_version: 1

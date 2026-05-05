@@ -1,0 +1,51 @@
+{% import "_disclaimer_ai_assist.md.j2" as disclaimer with context %}
+[info][title]【自動診断】薬機法に関する気づき — {{ rule_name }}[/title]
+[Zynect Auto-Reporter からの自動投稿 / {{ today }}]
+
+{{ client_name }} {{ honorific or "御中" }}
+
+弊社の自動診断システムが薬機法上の留意点を検知しました。
+法務担当者様へのエスカレーションをご検討ください。
+
+▼ 該当条文
+　・法令: {{ legal_reference.law }}
+　・条文: {{ legal_reference.article }}
+　・要旨: {{ legal_reference.description }}
+
+▼ 違反疑義の具体箇所
+　・対象: {{ violation_location }}
+　・該当表現: 「{{ violation_text }}」
+{% if violation_context %}
+　・前後の文脈: {{ violation_context }}
+{% endif %}
+
+▼ 修正候補の表現例
+{% if suggested_alternatives %}
+{% for alt in suggested_alternatives %}
+　{{ loop.index }}. {{ alt }}
+{% endfor %}
+{% else %}
+　(個別検討推奨、化粧品 56 効能の範囲内に書き換え)
+{% endif %}
+
+▼ 業種別ガイドライン参考
+{% if rule_id in ["V-EC-01", "V-EC-02"] %}
+　・化粧品: 厚生労働省告示「化粧品の効能の範囲」56 項目
+　・健康食品: 健康食品に関する景品表示法・健康増進法上の留意事項 (消費者庁)
+{% endif %}
+
+▼ 影響度の目安
+　・想定リスク: {{ risk_level }}
+{% if risk_level == "high" %}
+　・過去事例: 措置命令 + 課徴金 (景表法併用) のケースあり
+{% endif %}
+
+▼ Disclaimer (必読)
+　本指摘は Zynect のルールベース診断による **気づきレベル** の提示です。
+　Zynect は法務・薬事の専門家ではないため、最終判断は貴社法務担当者または
+　薬事担当者にご確認ください。本通知は法的助言を構成するものではありません。
+
+{{ disclaimer.render() }}
+
+[Rule ID: {{ rule_id }} / Zynect Media 自動運用システム / {{ today }}]
+[/info]

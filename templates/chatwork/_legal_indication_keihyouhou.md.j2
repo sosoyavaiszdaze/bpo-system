@@ -1,0 +1,61 @@
+{% import "_disclaimer_ai_assist.md.j2" as disclaimer with context %}
+[info][title]【自動診断】景品表示法に関する気づき — {{ rule_name }}[/title]
+[Zynect Auto-Reporter からの自動投稿 / {{ today }}]
+
+{{ client_name }} {{ honorific or "御中" }}
+
+弊社の自動診断システムが景品表示法上の留意点を検知しました。
+法務担当者様へのエスカレーションをご検討ください。
+
+▼ 該当条文
+　・法令: {{ legal_reference.law }}
+　・条文: {{ legal_reference.article }}
+　・要旨: {{ legal_reference.description }}
+
+▼ 違反疑義の具体箇所
+　・対象: {{ violation_location }}
+　・該当表現: 「{{ violation_text }}」
+{% if violation_context %}
+　・前後の文脈: {{ violation_context }}
+{% endif %}
+
+▼ 規制種別
+{% if rule_id == "F-LC-01" %}
+　・第 5 条第 1 号: **優良誤認表示**
+　　商品・サービスが実際よりも著しく優良であると示す表示
+{% elif rule_id == "F-LC-02" %}
+　・第 5 条第 2 号: **有利誤認表示**
+　　取引条件 (価格・期間等) が実際よりも著しく有利であると示す表示
+{% elif rule_id == "F-LC-03" %}
+　・打消し表示の視認性問題
+　　強調表示と打消し表示の視認性が同等でない場合のリスク
+{% elif rule_id == "F-LC-05" %}
+　・**ステマ規制 (2023年10月施行)**
+　　事業者の表示と判別困難な表示は不当表示
+{% endif %}
+
+▼ 修正候補の表現例
+{% if suggested_alternatives %}
+{% for alt in suggested_alternatives %}
+　{{ loop.index }}. {{ alt }}
+{% endfor %}
+{% else %}
+　(根拠データの併記、断定表現の回避、打消し表示の視認性強化を検討)
+{% endif %}
+
+▼ 影響度の目安
+　・想定リスク: {{ risk_level }}
+{% if risk_level == "high" %}
+　・過去事例: 措置命令 + 課徴金 (売上 3% 上限)
+　・違反確認時の対応期限: 通常 30 日以内
+{% endif %}
+
+▼ Disclaimer (必読)
+　本指摘は Zynect のルールベース診断による **気づきレベル** の提示です。
+　Zynect は法務の専門家ではないため、最終判断は貴社法務担当者または
+　顧問弁護士にご確認ください。本通知は法的助言を構成するものではありません。
+
+{{ disclaimer.render() }}
+
+[Rule ID: {{ rule_id }} / Zynect Media 自動運用システム / {{ today }}]
+[/info]

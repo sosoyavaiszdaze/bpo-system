@@ -66,3 +66,18 @@ axes:
   pole_right: システム自動化
   criteria: 施策は最終的に自動化に乗せる前提で初期値を人間が設計
   source: デッキ Automation Process
+- id: TO-12
+  name: 不正ブロック実行 vs CV保全
+  pole_left: block_aggressive   # 不正完全遮断、広告費節約最大、CV損失リスク
+  pole_right: cv_preservation   # CV保全最優先、ブロックは記録のみ
+  middle: investigate           # 一定期間モニタリング後判断
+  criteria: |
+    AdTruth等で検知した不正トラフィックをブロックする際、CV発生中の
+    セグメントを巻き込むリスクとブロック効果のトレードオフ。
+    媒体別にブロック手段が異なるため、Meta=Custom Audience exclusion中心、
+    Google=キーワード/IP除外中心、TikTok=Custom Audience中心で実行判断。
+  source: ADR-006 (AdTruth) + ADR-009 (顧客選好) + ADR-013 (5層ルール体系) — 2026-05-05 追加
+  related_adrs: [ADR-006, ADR-009, ADR-013]
+  decision_framework: two_layer  # 運用憲章+都度確認(Zynect推奨付き)
+  media_specific: true
+  related_axes: [TO-04, TO-07]   # クリック品質・配信品質と相互作用

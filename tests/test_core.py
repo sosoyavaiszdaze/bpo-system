@@ -991,13 +991,15 @@ class TestV2RuleCounts:
         rules = load_rules("adtruth")
         assert len(rules["rules"]) == 15
 
-    def test_tradeoff_axes_11(self):
-        """トレードオフ軸 = 11"""
+    def test_tradeoff_axes_12(self):
+        """トレードオフ軸 = 12 (2026-05-05 ADR-009 で TO-12「不正ブロック vs CV 保全」追加)"""
         import yaml
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "rules", "tradeoff_axes.yaml")
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
-        assert len(data["axes"]) == 11
+        assert len(data["axes"]) == 12
+        ids = [a["id"] for a in data["axes"]]
+        assert "TO-12" in ids
 
 
 class TestV2ConflictGroups:

@@ -1,0 +1,68 @@
+{% import "_disclaimer_ai_assist.md.j2" as disclaimer with context %}
+[info][title]【自動診断】特定商取引法に関する気づき — {{ rule_name }}[/title]
+[Zynect Auto-Reporter からの自動投稿 / {{ today }}]
+
+{{ client_name }} {{ honorific or "御中" }}
+
+弊社の自動診断システムが特定商取引法上の留意点を検知しました。
+法務担当者様へのエスカレーションをご検討ください。
+
+▼ 該当条文
+　・法令: {{ legal_reference.law }}
+　・条文: {{ legal_reference.article }}
+　・要旨: {{ legal_reference.description }}
+
+▼ 検知内容
+　・対象: {{ violation_location }}
+{% if missing_fields %}
+　・不足表記事項:
+{% for field in missing_fields %}
+　　- {{ field }}
+{% endfor %}
+{% endif %}
+{% if violation_text %}
+　・該当表現: 「{{ violation_text }}」
+{% endif %}
+
+▼ 必要な対応事項
+
+{% if rule_id == "F-LC-04" %}
+　通信販売における広告 (法第 11 条) の必須表記:
+　1. 販売価格 (税込)
+　2. 送料・その他費用
+　3. 代金支払時期・方法
+　4. 商品引渡時期
+　5. 返品特約 (返品不可なら明記)
+　6. 事業者氏名・住所・電話番号
+　7. その他施行規則 8 条で定める事項
+
+{% elif rule_id == "V-EC-08" %}
+　定期購入の表示義務 (法第 15 条の 2、2022 年 6 月改正):
+　1. 解約条件の明示 (回数・期間・違約金)
+　2. 解約方法の明示 (電話・Web フォーム等の手段)
+　3. **解約導線の確保** (申込画面と同等の手段で解約可能)
+　4. 申込確認画面での総額・継続条件再表示
+
+{% elif rule_id == "V-EC-11" %}
+　総額表示義務 (税込価格):
+　1. 全価格表記を税込で統一
+　2. 送料の取扱明示
+　3. 関連する規約・FAQ 内も整合
+{% endif %}
+
+▼ 影響度の目安
+　・想定リスク: {{ risk_level }}
+{% if risk_level == "critical" %}
+　・過去事例: 業務停止命令 (定期購入トラブル多発時)
+　・行政処分の対象企業数: 直近 3 年で年 30-50 件
+{% endif %}
+
+▼ Disclaimer (必読)
+　本指摘は Zynect のルールベース診断による **気づきレベル** の提示です。
+　Zynect は法務の専門家ではないため、最終判断は貴社法務担当者または
+　顧問弁護士にご確認ください。本通知は法的助言を構成するものではありません。
+
+{{ disclaimer.render() }}
+
+[Rule ID: {{ rule_id }} / Zynect Media 自動運用システム / {{ today }}]
+[/info]
