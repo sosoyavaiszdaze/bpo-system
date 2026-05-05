@@ -1,0 +1,17 @@
+{# 共通免責文 + 生成 AI 質問導線 (ADR-005 G タスク 層2)
+   方針: 各 rule_id の改善手順末尾に自動挿入し、UI 変更による陳腐化リスクを軽減する。
+
+   year / month は templates/chatwork/__init__.py で Jinja2 globals として注入される。
+   オーバーライドが必要な場合は render(context={"current_year": 2026, "current_month": 5})
+   で明示的に渡せばよい。
+#}
+
+{% macro render() %}
+　────────────────────────────
+　▼ 補足
+　　※ 本手順は{{ current_year }}年{{ current_month }}月時点の情報です。
+　　   Meta / Google / TikTok / ECフォース 等の管理画面は頻繁に更新されるため、
+　　   画面が異なる場合は実際のスクリーンショットを ChatGPT / Claude /
+　　   Gemini 等の生成AIに添付して「この画面で次のステップに進むには？」
+　　   と質問してください。または弊社までご返信ください。
+{% endmacro %}

@@ -37,6 +37,10 @@ def load_benchmarks(path: Path | None = None) -> dict[str, Any]:
 def get_benchmark_cell(bm: dict, industry: str, platform: str, metric: str) -> dict | None:
     """benchmarks.yaml から industry × platform × metric のセルを取り出す。
 
+    v3.1 (Task B): benchmarks.yaml は全て JPY/% で直接記述されるため、
+    自動換算ロジックは持たない（YAML の値をそのまま返す）。USD ソースは
+    出典コメントで参照可能。
+
     Returns:
         cell dict { industry_avg, zynect_recommended, unit, source, ... } or None.
     """

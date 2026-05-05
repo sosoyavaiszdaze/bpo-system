@@ -1,0 +1,34 @@
+{% import "_action_steps.md.j2" as steps with context %}
+{% import "_disclaimer_ai_assist.md.j2" as disclaimer with context %}
+[info][title]【{{ client_display_name }}】本日の運用指摘 {{ date }}（{{ indications|length }}件）[/title]
+{% if greeting %}{{ greeting }}
+
+{% endif %}
+{% for ind in indications %}
+■ 指摘 {{ loop.index }}/{{ indications|length }}：{{ ind.title }}
+　[{{ ind.rule_id }}] 重要度：{{ ind.severity_label }}
+　────────────────────────────
+　▼ 事実
+　　{{ ind.fact }}
+
+　▼ 影響
+　　{{ ind.impact }}
+{% if ind.expected_effect %}
+　　想定効果（{{ ind.scenario_label or "現実シナリオ" }}）：{{ ind.expected_effect }}
+{% endif %}
+
+　▼ 改善手順
+{{ steps.render_steps(ind.rule_id, ind.payload if ind.payload is defined else {}) }}
+{{ disclaimer.render() }}
+{% if not loop.last %}
+　────────────────────────────
+
+{% endif %}
+{% endfor %}
+{% if footer_note %}
+
+{{ footer_note }}
+{% endif %}
+
+ご質問・不明点があればこちらにご返信ください。
+[/info]

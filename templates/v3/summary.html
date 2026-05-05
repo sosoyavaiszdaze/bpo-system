@@ -115,9 +115,34 @@
     </tbody>
   </table>
   <div class="note-hint">
-    試算信頼度: {{ summary.confidence_summary }} / 効果が現れるまでの目安: 最大 {{ summary.horizon_weeks_max }} 週<br>
-    総月次改善見込み: <strong>{{ summary.total_savings_display }}</strong>
+    試算信頼度: {{ summary.confidence_summary }} / 効果が現れるまでの目安: 最大 {{ summary.horizon_weeks_max }} 週
   </div>
+
+  {# v3.1 Task F-4: 3層インパクト表示（最低値・現実値・上限値） #}
+  {% if summary.aggregate.three_layer %}
+  {% set tl = summary.aggregate.three_layer %}
+  {% set pixel_dormant = tl.pixel_health.dormant_pixel_count > 0 if tl.pixel_health else false %}
+  <section class="impact-three-layer">
+    <div class="layer-confident">
+      <h3>確実に見込める改善額（最低値）</h3>
+      <p class="amount-large">{{ tl.minimum.display }}</p>
+      <p class="note">複数の課題が相互に関連しているため、確度を最優先に最低値で算出しています。実際の改善効果はこれを上回る可能性があります。</p>
+      {% if pixel_dormant %}
+      <p class="note-warning">⚠ 現状ピクセル休眠（{{ tl.pixel_health.dormant_pixel_count }} 件、最大 {{ tl.pixel_health.dormant_days }} 日未発火）が検出されているため、計測基盤の修復を最優先としています。修復後に他施策の効果が顕在化します。</p>
+      {% endif %}
+    </div>
+    <div class="layer-realistic">
+      <h4>相互依存を考慮した現実的試算</h4>
+      <p class="amount-medium">{{ tl.realistic.display }}</p>
+      <p class="note-small">グループ別の依存係数（measurement_foundation 0.2 / delivery_learning 0.3 / creative 0.5 / budget 0.4 / targeting 0.4 / independent 1.0）を適用</p>
+    </div>
+    <div class="layer-upper">
+      <h5>各施策が独立に最大効果を発揮した場合</h5>
+      <p class="amount-small">最大 {{ tl.independent.display }}</p>
+      <p class="note-tiny">重複領域があるため実際にはこの値に到達しない可能性が高い（営業時の過大評価リスク注意）</p>
+    </div>
+  </section>
+  {% endif %}
 
   <div class="page-footer">{{ footer_text }}</div>
 </div>

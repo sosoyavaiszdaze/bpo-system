@@ -69,7 +69,27 @@ def start_scheduler():
         name="週次学習レビュー",
     )
 
-    log.info("スケジューラ起動: 週次監査(日02:00) / 日次Fraud(06:00) / 月次ベンチ(1日00:00) / 判断エスカ(15分毎) / 学習レビュー(月09:00)")
+    # 日次 09:00 JST: ChatWork 指摘・解消通知 (ADR-005 / pilotton)
+    scheduler.add_job(
+        _run_daily_chatwork_check,
+        CronTrigger(hour=9, minute=0),
+        id="daily_chatwork_check",
+        name="日次ChatWork指摘通知",
+    )
+
+    # 毎月1日 10:00 JST: ChatWork 月次レポート (ADR-005 / pilotton)
+    scheduler.add_job(
+        _run_monthly_chatwork_report,
+        CronTrigger(day=1, hour=10, minute=0),
+        id="monthly_chatwork_report",
+        name="月次ChatWorkレポート",
+    )
+
+    log.info(
+        "スケジューラ起動: 週次監査(日02:00) / 日次Fraud(06:00) / 月次ベンチ(1日00:00) / "
+        "判断エスカ(15分毎) / 学習レビュー(月09:00) / "
+        "日次ChatWork(09:00) / 月次ChatWork(1日10:00)"
+    )
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
@@ -210,6 +230,53 @@ def _run_weekly_learning_review():
                 log.warning(f"週次学習レビューSlack送信失敗: {e}")
     except Exception as e:
         log.error(f"週次学習レビューエラー: {e}")
+
+
+def _run_daily_chatwork_check():
+    """日次 09:00 JST: ChatWork 指摘・解消通知 (ADR-005)
+
+    内部レビュー期間中 (最初の 2 週間) は CHATWORK_TEST_PREFIX="[テスト] " を
+    .env に設定して投稿する。本番化時に空文字に切替。
+    """
+    log.info("=== 日次ChatWork指摘通知開始 ===")
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from scripts.daily_chatwork_check import run_daily_check, post_self_alert
+        prefix = os.environ.get("CHATWORK_TEST_PREFIX", "")
+        # pilotton 単一クライアント運用 (Phase A 範囲)
+        result = run_daily_check(client_id="pilotton", dry_run=False, test_prefix=prefix)
+        if result.get("errors"):
+            log.warning(f"日次ChatWork: 部分失敗 {result['errors']}")
+    except Exception as e:
+        log.error(f"日次ChatWorkエラー: {e}")
+        try:
+            from scripts.daily_chatwork_check import post_self_alert
+            post_self_alert(f"日次ジョブ失敗: {e}")
+        except Exception as e2:
+            log.error(f"自己監視通知も失敗: {e2}")
+
+
+def _run_monthly_chatwork_report():
+    """毎月1日 10:00 JST: ChatWork 月次レポート (ADR-005)
+
+    前月 (period 自動算定) を集計して投稿、PDF 添付、resolved_confirmed をアーカイブ。
+    """
+    log.info("=== 月次ChatWorkレポート開始 ===")
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from scripts.monthly_chatwork_report import run_monthly_report
+        prefix = os.environ.get("CHATWORK_TEST_PREFIX", "")
+        result = run_monthly_report(
+            client_id="pilotton",
+            period=None,  # 自動: 前月
+            dry_run=False,
+            test_prefix=prefix,
+            archive_after=True,
+        )
+        if result.get("errors"):
+            log.warning(f"月次ChatWork: 部分失敗 {result['errors']}")
+    except Exception as e:
+        log.error(f"月次ChatWorkエラー: {e}")
 
 
 if __name__ == "__main__":

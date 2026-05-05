@@ -1,0 +1,113 @@
+# =============================================================================
+# Conversion Mapping — Multi-platform conversion event normalization
+# =============================================================================
+# 用途: 各広告媒体 API が同一の購入/リード/登録を複数の action_type ラベルで
+#       重複報告する仕様を吸収し、unified counter（synonym を持たない代表ラベル）
+#       のみを採用して二重計上を回避する。
+#
+# 設計根拠: docs/decisions/ADR-004-cv-normalization-and-conversion-mapping.md
+# 関連事故: Day 5.2 (2026-05-02) で pilotton CV が 320→161（-50%）に修正された事故
+#
+# 利用箇所:
+#   - adapters/meta_adapter.py
+#   - adapters/google_adapter.py（Phase 2 で実装、現状は空マッピング）
+#   - adapters/tiktok_adapter.py（Phase 2 で実装、現状は空マッピング）
+#
+# =============================================================================
+
+version: 1
+
+metadata:
+  description: "Multi-platform conversion event normalization map"
+  last_updated: "2026-05-03"
+  related_adr: ADR-004
+  notes: |
+    各広告媒体の API は同一の購入/リード/登録を複数の action_type ラベルで
+    重複報告する仕様がある。本ファイルは synonym → canonical の正規化を
+    宣言的に管理し、CV 二重計上を防ぐ。
+
+# =============================================================================
+# プラットフォーム別マッピング
+# =============================================================================
+
+platforms:
+
+  # ---------------------------------------------------------------------------
+  # Meta (Facebook / Instagram) — フル実装
+  # ---------------------------------------------------------------------------
+  meta:
+    enabled: true
+    api_version: "v22.0"
+
+    conversion_types:
+      purchase:
+        canonical: purchase
+        synonyms:
+          - purchase
+          - offsite_conversion.fb_pixel_purchase
+          - onsite_web_app_purchase
+          - onsite_web_purchase
+          - omni_purchase
+          - web_in_store_purchase
+          - web_app_in_store_purchase
+        dedup_strategy: max
+        notes: |
+          Day 5.2 事故の根本原因。同一購入を 7 種類超のラベルで重複報告される。
+          dedup_strategy: max は synonym 間で最大値のみ採用（同一イベントの重複表示のため）。
+
+      lead:
+        canonical: lead
+        synonyms:
+          - lead
+          - offsite_conversion.fb_pixel_lead
+        dedup_strategy: max
+
+      complete_registration:
+        canonical: complete_registration
+        synonyms:
+          - complete_registration
+          - offsite_conversion.fb_pixel_complete_registration
+        dedup_strategy: max
+
+    revenue_types:
+      purchase_value:
+        canonical: purchase
+        synonyms:
+          - purchase
+        dedup_strategy: max
+        notes: "action_values でも同様の dedup が必要（action と独立した集計）"
+
+  # ---------------------------------------------------------------------------
+  # Google Ads — Phase 2、現状は空マッピング（既存 adapter ハードコードを継続）
+  # ---------------------------------------------------------------------------
+  google:
+    enabled: false
+    api_version: "v17"
+    conversion_types: {}
+    revenue_types: {}
+    notes: |
+      Google Ads の conversion_action_category マッピング（PURCHASE / LEAD /
+      SIGNUP / DOWNLOAD / SUBSCRIBE_PAID 等）は別タスクで調査。
+      `conversions` / `all_conversions` / `view_through_conversions` の関係も整理要。
+      現状は adapters/google_adapter.py のハードコードを継続使用。
+
+  # ---------------------------------------------------------------------------
+  # TikTok — Phase 2、現状は空マッピング
+  # ---------------------------------------------------------------------------
+  tiktok:
+    enabled: false
+    api_version: "v1.3"
+    conversion_types: {}
+    revenue_types: {}
+    notes: |
+      TikTok Events API の event_type マッピングは別タスクで調査。
+      `complete_payment` / `place_an_order` / `view_content` 等の階層関係を整理要。
+      現状は adapters/tiktok_adapter.py のハードコードを継続使用。
+
+# =============================================================================
+# dedup_strategy の選択肢
+# =============================================================================
+# max:   synonym 間で最大値を採用（同一イベントの重複報告 → Meta purchase 等）
+# sum:   合算（独立した複数イベント、将来 Custom Event 用）
+# first: 最初に出現した synonym のみ採用（特殊用途）
+# =============================================================================

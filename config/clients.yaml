@@ -96,8 +96,8 @@ clients:
     company:
       name: 株式会社パイロットン
       honorific: 御中
-      industry: ec_retail  # TODO: 業界カテゴリは確認のうえ調整可能
-      industry_label: EC・通販
+      industry: beauty_d2c  # 内部参照キー（v3.1 で beauty_d2c 業界を新設）
+      industry_label: 美容・D2C # 表示用（顧客向けレポートでの業界表示）
     contact:
       name: '[要入力: 担当者氏名]'
       honorific: 様
@@ -113,11 +113,45 @@ clients:
     objective: balanced
     ads:
       meta:
+        enabled: true
         account_id: act_566972639374407
-        access_token_env: META_ACCESS_TOKEN_BANDAL  # BANDAL システムユーザートークンで参照可能（疎通確認済 2026-05-02）
-        lookback_days: 90
+        access_token_env: META_ACCESS_TOKEN_PILOTTON  # BANDAL 共用→PILOTTON 専用に切替
+        lookback_days: 30  # v3.1: PDF カバー「直近30日」表示と整合（旧 90 から変更）
+        pixels:
+        - id: '1678979499646915'
+          name: CLOCKING Pixel
+          note: 最終発火 270日前 / 休眠 / 重複疑い（CLOOKING_ピクセルと並存）
+          duplicate: true
+          dormant_days: 270
+        - id: '668329358903771'
+          name: CLOCKING_ピクセル
+          note: 最終発火 366日前 / 休眠 / 重複疑い（CLOOKING Pixel と並存、こちらの方が古い）
+          duplicate: true
+          dormant_days: 366
+        - id: '1690318315033477'
+          name: MYNAILPLEX_LP01
+          note: '最終発火 0日前 / アクティブ運用中（MYNAILPLEX ブランド主力ピクセル）'
+          duplicate: false
+          dormant_days: 0
+        - id: '507908412373466'
+          name: アゲルキャリア_Pixel
+          note: '最終発火 0日前 / アクティブ運用中（アゲルキャリアブランド、MYNAILPLEX とは別商材）'
+          duplicate: false
+          dormant_days: 0
+        - id: '986638556918191'
+          name: 削除
+          note: 未発火 / 廃止予定（Meta UI で実削除推奨）
+          duplicate: false
+      google:
+        enabled: false
+      tiktok:
+        enabled: false
     notifications:
       platform: lark
       lark:
         webhook_env: LARK_WEBHOOK_PILOTTON
     intent_overrides: []
+    seo:
+      enabled: false
+    adtruth:
+      enabled: false

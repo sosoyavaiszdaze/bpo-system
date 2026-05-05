@@ -255,21 +255,23 @@ def _parse_campaign(row):
         "learning_phase": False,
     }
 
-    # actions からコンバージョン数を抽出
-    actions = row.get("actions", [])
-    for action in actions:
-        if action.get("action_type") in [
-            "purchase", "offsite_conversion.fb_pixel_purchase",
-            "complete_registration", "lead",
-        ]:
-            camp["conversions"] += float(action.get("value", 0))
+    # ADR-004 (Day 5.3): action_type 正規化を config/conversion_mapping.yaml に外部化。
+    # synonym 集約 → canonical 単位で集計し、Meta API の重複報告（同一購入を 9 種類超の
+    # ラベルで報告する仕様）による二重計上を回避する。
+    # 旧ハードコード定数 UNIFIED_CV_TYPES / UNIFIED_REVENUE_TYPES は廃止。
+    from engine.conversion_mapping import aggregate_actions, load_conversion_mapping
 
-    # action_values からコンバージョン値を抽出
-    action_values = row.get("action_values", [])
-    for av in action_values:
-        if av.get("action_type") in ["purchase", "offsite_conversion.fb_pixel_purchase"]:
-            camp["conversion_value"] += float(av.get("value", 0))
-            camp["revenue"] += float(av.get("value", 0))
+    cm = load_conversion_mapping()
+    cv_aggregated = aggregate_actions("meta", "conversion", row.get("actions", []), mapping=cm)
+    rev_aggregated = aggregate_actions("meta", "revenue", row.get("action_values", []), mapping=cm)
+
+    # canonical 単位の集計値を camp の集約フィールドへ反映
+    # CV 数は「全 canonical の合計」（purchase + lead + complete_registration 等を独立 CV として加算）
+    camp["conversions"] += sum(cv_aggregated.values())
+    # Revenue は purchase の value のみ（複数の収益タイプは現状想定外）
+    purchase_value = rev_aggregated.get("purchase", 0.0)
+    camp["conversion_value"] += purchase_value
+    camp["revenue"] += purchase_value
 
     # CPA計算
     if camp["conversions"] > 0:

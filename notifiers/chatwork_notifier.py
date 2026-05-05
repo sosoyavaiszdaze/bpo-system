@@ -1,0 +1,347 @@
+"""ChatWork 通知クライアント (ADR-005)
+
+ChatWork API v2 を使ったメッセージ投稿・ファイル添付。
+Day 1 範囲: API クライアント本体（テキスト投稿、ファイル添付、retry、rate limit、idempotency）
+
+設計方針:
+- トークン未設定でも import エラーにならない（環境変数は send 時に参照）
+- 既存 outputs/slack_notify.py / lark_notify.py のパターン踏襲
+- requests を使わず urllib（既存コードと統一、追加依存なし）
+- multipart/form-data はファイル添付時に手組み（Python 標準のみ）
+
+API 仕様:
+- Base URL: https://api.chatwork.com/v2
+- Header: X-ChatWorkToken: <token>
+- Rate limit: 5 req/sec (WRITE), 100 req/5min (READ)
+- メッセージ投稿: POST /rooms/{room_id}/messages
+- ファイル添付: POST /rooms/{room_id}/files (multipart/form-data)
+
+Idempotency:
+- ChatWork API 自体には Idempotency-Key の概念がない
+- (room_id, body のハッシュ) で送信済みを記録し、再送を防ぐ
+- 記録は notifiers/_chatwork_sent.json（簡易 JSON ストア）
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+import mimetypes
+import os
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from typing import Optional
+
+log = logging.getLogger("bpo")
+
+CHATWORK_API_BASE = "https://api.chatwork.com/v2"
+DEFAULT_TIMEOUT = 15
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RATE_LIMIT_PER_SEC = 5  # ChatWork WRITE 系の上限
+SENT_LOG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "state",
+    "chatwork_sent.json",
+)
+
+
+class ChatWorkError(Exception):
+    """ChatWork API 呼び出し失敗"""
+
+
+class ChatWorkClient:
+    """ChatWork API クライアント
+
+    Args:
+        api_token: API トークン。None の場合は環境変数 CHATWORK_API_TOKEN を参照
+        room_id: デフォルトのルームID（メソッド呼び出し時に上書き可）
+        max_retries: 5xx / 429 時のリトライ回数
+        rate_limit_per_sec: 秒間最大リクエスト数（簡易ローカル制御）
+        sent_log_path: 送信済み記録ファイル（idempotency 用）
+        dry_run: True の場合 HTTP 送信をスキップしログのみ
+    """
+
+    def __init__(
+        self,
+        api_token: Optional[str] = None,
+        room_id: Optional[str] = None,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        rate_limit_per_sec: int = DEFAULT_RATE_LIMIT_PER_SEC,
+        sent_log_path: str = SENT_LOG_PATH,
+        dry_run: bool = False,
+    ):
+        self._api_token = api_token  # None 許容、send 時に env 参照
+        self._room_id = room_id
+        self.max_retries = max_retries
+        self.rate_limit_per_sec = max(1, rate_limit_per_sec)
+        self.sent_log_path = sent_log_path
+        self.dry_run = dry_run
+        self._last_request_at: float = 0.0
+
+    # ---------- 設定参照（遅延） ----------
+
+    def _resolve_token(self) -> str:
+        token = self._api_token or os.environ.get("CHATWORK_API_TOKEN", "")
+        if not token:
+            raise ChatWorkError(
+                "CHATWORK_API_TOKEN 未設定: 環境変数または引数で渡してください"
+            )
+        return token
+
+    def _resolve_room_id(self, room_id: Optional[str]) -> str:
+        rid = room_id or self._room_id or os.environ.get("CHATWORK_ROOM_ID_PILOTTON", "")
+        if not rid:
+            raise ChatWorkError(
+                "ChatWork room_id 未指定: 引数または CHATWORK_ROOM_ID_PILOTTON で指定してください"
+            )
+        return str(rid)
+
+    # ---------- Idempotency ストア ----------
+
+    @staticmethod
+    def _content_hash(room_id: str, body: str) -> str:
+        h = hashlib.sha256()
+        h.update(f"{room_id}|{body}".encode("utf-8"))
+        return h.hexdigest()
+
+    def _load_sent(self) -> dict:
+        if not os.path.exists(self.sent_log_path):
+            return {}
+        try:
+            with open(self.sent_log_path, "r", encoding="utf-8") as f:
+                return json.load(f) or {}
+        except (json.JSONDecodeError, OSError):
+            log.warning(f"chatwork_sent.json 読み込み失敗、空で再開: {self.sent_log_path}")
+            return {}
+
+    def _save_sent(self, store: dict) -> None:
+        os.makedirs(os.path.dirname(self.sent_log_path), exist_ok=True)
+        tmp = f"{self.sent_log_path}.tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(store, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, self.sent_log_path)
+
+    def _is_already_sent(self, idempotency_key: str) -> bool:
+        store = self._load_sent()
+        return idempotency_key in store
+
+    def _record_sent(self, idempotency_key: str, meta: dict) -> None:
+        store = self._load_sent()
+        store[idempotency_key] = meta
+        self._save_sent(store)
+
+    # ---------- Rate Limit ----------
+
+    def _throttle(self) -> None:
+        """秒間 N 件の簡易レート制御（ローカルプロセス内のみ）"""
+        min_interval = 1.0 / self.rate_limit_per_sec
+        elapsed = time.monotonic() - self._last_request_at
+        if elapsed < min_interval:
+            time.sleep(min_interval - elapsed)
+        self._last_request_at = time.monotonic()
+
+    # ---------- HTTP 共通 ----------
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        data: Optional[bytes] = None,
+        headers: Optional[dict] = None,
+        timeout: int = DEFAULT_TIMEOUT,
+    ) -> dict:
+        """リトライ付き HTTP リクエスト
+
+        Returns:
+            レスポンス JSON（パース失敗時は {"raw": text}）
+        """
+        url = f"{CHATWORK_API_BASE}{path}"
+        token = self._resolve_token()
+        req_headers = {"X-ChatWorkToken": token}
+        if headers:
+            req_headers.update(headers)
+
+        last_err: Optional[Exception] = None
+        for attempt in range(1, self.max_retries + 1):
+            self._throttle()
+            try:
+                req = urllib.request.Request(url, data=data, headers=req_headers, method=method)
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    body = resp.read().decode("utf-8")
+                    try:
+                        return json.loads(body)
+                    except json.JSONDecodeError:
+                        return {"raw": body, "status": resp.status}
+            except urllib.error.HTTPError as e:
+                last_err = e
+                # 4xx は基本リトライ不要、429 は backoff
+                if e.code == 429 or 500 <= e.code < 600:
+                    backoff = min(2 ** attempt, 30)
+                    log.warning(
+                        f"ChatWork API {method} {path}: HTTP {e.code} attempt {attempt}/{self.max_retries}, "
+                        f"backoff {backoff}s"
+                    )
+                    time.sleep(backoff)
+                    continue
+                raise ChatWorkError(f"ChatWork API HTTP {e.code}: {e.reason}") from e
+            except (urllib.error.URLError, TimeoutError) as e:
+                last_err = e
+                backoff = min(2 ** attempt, 30)
+                log.warning(
+                    f"ChatWork API {method} {path}: network error attempt {attempt}/{self.max_retries}, "
+                    f"backoff {backoff}s ({e})"
+                )
+                time.sleep(backoff)
+                continue
+        raise ChatWorkError(
+            f"ChatWork API {method} {path}: max retries ({self.max_retries}) exceeded"
+        ) from last_err
+
+    # ---------- Public API ----------
+
+    def post_message(
+        self,
+        body: str,
+        room_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        self_unread: int = 0,
+    ) -> dict:
+        """メッセージを投稿
+
+        Args:
+            body: 投稿本文（Markdown 不可、ChatWork 独自記法 [info][/info] 等は可）
+            room_id: 投稿先ルームID（省略時はインスタンス default → env）
+            idempotency_key: 再送防止キー（省略時は (room_id, body) ハッシュから自動生成）
+            self_unread: 自分宛て未読扱いするか（0/1、ChatWork 仕様）
+
+        Returns:
+            {"message_id": "..."} or dry_run の場合は {"dry_run": True, ...}
+        """
+        rid = self._resolve_room_id(room_id)
+        key = idempotency_key or self._content_hash(rid, body)
+
+        if self._is_already_sent(key):
+            log.info(f"ChatWork: 送信済みスキップ key={key[:12]}…")
+            return {"skipped": True, "idempotency_key": key}
+
+        if self.dry_run:
+            log.info(f"ChatWork [dry_run] room={rid} len={len(body)} body[:60]={body[:60]!r}")
+            self._record_sent(key, {"room_id": rid, "dry_run": True, "ts": time.time()})
+            return {"dry_run": True, "idempotency_key": key, "room_id": rid}
+
+        form = urllib.parse.urlencode({"body": body, "self_unread": str(self_unread)}).encode("utf-8")
+        result = self._request(
+            "POST",
+            f"/rooms/{rid}/messages",
+            data=form,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        message_id = result.get("message_id", "")
+        self._record_sent(
+            key,
+            {
+                "room_id": rid,
+                "message_id": message_id,
+                "ts": time.time(),
+            },
+        )
+        log.info(f"ChatWork 投稿成功 room={rid} message_id={message_id}")
+        return result
+
+    def upload_file(
+        self,
+        file_path: str,
+        room_id: Optional[str] = None,
+        message: str = "",
+        idempotency_key: Optional[str] = None,
+    ) -> dict:
+        """ファイルを添付投稿（multipart/form-data）
+
+        Args:
+            file_path: アップロード対象ファイルの絶対パス
+            room_id: 投稿先ルームID
+            message: ファイルに付随するメッセージ（任意）
+            idempotency_key: 再送防止キー（省略時は (room_id, ファイル名+サイズ+message) ハッシュ）
+        """
+        if not os.path.exists(file_path):
+            raise ChatWorkError(f"ファイル不在: {file_path}")
+
+        rid = self._resolve_room_id(room_id)
+        size = os.path.getsize(file_path)
+        filename = os.path.basename(file_path)
+
+        key = idempotency_key or self._content_hash(rid, f"FILE:{filename}:{size}:{message}")
+        if self._is_already_sent(key):
+            log.info(f"ChatWork: ファイル送信済みスキップ key={key[:12]}…")
+            return {"skipped": True, "idempotency_key": key}
+
+        if self.dry_run:
+            log.info(f"ChatWork [dry_run] upload room={rid} file={filename} size={size}B")
+            self._record_sent(key, {"room_id": rid, "file": filename, "dry_run": True, "ts": time.time()})
+            return {"dry_run": True, "idempotency_key": key, "file": filename}
+
+        boundary = f"----BPOChatWorkBoundary{uuid.uuid4().hex}"
+        with open(file_path, "rb") as f:
+            file_content = f.read()
+        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+        body_parts: list[bytes] = []
+        if message:
+            body_parts.append(f"--{boundary}\r\n".encode("utf-8"))
+            body_parts.append(b'Content-Disposition: form-data; name="message"\r\n\r\n')
+            body_parts.append(message.encode("utf-8"))
+            body_parts.append(b"\r\n")
+        body_parts.append(f"--{boundary}\r\n".encode("utf-8"))
+        body_parts.append(
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode("utf-8")
+        )
+        body_parts.append(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+        body_parts.append(file_content)
+        body_parts.append(b"\r\n")
+        body_parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+        body = b"".join(body_parts)
+
+        result = self._request(
+            "POST",
+            f"/rooms/{rid}/files",
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            timeout=60,  # ファイルアップロードは長め
+        )
+        file_id = result.get("file_id", "")
+        self._record_sent(
+            key,
+            {
+                "room_id": rid,
+                "file_id": file_id,
+                "filename": filename,
+                "size": size,
+                "ts": time.time(),
+            },
+        )
+        log.info(f"ChatWork ファイル投稿成功 room={rid} file_id={file_id} {filename}")
+        return result
+
+
+# ---------- module-level helpers ----------
+
+def send_chatwork_message(
+    body: str,
+    room_id: Optional[str] = None,
+    api_token: Optional[str] = None,
+    dry_run: bool = False,
+    idempotency_key: Optional[str] = None,
+) -> dict:
+    """単発投稿の便利関数（既存 send_lark_notification と同パターン）
+
+    トークン未設定や API エラーは ERROR ログを出力して空 dict を返す（pipeline 全体を落とさない）。
+    """
+    try:
+        client = ChatWorkClient(api_token=api_token, room_id=room_id, dry_run=dry_run)
+        return client.post_message(body, idempotency_key=idempotency_key)
+    except ChatWorkError as e:
+        log.error(f"ChatWork 投稿失敗: {e}")
+        return {}

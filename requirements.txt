@@ -11,6 +11,9 @@ google-ads>=30.0.0
 # PDF生成（Playwright）
 playwright>=1.40
 
+# PPTX生成（提案資料、Day 5.3 で追加）
+python-pptx>=1.0
+
 # Claude API
 anthropic>=0.39
 

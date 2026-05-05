@@ -27,6 +27,55 @@
   <div class="section-title">優先アクションプラン Top {{ actions|length }}</div>
   <div class="section-subtitle">クイックウィン（小工数 × 大インパクト）優先で並べています。各アクションは原則タグ・実行手順・想定効果を併記しています。</div>
 
+  {# v3.1.2 (Day 5.3 A-T3): Top5 + 3層インパクト統合表（pptx P8 と完全同期） #}
+  {% if actions|length > 0 %}
+  <div class="top5-unified-table">
+    <div class="top5-table-title">Top{{ actions|length }} アクション + 3層インパクト統合表</div>
+    <table class="top5-table">
+      <thead>
+        <tr>
+          <th class="t5-col-rank">#</th>
+          <th class="t5-col-action">アクション</th>
+          <th class="t5-col-group">Group</th>
+          <th class="t5-col-factor">係数</th>
+          <th class="t5-col-yen">確実値</th>
+          <th class="t5-col-yen">現実値</th>
+          <th class="t5-col-yen">上限値</th>
+          <th class="t5-col-conf">確度</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in actions %}
+        <tr>
+          <td class="t5-col-rank">{{ loop.index }}</td>
+          <td class="t5-col-action">[{{ a.rule_id }}] {{ a.narrative.action_name or a.rule_name }}</td>
+          <td class="t5-col-group">{{ a.unified_table.group_short }}</td>
+          <td class="t5-col-factor">×{{ "%.2f"|format(a.unified_table.factor) }}</td>
+          <td class="t5-col-yen t5-col-confident"><strong>¥{{ "{:,}".format(a.unified_table.conservative) }}</strong></td>
+          <td class="t5-col-yen">¥{{ "{:,}".format(a.unified_table.realistic) }}</td>
+          <td class="t5-col-yen t5-col-upper">¥{{ "{:,}".format(a.unified_table.optimistic) }}</td>
+          <td class="t5-col-conf">{{ a.confidence_stars }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="t5-row-total">
+          <td colspan="4">Top{{ actions|length }} 合計</td>
+          <td class="t5-col-yen t5-col-confident"><strong>¥{{ "{:,}".format(summary.aggregate.three_layer.minimum.total_yen) }}</strong></td>
+          <td class="t5-col-yen">¥{{ "{:,}".format(summary.aggregate.three_layer.realistic.total_yen) }}</td>
+          <td class="t5-col-yen t5-col-upper">¥{{ "{:,}".format(summary.aggregate.three_layer.independent.total_yen) }}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="top5-table-legend">
+      凡例: MF=計測基盤 / DLS=配信学習・構造 / CR=クリエイティブ / BUD=予算配分 / TGT=ターゲティング / IND=独立施策<br>
+      係数: グループ最大値=×1.00、2位以下=duplicate_factor 適用（pixel_health 連動で MF 内 0.1〜0.2）<br>
+      確実値: pixel_health 連動込み（measurement_foundation 内 2 位以下を 0.1×、非 MF を 0.7× decay）<br>
+      上限値: 各施策が独立に最大効果を発揮した場合（重複排除なし、到達困難）
+    </div>
+  </div>
+  {% endif %}
+
+
   {% for a in actions %}
   <div class="action-item is-{{ a.severity }}">
     {# B5: quick_win は右上コーナー小バッジに分離 #}
@@ -36,7 +85,8 @@
       <div class="action-name">{{ a.narrative.action_name or a.rule_name }}</div>
       <div class="action-tags">
         <span class="tag tag-severity tag-{{ a.severity }}">{{ a.severity }}</span>
-        <span class="tag tag-conf">確度 {{ a.confidence_label }}</span>
+        <span class="tag tag-conf" title="確度">{{ a.confidence_stars }} {{ a.confidence_label }}</span>
+        <span class="tag tag-horizon">⏱ {{ a.horizon_label }}</span>
       </div>
     </div>
 
@@ -44,21 +94,50 @@
       <span class="lab">なぜ重要か</span>{{ a.narrative.why_important }}
     </div>
 
+    {# v3.1: 実装ステップ（明日から何をやるか） #}
     <div class="action-steps">
-      {% for s in a.narrative.steps %}
+      <div class="action-row" style="padding-left:0;"><span class="lab">実装ステップ</span></div>
+      {% for step in a.implementation_steps %}
       <div class="step">
-        <span class="step-num">{{ s.step }}.</span>
-        <span class="actor">{{ s.actor }}</span>
-        <span>{{ s.what }}</span>
-        <span class="duration">{{ s.duration }}</span>
+        <span class="step-num">{{ loop.index }}.</span>
+        <span class="actor">[運用代行]</span>
+        <span>{{ step }}</span>
       </div>
       {% endfor %}
     </div>
 
-    <div class="action-row" style="margin-top:8px;">
-      <span class="lab">想定効果</span><strong>{{ a.expected_savings_display }}</strong>
-      &nbsp;<span style="color:#888;">/ 効果発現 約 {{ a.horizon_weeks }} 週</span>
+    {# v3.1: 確認方法 + 実装所要時間 #}
+    <div class="action-row">
+      <span class="lab">改善確認方法</span>{{ a.verification }}
     </div>
+    {% if a.estimated_duration %}
+    <div class="action-row">
+      <span class="lab">実装所要時間</span>{{ a.estimated_duration }}
+    </div>
+    {% endif %}
+
+    {# v3.1 Task G: シナリオ別予測（保守/現実/楽観） #}
+    <div class="scenario-block">
+      <div class="scenario-title">
+        想定効果（月次・3 シナリオ、振れ幅 ±{{ a.scenario_band_pct }}%）
+        {% if a.confidence == 'low' %}<span style="color:#A32D2D; margin-left:8px;">⚠ 低確度: 振れ幅は ±30〜50% の範囲、個別事例で大きく異なる可能性</span>{% endif %}
+      </div>
+      <div class="scenario-row">
+        <div class="scenario-cell scenario-cons">
+          <div class="scenario-lab">保守的</div>
+          <div class="scenario-val">{{ a.scenario_conservative }}</div>
+        </div>
+        <div class="scenario-cell scenario-real">
+          <div class="scenario-lab">現実的</div>
+          <div class="scenario-val">{{ a.scenario_realistic }}</div>
+        </div>
+        <div class="scenario-cell scenario-opt">
+          <div class="scenario-lab">楽観的</div>
+          <div class="scenario-val">{{ a.scenario_optimistic }}</div>
+        </div>
+      </div>
+    </div>
+
     <div class="action-row">
       <span class="lab">関連ルールID</span>{% for rid in a.related_rule_ids %}{{ rid }}{% if not loop.last %} / {% endif %}{% endfor %}
       {% if a.principle_tag %}<span style="margin-left:14px;"><span class="lab">原則</span>{{ a.principle_tag }}</span>{% endif %}
@@ -69,6 +148,54 @@
   {% if actions|length == 0 %}
   <div style="text-align:center; padding: 40px; background: #fafaf8; border-radius:8px; color: #888; font-size: 12px;">
     優先アクションは検出されませんでした。健全な運用状態です。
+  </div>
+  {% endif %}
+
+  {# v3.1 Task F-7: 計測基盤 推奨実装順序ダイアグラム #}
+  {% if measurement_sequence %}
+  <div class="priority-diagram">
+    <div class="priority-diagram-title">計測基盤グループ — 推奨実装順序（Top5 中の対象は緑色）</div>
+    <div class="priority-flow">
+      {% for s in measurement_sequence.steps %}
+      <span class="priority-step {% if s.is_in_top5 %}priority-current{% endif %}">{{ s.id }} {{ s.name }}</span>
+      {% if not loop.last %}<span class="priority-arrow">→</span>{% endif %}
+      {% endfor %}
+    </div>
+    <div style="font-size:10px; color:#888; margin-top:6px;">
+      ※計測基盤は依存順序が強く、上記順番で実装すると後続施策が機能します（例: M04 ドメイン検証 → M02 CAPI → M03 EMQ の順）。
+    </div>
+  </div>
+  {% endif %}
+
+  {# v3.1: 改善ロードマップ（タイムライン） #}
+  {% if actions|length > 0 %}
+  <div class="roadmap-section">
+    <div class="roadmap-title">Top{{ actions|length }} 改善ロードマップ — 効果発現タイムライン</div>
+    {% for a in actions %}
+    {% set bar_pct = (a.horizon_weeks * 8) if a.horizon_weeks <= 12 else 100 %}
+    {% set tier = '即効' if a.horizon_weeks <= 4 else ('中期' if a.horizon_weeks <= 8 else '長期') %}
+    <div class="roadmap-row">
+      <div class="roadmap-rank">{{ loop.index }}</div>
+      <div class="roadmap-name">[{{ a.rule_id }}] {{ a.narrative.action_name or a.rule_name }}</div>
+      <div class="roadmap-bar-track">
+        <div class="roadmap-bar roadmap-bar-{{ tier }}" style="width: {{ bar_pct }}%;">
+          <span class="roadmap-bar-label">{{ a.horizon_weeks }}週</span>
+        </div>
+      </div>
+      <div class="roadmap-tier">{{ tier }}</div>
+    </div>
+    {% endfor %}
+    <div class="roadmap-axis">
+      <span style="left: 8%;">2週</span>
+      <span style="left: 32%;">4週</span>
+      <span style="left: 64%;">8週</span>
+      <span style="left: 92%;">12週+</span>
+    </div>
+    <div class="roadmap-legend">
+      <span><span class="roadmap-legend-dot" style="background:#27500A;"></span>即効（〜4週）</span>
+      <span><span class="roadmap-legend-dot" style="background:#BA7517;"></span>中期（〜8週）</span>
+      <span><span class="roadmap-legend-dot" style="background:#666;"></span>長期（8週超）</span>
+    </div>
   </div>
   {% endif %}
 

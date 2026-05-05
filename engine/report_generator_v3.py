@@ -30,7 +30,11 @@ from engine.benchmark_compare import (
 from engine.claude_insights import ClaudeInsights
 from engine.impact_estimator import (
     aggregate_top5_impact,
+    aggregate_with_dedup,
     build_kpi_projection,
+    calculate_independent_impact,
+    calculate_minimum_impact,
+    calculate_realistic_impact,
     estimate_for_rule,
 )
 from engine.priority_ranker import (
@@ -93,7 +97,8 @@ def _resolve_industry(client_cfg: dict) -> tuple[str, str]:
     industry = (company.get("industry") or "").strip()
     label = (company.get("industry_label") or "").strip()
 
-    valid_keys = {"ec_retail", "saas_b2b", "finance", "education", "local_service"}
+    # v3.1 (Task B): beauty_d2c を新設
+    valid_keys = {"ec_retail", "beauty_d2c", "saas_b2b", "finance", "education", "local_service"}
     if industry not in valid_keys:
         log.warning(f"industry='{industry}' は未対応キー、ec_retail にフォールバック")
         industry = "ec_retail"
@@ -103,6 +108,7 @@ def _resolve_industry(client_cfg: dict) -> tuple[str, str]:
     if not label or label.startswith("[要入力"):
         label = {
             "ec_retail": "EC・通販",
+            "beauty_d2c": "美容・D2C",
             "saas_b2b": "SaaS・B2B",
             "finance": "金融・保険",
             "education": "教育",
@@ -110,6 +116,220 @@ def _resolve_industry(client_cfg: dict) -> tuple[str, str]:
         }.get(industry, "(業界ラベル未設定)")
 
     return industry, label
+
+
+# =============================================================================
+# v3.1: ルール ID → 具体的な実装ステップ・確認方法のテンプレート
+# =============================================================================
+# Claude API 不在時に「明日から何をやるか」が読み手に伝わるよう、主要ルール
+# 単位で実装手順と確認方法をテンプレ化する。redesign_note と組み合わせて使う。
+RULE_PLAYBOOK: dict[str, dict] = {
+    # === 計測基盤系 ===
+    "M01": {
+        "implementation_steps": [
+            "Meta Events Manager で対象 Pixel ID の発火状況を確認（直近 7 日）",
+            "発火していない場合: GTM / サイト埋め込みコードに Pixel が正しく設置されているか検証",
+            "Helper 拡張機能 (Meta Pixel Helper) で実画面でのイベント発火を目視確認",
+            "PageView / Purchase 等の主要イベントが正しいパラメータ付きで発火しているか確認",
+        ],
+        "verification": "Events Manager の「テストイベント」タブで実際に発火イベントが受信されること",
+    },
+    "M02": {
+        "implementation_steps": [
+            "Events Manager → 設定 → コンバージョン API のステータスを確認",
+            "未実装の場合: サーバー側で Conversions API SDK (Python/Node) を実装、Pixel と同じ event_id でデデュプ",
+            "実装済みの場合: EMQ スコアと「重複なし」判定を確認",
+            "ハッシュ化メールアドレス / 電話番号 / fbc / fbp を必ず送信",
+        ],
+        "verification": "Events Manager の「コンバージョン API ヘルス」が緑色 / EMQ ≥ 7.0",
+    },
+    "M03": {
+        "implementation_steps": [
+            "Events Manager → イベントテストで現在の EMQ スコアを確認",
+            "EMQ 7 未満の場合: ハッシュ化 email を全イベントに必須化",
+            "電話番号、外部 ID、fbc/fbp も追加してマッチ精度向上",
+            "PII 送信のプライバシーポリシー記載確認",
+        ],
+        "verification": "Purchase イベント EMQ 8.0+ / AddToCart 7.0+ に到達",
+    },
+    "M04": {
+        "implementation_steps": [
+            "ビジネス設定 → ブランドセーフティ → ドメイン検証ページを開く",
+            "対象ドメイン（LP の親ドメイン）を追加",
+            "メタタグ / DNS TXT レコード / HTML ファイルアップロードのいずれかで認証",
+            "認証完了後、AEM で優先度イベントを 8 件まで設定",
+        ],
+        "verification": "ドメイン検証ステータスが「確認済み」/ AEM 優先度イベント表示が有効",
+    },
+    "M09": {
+        "implementation_steps": [
+            "学習中の広告セット一覧を Ads Manager で抽出",
+            "予算 / ターゲット / 最適化イベントを 7 日間変更しないことを徹底",
+            "週 50CV 未満の広告セットは集約検討（同類似ペルソナを統合）",
+            "Advantage+ Audience の有効化で学習速度を約 30% 加速可能",
+        ],
+        "verification": "学習フェーズ → 「最適化済み」へ遷移 / 週次 CV ≥ 50",
+    },
+    "M61": {
+        "implementation_steps": [
+            "Customer File（顧客リスト CSV）を月次で再アップロード",
+            "ハッシュ化メール / 電話 / 住所のマッチ率 60%+ を確認",
+            "Lookalike Audience は LTV Top 1〜5% で seed",
+            "新規獲得時は既存顧客を除外オーディエンスに設定",
+        ],
+        "verification": "Audiences 画面でマッチ率表示 / LLA seed の更新日が直近 30 日以内",
+    },
+    "M47": {
+        "implementation_steps": [
+            "現状の広告セット内アクティブ CR を Ads Manager でカウント",
+            "15 本未満の場合: Hook 訴求軸 × フォーマット で組み合わせ生成",
+            "DCO（Dynamic Creative Optimization）を有効化して自動組み合わせ最適化",
+            "週次の CR 入替サイクルを業務に組み込む",
+        ],
+        "verification": "ASC 内アクティブ CR ≥ 15 / Frequency が前週比で低下",
+    },
+    "M57": {
+        "implementation_steps": [
+            "Ads Manager で Frequency 3.5+ の広告セットを抽出",
+            "新 CR を投入（最低 5 本）または対象オーディエンスを 1.5 倍以上拡大",
+            "リターゲティング広告の場合: 顧客除外設定を見直し",
+            "週次で Frequency と CTR の相関をモニタリング",
+        ],
+        "verification": "Frequency 3.0 以下 / CTR が回復傾向（ベースライン比 +10%）",
+    },
+    # === Google 計測系 ===
+    "G01": {
+        "implementation_steps": [
+            "Google Ads → ツール → 測定 → コンバージョンで重複定義を確認",
+            "1 件の事業価値（例: 購入完了）に対して複数 CV アクションが定義されていないか",
+            "重複していたら 1 つに統合し、他は「セカンダリ」へ降格",
+            "Tag Assistant で実 Web ページでの発火数を検証",
+        ],
+        "verification": "Conversions タブで主要 CV の合計が想定発火回数 ±5% 以内",
+    },
+    "G05": {
+        "implementation_steps": [
+            "Tag Assistant（Chrome 拡張）で対象 LP を開き発火状況を確認",
+            "エラーが出ているタグ ID を特定",
+            "GTM / 直貼りのコード差分を比較し、設置漏れ / 構文エラーを修正",
+            "公開後、Tag Assistant で再検証",
+        ],
+        "verification": "全主要 CV ページで Tag Assistant エラー 0 件",
+    },
+    "G27": {
+        "implementation_steps": [
+            "検索語句レポートを過去 30 日でエクスポート",
+            "意図と無関係なクエリを抽出（例: 「無料」「やり方」等）",
+            "ネガティブキーワードリストに追加（共有リスト推奨）",
+            "週次で繰り返してネガリストを成長させる",
+        ],
+        "verification": "翌週以降の検索語句レポートで除外 KW のクリック発生 0 件",
+    },
+    "G12": {
+        "implementation_steps": [
+            "Smart Bidding 学習中のキャンペーンを一覧化",
+            "予算 / 入札戦略 / CV 設定を 14 日間変更しない",
+            "週 30 CV 未満の場合: キャンペーン統合または予算増額",
+            "学習完了後、tCPA / tROAS の段階的調整を再開",
+        ],
+        "verification": "学習ステータス → 「最適化済み」/ CPA の週次変動 < 15%",
+    },
+    "G34": {
+        "implementation_steps": [
+            "RSA 広告強度 < 「優」の広告グループを抽出",
+            "短い見出し（10〜12 字）を 5 本以上追加",
+            "説明文も訴求軸ごとに 4 本以上揃える",
+            "ピン留めは最小限（Brand 名のみ等）",
+        ],
+        "verification": "全主要 RSA で広告強度「優」/ CTR ベースライン比 +10%",
+    },
+    # === TikTok 計測系 ===
+    "T01": {
+        "implementation_steps": [
+            "TikTok Events Manager で Pixel 発火状況を確認",
+            "未発火の場合: TikTok Pixel Helper で実画面検証",
+            "GTM / サイト埋め込みコードを確認・修正",
+            "再公開後、Test Events タブで動作確認",
+        ],
+        "verification": "Test Events で全主要イベント受信 / Pixel ヘルス「Active」",
+    },
+    "T02": {
+        "implementation_steps": [
+            "Events API（CAPI 相当）の実装状況を確認",
+            "未実装ならサーバー側で TikTok Events API を実装、event_id でデデュプ",
+            "ハッシュ化メール / 電話番号送信を必須化",
+            "実装後、Events Manager で「Pixel + Events API」両方の発火を確認",
+        ],
+        "verification": "Events Manager で重複なし / Match Quality スコア向上",
+    },
+    "T13": {
+        "implementation_steps": [
+            "疲弊している広告のフリークエンシー / CTR 推移を確認",
+            "週 5 本以上の新 CR を投入（縦型 9:16、9〜15 秒、サウンド ON 設計）",
+            "Spark Ads でオーガニック投稿を CR 化（疲弊しにくい）",
+            "TikTok Creative Center でトレンド要素を取り込み",
+        ],
+        "verification": "Frequency 低下 / CTR 回復（ベースライン比 +15%）",
+    },
+    # === 計測ロイヤルテンプレ（未定義ルール用） ===
+    "_default_measurement": {
+        "implementation_steps": [
+            "Events Manager / Tag Assistant で対象計測タグの発火を確認",
+            "計測欠損があれば実装を修正・再デプロイ",
+            "再発火を Test Events で確認",
+            "翌週の CV 数 / CPA に反映されているかモニタリング",
+        ],
+        "verification": "計測タグが正常発火 / 翌週レポートで欠損解消",
+    },
+    "_default_creative": {
+        "implementation_steps": [
+            "対象クリエイティブのパフォーマンス指標を確認",
+            "新 CR の制作要件（フォーマット・尺・訴求）を整理",
+            "週次で CR 入替を実施（最低週 3 本）",
+            "Frequency と CTR の相関をモニタリング",
+        ],
+        "verification": "CTR 維持・改善 / Frequency 上昇の鈍化",
+    },
+    "_default_structure": {
+        "implementation_steps": [
+            "現状のキャンペーン / 広告セット構造を可視化",
+            "学習データ希薄なグループを特定",
+            "集約方針を策定し、変更を 1 回で実施（学習リセット最小化）",
+            "再学習期間（7 日）後にパフォーマンス比較",
+        ],
+        "verification": "学習脱出加速 / CPA 安定性向上",
+    },
+}
+
+
+def _get_playbook(rule: dict) -> dict:
+    """ルール ID または category から playbook を取得する。
+
+    v3.1 Task D: ルール定義に implementation_steps / verification_method /
+    estimated_duration フィールドが直接書かれている場合はそちらを最優先で採用する。
+    """
+    # 1. YAML 直接定義（最優先）
+    if rule.get("implementation_steps") and rule.get("verification_method"):
+        return {
+            "implementation_steps": list(rule["implementation_steps"]),
+            "verification": rule["verification_method"],
+            "estimated_duration": rule.get("estimated_duration"),
+        }
+    # 2. RULE_PLAYBOOK（コード内定義）
+    rid = rule.get("id", "")
+    if rid in RULE_PLAYBOOK:
+        pb = dict(RULE_PLAYBOOK[rid])
+        pb.setdefault("estimated_duration", None)
+        return pb
+    # 3. category 別デフォルト
+    cat = rule.get("category", "")
+    if "計測" in cat:
+        return {**RULE_PLAYBOOK["_default_measurement"], "estimated_duration": None}
+    if cat == "クリエイティブ":
+        return {**RULE_PLAYBOOK["_default_creative"], "estimated_duration": None}
+    if cat in ("構造_設定", "予算_入札"):
+        return {**RULE_PLAYBOOK["_default_structure"], "estimated_duration": None}
+    return {**RULE_PLAYBOOK["_default_measurement"], "estimated_duration": None}
 
 
 def _polar_marker(pct: float, radius: float = 42.0, cx: float = 50.0, cy: float = 50.0) -> dict:
@@ -251,6 +471,90 @@ def _format_metric(metric: str, value) -> str:
     return f"{v:,.2f}"
 
 
+def _detect_data_quality_alerts(audit: dict) -> list[dict]:
+    """v3.1 Task C: 監査データから動的に Critical Alert を生成する。
+
+    検出ロジック:
+    - cost > 0 かつ avg_roas == 0（または None）→ Conversion Value 未取得を疑う
+    - cost > 0 かつ conversions == 0 → Pixel/CAPI 不発火を疑う
+
+    各アラートには Meta Events Manager / CAPI の具体的な確認手順を併記する。
+    "ROAS=0 は計測不備の可能性が高く、実際の収益貢献は別途評価が必要" という
+    注記を必ず含める（営業時に誤った数値で説明してしまうリスクを避けるため）。
+    """
+    alerts: list[dict] = []
+    ps = audit.get("platform_summary") or {}
+    total_cost = float(audit.get("total_cost", 0) or 0)
+    total_cv = float(audit.get("total_conversions", 0) or 0)
+
+    roas_missing_msg_template = (
+        "【⚠ ROAS 未計測リスク】コスト ¥{cost:,.0f} / CV {cv:.0f} 件は計測されていますが、"
+        "収益額（Conversion Value / purchase_value）が 0 のため ROAS 評価が機能していません。\n"
+        "▶ ROAS=0 は計測不備の可能性が高く、実際の収益貢献は別途評価が必要です。\n"
+        "確認手順:\n"
+        "①Meta Events Manager → 該当 Pixel → 「テストイベント」で Purchase イベントの value パラメータが入っているか確認\n"
+        "②サイト埋め込み Pixel コードに value: <購入金額> が含まれているか検証\n"
+        "③CAPI 実装している場合は、サーバ送信ペイロードで custom_data.value と currency が送信されているか確認\n"
+        "④Events Manager の「データソース」→「コンバージョン API ヘルス」で「value 受信あり」表示を確認"
+    )
+
+    cv_zero_msg_template = (
+        "【⚠ CV 計測不能リスク】コスト ¥{cost:,.0f} に対して CV 数 0 件。"
+        "Pixel/CAPI の発火または計測タグ実装に問題がある可能性が高い。\n"
+        "▶ 配信実績はあるため、計測修復後に正しい CPA / ROAS が見えてきます。\n"
+        "確認手順:\n"
+        "①Meta Pixel Helper（Chrome 拡張）で実 LP を開き、Purchase / Lead / CompleteRegistration 等の発火を目視確認\n"
+        "②Events Manager → 「概要」タブで直近 24h の主要イベント受信件数を確認\n"
+        "③ドメイン検証ステータスを確認（未検証なら AEM が機能せず CV 集計欠損）\n"
+        "④優先度イベント設定で 8 件まで重要 CV を順位付け（iOS14 以降は最優先イベントのみ計測される）"
+    )
+
+    for pkey, s in ps.items():
+        cost = float(s.get("cost", 0) or 0)
+        roas = s.get("avg_roas")
+        cv = s.get("conversions") or 0
+        if cost <= 0:
+            continue
+
+        # ROAS 未計測（cost あるが ROAS=0 or None）
+        if roas in (0, 0.0, None) and cv > 0:
+            alerts.append({
+                "rule_id": "DQ-ROAS-MISSING",
+                "rule_name": f"ROAS 未計測 ({pkey}) — Conversion Value (revenue) が取得できていません",
+                "severity": "critical",
+                "category": "計測_トラッキング",
+                "platform": pkey,
+                "redesign_note": roas_missing_msg_template.format(cost=cost, cv=cv),
+                "quick_win": False,
+            })
+
+        # CV ゼロ（cost あるが CV=0）
+        if cv == 0:
+            alerts.append({
+                "rule_id": "DQ-CV-ZERO",
+                "rule_name": f"CV 計測不能 ({pkey}) — Pixel/CAPI 不発火または計測タグ未実装",
+                "severity": "critical",
+                "category": "計測_トラッキング",
+                "platform": pkey,
+                "redesign_note": cv_zero_msg_template.format(cost=cost),
+                "quick_win": True,
+            })
+
+    # アカウント全体で revenue 0
+    if total_cost > 0 and total_cv > 0 and (audit.get("avg_roas") in (0, 0.0, None)):
+        if not any(a["rule_id"] == "DQ-ROAS-MISSING" for a in alerts):
+            alerts.append({
+                "rule_id": "DQ-ROAS-ACCOUNT",
+                "rule_name": "アカウント全体 ROAS 未計測 — revenue 列が空",
+                "severity": "critical",
+                "category": "計測_トラッキング",
+                "platform": "all",
+                "redesign_note": roas_missing_msg_template.format(cost=total_cost, cv=total_cv),
+                "quick_win": False,
+            })
+    return alerts
+
+
 def _gather_detected_rule_ids(audit: dict) -> list[str]:
     """audit results の issues から rule ID を抽出する。
 
@@ -329,6 +633,20 @@ def _build_actions_with_narrative(
         principle_tag = action.get("principle_tag", "")
         narrative = insights.generate_action_narrative(rule, impact, principle_tag)
 
+        # v3.1: 具体的な実装ステップと確認方法を playbook から付与
+        playbook = _get_playbook(rule)
+        # narrative.steps が Claude API 由来でない（フォールバック）場合は playbook で上書き
+        if narrative.get("_fallback") or not narrative.get("steps"):
+            narrative["implementation_steps"] = playbook["implementation_steps"]
+            narrative["verification"] = playbook["verification"]
+        else:
+            narrative["implementation_steps"] = [s.get("what", "") for s in narrative.get("steps", [])]
+            narrative["verification"] = playbook["verification"]
+        narrative["estimated_duration"] = playbook.get("estimated_duration")
+
+        scenario = impact.get("scenario") or {}
+        horizon = impact.get("impact_horizon_weeks") or 4
+
         enriched.append(
             {
                 **action,
@@ -336,13 +654,35 @@ def _build_actions_with_narrative(
                 "narrative": narrative,
                 "expected_savings_display": impact.get("estimated_savings_display"),
                 "confidence_label": impact.get("confidence_label", "—"),
-                "horizon_weeks": impact.get("impact_horizon_weeks"),
+                "confidence_stars": impact.get("confidence_stars", "★☆☆"),
+                "horizon_weeks": horizon,
+                "horizon_label": _horizon_label(horizon),
                 "principle_tag": principle_tag,
                 "related_rule_ids": [action["rule_id"]],
                 "calc_basis": impact.get("calc_basis", "monthly_spend"),
+                # シナリオ別表示
+                "scenario_conservative": f"¥{scenario.get('conservative_yen', 0):,}",
+                "scenario_realistic": f"¥{scenario.get('realistic_yen', 0):,}",
+                "scenario_optimistic": f"¥{scenario.get('optimistic_yen', 0):,}",
+                "scenario_band_pct": scenario.get("band_pct", 40),
+                # playbook 由来
+                "implementation_steps": narrative["implementation_steps"],
+                "verification": narrative["verification"],
+                "estimated_duration": narrative.get("estimated_duration"),
             }
         )
     return enriched
+
+
+def _horizon_label(weeks: int) -> str:
+    """効果発現週数 → 期間ラベル"""
+    if weeks <= 2:
+        return f"即効（{weeks} 週）"
+    if weeks <= 4:
+        return f"短期（{weeks} 週）"
+    if weeks <= 8:
+        return f"中期（{weeks} 週）"
+    return f"長期（{weeks}+ 週）"
 
 
 def build_v3_context(
@@ -392,9 +732,60 @@ def build_v3_context(
     # 集計
     estimates = [a["impact"] for a in actions]
     aggregate = aggregate_top5_impact(estimates)
-    kpi_proj = build_kpi_projection(audit, aggregate)
+    # v3.1: 重複排除付き集計（root_cause グループベース）
+    dedup = aggregate_with_dedup(estimates, rules_by_id, weights)
+    aggregate["dedup"] = dedup
+
+    # v3.1.2 (Day 5.3 A-T3): Top5 + 3層インパクト統合表のために
+    # 各アクションに per_estimate_with_factor 情報（group, factor, conservative/realistic/optimistic）を付与
+    per_est = {p["rule_id"]: p for p in dedup.get("per_estimate_with_factor", [])}
+    for a in actions:
+        sc = (a.get("impact") or {}).get("scenario") or {}
+        info = per_est.get(a.get("rule_id"), {})
+        a["unified_table"] = {
+            "group": info.get("group", "other"),
+            "group_short": {
+                "measurement_foundation": "MF",
+                "delivery_learning_or_structure": "DLS",
+                "creative_optimization": "CR",
+                "budget_allocation": "BUD",
+                "targeting": "TGT",
+                "independent": "IND",
+                "other": "—",
+            }.get(info.get("group", "other"), "—"),
+            "factor": info.get("factor", 1.0),
+            "conservative": int(sc.get("conservative_yen", 0)),
+            "realistic": int(sc.get("realistic_yen", 0)),
+            "optimistic": int(sc.get("optimistic_yen", 0)),
+        }
+
+    # v3.1 Task F-5: pixel_health を取得（pilotton 等の clients.yaml から）
+    from analyzers.ads_audit import detect_pixel_health
+    pixels = (((client_cfg.get("ads") or {}).get("meta") or {}).get("pixels") or [])
+    pixel_health = detect_pixel_health(pixels)
+
+    # v3.1 Task F-3: 3層インパクト（最低値 / 現実値 / 上限値、pixel_health 連動）
+    minimum = calculate_minimum_impact(estimates, rules_by_id, weights, pixel_health=pixel_health)
+    realistic = calculate_realistic_impact(estimates, rules_by_id, weights, pixel_health=pixel_health)
+    independent = calculate_independent_impact(estimates, rules_by_id, weights)
+    aggregate["three_layer"] = {
+        "minimum": minimum,
+        "realistic": realistic,
+        "independent": independent,
+        "pixel_health": pixel_health,
+    }
+
+    # KPI 投影は最低値（最も保守的）を使う（営業時の過大評価を回避）
+    aggregate_for_kpi = dict(aggregate)
+    aggregate_for_kpi["total_savings_yen"] = minimum["total_yen"]
+    kpi_proj = build_kpi_projection(audit, aggregate_for_kpi)
 
     critical_alerts = compute_critical_alerts(detected_ids, rules_by_id, weights)
+
+    # === v3.1: 動的 Critical Alert: ROAS=0 検出 ===
+    extra_alerts = _detect_data_quality_alerts(audit)
+    if extra_alerts:
+        critical_alerts = critical_alerts + extra_alerts
 
     # === セクション2: Executive Summary ===
     summary_3lines = insights.generate_summary_3lines(audit, aggregate, industry_label)
@@ -442,6 +833,10 @@ def build_v3_context(
         f"calls={llm_stats['total_calls']}, cost=¥{llm_stats['estimated_cost_jpy']}"
     )
 
+    # v3.1 Task F-7: グループ内 priority 順序ダイアグラム用データ
+    # Top5 内に measurement_foundation のルールがあれば、そのグループの推奨実装順序を表示
+    measurement_sequence = _build_measurement_priority_sequence(actions, rules_by_id)
+
     return {
         "client_id": client_id,
         "cover": cover,
@@ -452,7 +847,44 @@ def build_v3_context(
         "insights": insight_items,
         "appendix": appendix,
         "llm_stats": llm_stats,
+        "measurement_sequence": measurement_sequence,
         "footer_text": "本書は機密保持契約に基づき作成されました / © 2026 Zynect Media 株式会社",
+    }
+
+
+def _build_measurement_priority_sequence(actions: list[dict], rules_by_id: dict) -> dict | None:
+    """v3.1 Task F-7: Top5 内に measurement_foundation グループのルールがある場合、
+    そのグループの推奨実装順序を構築する。
+
+    Returns:
+        dict { steps: [...], current_ids: set, group_name: str } or None
+    """
+    top5_ids = {a.get("rule_id") for a in actions if a.get("rule_id")}
+    # Top5 で measurement_foundation グループのルールを検出
+    mf_in_top5 = []
+    for rid in top5_ids:
+        rule = rules_by_id.get(rid)
+        if rule and rule.get("root_cause_group") == "measurement_foundation":
+            mf_in_top5.append(rid)
+    if not mf_in_top5:
+        return None
+
+    # measurement_foundation グループの全ルールを priority_in_group 順に並べる
+    mf_all = []
+    for rid, rule in rules_by_id.items():
+        if rule.get("root_cause_group") == "measurement_foundation" and rule.get("priority_in_group"):
+            mf_all.append({
+                "id": rid,
+                "name": rule.get("name", ""),
+                "priority": rule.get("priority_in_group"),
+                "is_in_top5": rid in mf_in_top5,
+            })
+    mf_all.sort(key=lambda x: x["priority"])
+
+    return {
+        "group_name": "計測基盤（Measurement Foundation）",
+        "steps": mf_all[:7],  # 主要 7 ステップに制限（M01-M07）
+        "current_ids": list(top5_ids & {x["id"] for x in mf_all}),
     }
 
 

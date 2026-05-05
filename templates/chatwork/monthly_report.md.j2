@@ -1,0 +1,54 @@
+[info][title]【{{ client_display_name }}】{{ period_label }} 月次運用レポート[/title]
+対象期間：{{ period_start }} 〜 {{ period_end }}
+集計時点：{{ generated_at }}
+
+▼ サマリー
+　・新規指摘：{{ summary.indications_new }} 件
+　・解消完了：{{ summary.completions }} 件
+　・継続観察中：{{ summary.in_progress }} 件
+{% if summary.coverage_label %}
+　・指摘カバレッジ：{{ summary.coverage_label }}
+{% endif %}
+
+▼ 達成効果（月次換算、解消済み {{ summary.completions }} 件の合算）
+　・確実値合計：{{ effect.minimum }}
+　・現実値合計：{{ effect.realistic }}
+{% if effect.optimistic %}
+　・上限値合計：{{ effect.optimistic }}
+{% endif %}
+{% if effect.formula_note %}
+　　{{ effect.formula_note }}
+{% endif %}
+
+{% if completions_breakdown %}
+▼ 解消ハイライト（重要度順）
+{% for c in completions_breakdown %}
+　{{ loop.index }}. [{{ c.rule_id }}] {{ c.title }}（{{ c.severity_label }}）
+　　達成効果：{{ c.effect_label }}
+{% endfor %}
+{% endif %}
+
+{% if open_indications %}
+
+▼ 継続中の指摘 Top {{ open_indications|length }}
+{% for o in open_indications %}
+　{{ loop.index }}. [{{ o.rule_id }}] {{ o.title }}
+　　経過日数：{{ o.days_open }} 日 ／ 重要度：{{ o.severity_label }}
+{% endfor %}
+{% endif %}
+
+{% if next_focus %}
+
+▼ 次月の重点フォーカス
+{% for f in next_focus %}
+　・{{ f }}
+{% endfor %}
+{% endif %}
+{% if attached_pdf %}
+
+▼ 添付資料
+　・{{ attached_pdf }}
+{% endif %}
+
+ご質問・ご相談はこちらにご返信ください。
+[/info]
