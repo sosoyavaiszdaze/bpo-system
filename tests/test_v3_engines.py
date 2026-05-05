@@ -18,6 +18,7 @@ from engine.impact_estimator import (
     build_kpi_projection,
     estimate_for_rule,
 )
+from engine.longterm_projector import build_longterm_projection
 from engine.priority_ranker import (
     compute_critical_alerts,
     compute_priority_score,
@@ -266,6 +267,132 @@ class TestImpactEstimator:
         proj = build_kpi_projection(audit, agg)
         assert proj["delta"]["monthly_cost"] < 0
         assert proj["projected"]["monthly_cv"] >= proj["current"]["monthly_cv"]
+
+
+# =============================================================================
+# longterm_projector
+# =============================================================================
+class TestLongtermProjector:
+    def test_projection_builds_12_month_band(self):
+        actions = [
+            {
+                "rule_id": "M02",
+                "rule_name": "CAPI実装状況",
+                "severity": "critical",
+                "platform": "meta",
+                "impact": {
+                    "has_estimate": True,
+                    "estimated_savings_yen": 100_000,
+                    "confidence": "medium",
+                    "confidence_label": "中",
+                },
+            }
+        ]
+        proj = build_longterm_projection(actions, {"total_cost": 1_000_000})
+        assert proj["has_projection"] is True
+        assert len(proj["months"]) == 12
+        assert proj["months"][0]["monthly"]["realistic"] > 0
+        assert proj["total_12m"]["lower"] < proj["total_12m"]["realistic"] < proj["total_12m"]["upper"]
+        assert {m["month"] for m in proj["milestones"]} == {1, 3, 6, 12}
+
+    def test_empty_projection_when_no_estimated_actions(self):
+        proj = build_longterm_projection([
+            {"rule_id": "X", "impact": {"has_estimate": False}},
+        ])
+        assert proj["has_projection"] is False
+        assert proj["total_12m"]["realistic"] == 0
+
+    def test_lifecycle_rule_override_and_decay(self):
+        cfg = {
+            "projection": {"months": 12, "weeks_per_month": 4},
+            "confidence_band_pct": {"high": 10, "unknown": 35},
+            "default_tier_by_severity": {"critical": "monitor"},
+            "default_acceptance_curve": {
+                "block": {"week_0": 1.0, "week_1": 1.0},
+                "monitor": {"week_0": 0.0, "week_4": 0.5, "week_8": 1.0},
+            },
+            "defaults": {
+                "ramp_up_weeks": 4,
+                "decay_half_life_weeks": None,
+                "dependency_multiplier": 1.0,
+                "operational_cost_yen": 0,
+            },
+            "rules": {
+                "F01-F15": {"tier": "block", "decay_half_life_weeks": 8},
+            },
+        }
+        actions = [
+            {
+                "rule_id": "F10",
+                "rule_name": "Fraud",
+                "severity": "critical",
+                "impact": {
+                    "has_estimate": True,
+                    "estimated_savings_yen": 100_000,
+                    "confidence": "high",
+                    "confidence_label": "高",
+                },
+            }
+        ]
+        proj = build_longterm_projection(actions, lifecycle_cfg=cfg)
+        assert proj["top_contributors"][0]["tier"] == "block"
+        assert proj["months"][0]["monthly"]["realistic"] > proj["months"][-1]["monthly"]["realistic"]
+
+    def test_v3_context_includes_longterm_projection(self):
+        from engine.report_generator_v3 import build_v3_context
+
+        ctx = build_v3_context(
+            "test_client",
+            {"name": "Test", "company": {"name": "Test Co", "industry": "ec_retail"}},
+            {
+                "ads_audit": {
+                    "score": 70,
+                    "grade": "B",
+                    "total_cost": 1_000_000,
+                    "total_conversions": 100,
+                    "avg_cpa": 10_000,
+                    "total_checks": 10,
+                    "issues": [
+                        {
+                            "id": "G27",
+                            "platform": "google",
+                            "severity": "critical",
+                            "issue": "無駄配信",
+                            "campaign": "Campaign",
+                            "action": "除外設定",
+                        }
+                    ],
+                    "platform_summary": {
+                        "google": {
+                            "score": 70,
+                            "campaigns": 1,
+                            "cost": 1_000_000,
+                            "conversions": 100,
+                            "avg_cpa": 10_000,
+                            "avg_roas": 2,
+                            "roas": 2,
+                            "avg_ctr": 3,
+                            "avg_cvr": 2,
+                        }
+                    },
+                }
+            },
+        )
+        assert ctx["total_pages"] == 9
+        assert ctx["longterm"]["has_projection"] is True
+        assert ctx["longterm"]["total_12m"]["realistic"] > 0
+
+    def test_v3_total_pages_tracks_platform_page_count(self, monkeypatch):
+        import engine.report_generator_v3 as report_v3
+
+        monkeypatch.setattr(report_v3, "_build_platform_compare", lambda audit, industry, bm: [{"key": "google"}])
+
+        ctx = report_v3.build_v3_context(
+            "test_client",
+            {"name": "Test", "company": {"name": "Test Co", "industry": "ec_retail"}},
+            {"ads_audit": {"score": 70, "grade": "B", "total_cost": 1_000_000, "issues": []}},
+        )
+        assert ctx["total_pages"] == 7
 
 
 # =============================================================================

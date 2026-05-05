@@ -19,7 +19,7 @@ def send_notification(client_id, results, config):
         webhook_url = config.get("webhook_url", "")
     if not webhook_url:
         log.warning(f"[{client_id}] Slack Webhook未設定")
-        return
+        return None
 
     blocks = _build_blocks(client_id, results)
     payload = {"blocks": blocks}
@@ -33,8 +33,10 @@ def send_notification(client_id, results, config):
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             log.info(f"[{client_id}] Slack通知送信完了: {resp.status}")
+        return True
     except Exception as e:
         log.error(f"[{client_id}] Slack通知失敗: {e}")
+        return False
 
 
 def _build_blocks(client_id, results):

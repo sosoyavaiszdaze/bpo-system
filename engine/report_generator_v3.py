@@ -37,6 +37,7 @@ from engine.impact_estimator import (
     calculate_realistic_impact,
     estimate_for_rule,
 )
+from engine.longterm_projector import build_longterm_projection
 from engine.priority_ranker import (
     compute_critical_alerts,
     compute_top_actions,
@@ -780,6 +781,9 @@ def build_v3_context(
     aggregate_for_kpi["total_savings_yen"] = minimum["total_yen"]
     kpi_proj = build_kpi_projection(audit, aggregate_for_kpi)
 
+    # v3.2 (Codex 統合): 12 ヶ月長期効果予測 (lifecycle ベース)
+    longterm = build_longterm_projection(actions, audit)
+
     critical_alerts = compute_critical_alerts(detected_ids, rules_by_id, weights)
 
     # === v3.1: 動的 Critical Alert: ROAS=0 検出 ===
@@ -837,10 +841,14 @@ def build_v3_context(
     # Top5 内に measurement_foundation のルールがあれば、そのグループの推奨実装順序を表示
     measurement_sequence = _build_measurement_priority_sequence(actions, rules_by_id)
 
+    # v3.2 (Codex 統合): ページ番号動的化 (cover + summary + actions + longterm + insights + appendix = 6 固定 + 媒体別ページ数)
+    total_pages = 6 + len(platforms)
+
     return {
         "client_id": client_id,
         "cover": cover,
         "summary": summary,
+        "longterm": longterm,
         "actions": actions,
         "critical_alerts": critical_alerts,
         "platforms": platforms,
@@ -848,6 +856,7 @@ def build_v3_context(
         "appendix": appendix,
         "llm_stats": llm_stats,
         "measurement_sequence": measurement_sequence,
+        "total_pages": total_pages,
         "footer_text": "本書は機密保持契約に基づき作成されました / © 2026 Zynect Media 株式会社",
     }
 

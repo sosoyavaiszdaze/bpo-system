@@ -278,6 +278,7 @@ class TwentyCRM:
             "title": f"[Client] {config.client_id}",
             "bodyV2": {"markdown": (
                 f"# Client: {config.client_id}\n"
+                f"**clientId:** {config.client_id}\n"
                 f"**name:** {config.name}\n"
                 f"**active:** {config.active}\n"
                 f"**objective:** {config.objective}\n"
@@ -297,6 +298,7 @@ class TwentyCRM:
 
     def _parse_client_note(self, note):
         """NotesからClientデータをパース"""
+        title = note.get("title", "")
         body = note.get("bodyV2", {}).get("markdown", note.get("body", ""))
         data = {}
         for line in body.split("\n"):
@@ -311,6 +313,8 @@ class TwentyCRM:
                     data[key] = value
                 except (IndexError, ValueError):
                     continue
+        if not data.get("clientId") and title.startswith("[Client] "):
+            data["clientId"] = title.replace("[Client] ", "", 1).strip()
         return data if data.get("clientId") or data.get("name") else None
 
     # ── 共通 ──────────────────────────────────────────────

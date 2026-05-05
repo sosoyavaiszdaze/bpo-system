@@ -15,13 +15,13 @@ def send_lark_notification(client_id, results, config):
     Args:
         client_id: クライアントID
         results: パイプライン結果
-        config: 通知設定 (lark_webhook_env等)
+        config: 通知設定 (webhook_env or lark_webhook_env)
     """
-    webhook_env = config.get("lark_webhook_env", "")
+    webhook_env = config.get("webhook_env") or config.get("lark_webhook_env", "")
     webhook_url = os.environ.get(webhook_env, "")
     if not webhook_url:
         log.warning(f"[{client_id}] Lark Webhook未設定")
-        return
+        return None
 
     card = _build_card(client_id, results)
     payload = {"msg_type": "interactive", "card": card}
@@ -34,8 +34,10 @@ def send_lark_notification(client_id, results, config):
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             log.info(f"[{client_id}] Lark通知送信完了: {resp.status}")
+        return True
     except Exception as e:
         log.error(f"[{client_id}] Lark通知失敗: {e}")
+        return False
 
 
 def _build_card(client_id, results):

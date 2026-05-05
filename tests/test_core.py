@@ -650,6 +650,12 @@ class TestFraudAction:
         result = run_fraud_action("test", None, {}, {})
         assert result.get("skipped") is True
 
+    def test_pipeline_fraud_rate_percent_to_fraction(self):
+        """fraud_audit の 0-100 表現を fraud_action の 0-1 表現に変換"""
+        from pipeline import _percent_to_fraction
+        assert _percent_to_fraction(20.0) == 0.2
+        assert _percent_to_fraction(0.15) == 0.15
+
 
 class TestValidatorSync:
     """バリデータの conversion_value/revenue 同期テスト"""

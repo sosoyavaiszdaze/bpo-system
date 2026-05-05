@@ -1,0 +1,99 @@
+{# v3 長期効果予測 — 12か月の月次/累積インパクト #}
+<div class="page page-break">
+  <div class="page-header">
+    <div><span class="brand">zynect media</span> &nbsp;|&nbsp; {{ cover.report_name }} &nbsp;|&nbsp; {{ cover.company_name }} {{ cover.company_honorific }}</div>
+    <div>P4 / {{ total_pages }}</div>
+  </div>
+
+  <div class="section-label">03 — Long-Term Projection</div>
+  <div class="section-title">長期効果予測（12か月）</div>
+  <div class="section-subtitle">Topアクションの効果を、立ち上がり期間と試算確度を加味して月次推移に展開しています。</div>
+
+  {% if longterm.has_projection %}
+  <div class="lt-hero">
+    <div>
+      <div class="lt-label">12か月累積改善見込み</div>
+      <div class="lt-total">{{ longterm.total_12m_display.realistic }}</div>
+      <div class="lt-range">信頼区間 {{ longterm.total_12m_display.lower }} - {{ longterm.total_12m_display.upper }}</div>
+    </div>
+    <div class="lt-copy">{{ longterm.summary_text }}</div>
+  </div>
+
+  <div class="lt-chart">
+    <div class="lt-chart-head">
+      <div>月次改善見込み（下限 / realistic / 上限）</div>
+      <div>{{ longterm.chart.max_y_display }} / 月</div>
+    </div>
+    <svg viewBox="0 0 {{ longterm.chart.width }} {{ longterm.chart.height }}" preserveAspectRatio="none">
+      <line class="grid" x1="28" y1="18" x2="28" y2="132"></line>
+      <line class="grid" x1="28" y1="132" x2="532" y2="132"></line>
+      <polyline class="band upper" points="{{ longterm.chart.upper_points }}"></polyline>
+      <polyline class="band lower" points="{{ longterm.chart.lower_points }}"></polyline>
+      <polyline class="main" points="{{ longterm.chart.realistic_points }}"></polyline>
+    </svg>
+    <div class="lt-axis">
+      <span>Month 1</span><span>Month 3</span><span>Month 6</span><span>Month 12</span>
+    </div>
+  </div>
+
+  <div class="lt-milestones">
+    {% for m in longterm.milestones %}
+    <div class="lt-ms">
+      <div class="m">Month {{ m.month }}</div>
+      <div class="v">{{ m.cumulative_realistic_display }}</div>
+      <div class="s">累積 / {{ m.range_display }}</div>
+      <div class="s">月次 {{ m.monthly_realistic_display }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="lt-grid">
+    <div>
+      <h3>貢献内訳 Top</h3>
+      <table class="lt-table">
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>施策</th>
+            <th>12か月寄与</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in longterm.top_contributors %}
+          <tr>
+            <td class="rid">{{ c.rule_id }}</td>
+            <td>
+              <strong>{{ c.rule_name }}</strong><br>
+              <span>{{ c.tier }} / 確度 {{ c.confidence_label }} / Month12 {{ c.month12_monthly_display }}</span>
+            </td>
+            <td style="text-align:right;">{{ c.approx_12m_display }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>読み方</h3>
+      <div class="lt-notes">
+        {% for a in longterm.assumptions %}
+        <div>{{ loop.index }}. {{ a }}</div>
+        {% endfor %}
+      </div>
+      <div class="note-hint">
+        このページはMVPの見込み値です。実績データが蓄積されるほど、立ち上がりカーブと信頼区間を顧客別に補正できます。
+      </div>
+      <div class="note-hint">
+        本予測はTopアクション全件が推奨通り実行された場合の見込みです。一部のみ実行または差し戻しが発生する場合は、貢献内訳表の該当行を比例縮小してご参照ください。
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="no-data-placeholder">
+    <div class="icon">∅</div>
+    <strong>長期効果予測の対象アクションがありません</strong><br>
+    expected_impact を持つ優先アクションが検出された場合、12か月予測が自動表示されます。
+  </div>
+  {% endif %}
+
+  <div class="page-footer">{{ footer_text }}</div>
+</div>

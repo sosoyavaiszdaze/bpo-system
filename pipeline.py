@@ -224,6 +224,15 @@ def run_seo_audit(client_id, client_cfg, thresholds):
         return {"error": str(e)}
 
 
+def _percent_to_fraction(value):
+    """0-100 のパーセント表現を fraud_action 用の 0-1 率に正規化する。"""
+    try:
+        rate = float(value)
+    except (TypeError, ValueError):
+        return value
+    return rate / 100 if rate > 1 else rate
+
+
 def output_results(client_id, client_cfg, results, report_version="v2"):
     """結果出力: Slack, CRM, PDF, JSON。各ステップの成否をstep_statusに記録。
 
@@ -243,24 +252,42 @@ def output_results(client_id, client_cfg, results, report_version="v2"):
     slack_cfg = notif_cfg.get("slack", {})
     lark_cfg = notif_cfg.get("lark", {})
 
-    if notification_platform == "lark" and lark_cfg.get("webhook_env"):
-        try:
-            from outputs.lark_notify import send_lark_notification
-            send_lark_notification(client_id, results, lark_cfg)
-            step_status["lark"] = "ok"
-        except Exception as e:
-            log.error(f"[{client_id}] Lark通知エラー: {e}")
-            step_status["lark"] = "error"
+    if notification_platform == "lark":
+        if not (lark_cfg.get("webhook_env") or lark_cfg.get("lark_webhook_env")):
+            log.info(f"[{client_id}] Lark通知未設定のためスキップ")
+            step_status["lark"] = "skipped"
+            step_status["slack"] = "skipped"
+        else:
+            try:
+                from outputs.lark_notify import send_lark_notification
+                ok = send_lark_notification(client_id, results, lark_cfg)
+                if ok is True:
+                    step_status["lark"] = "ok"
+                elif ok is False:
+                    step_status["lark"] = "error"
+                else:
+                    step_status["lark"] = "skipped"
+            except Exception as e:
+                log.error(f"[{client_id}] Lark通知エラー: {e}")
+                step_status["lark"] = "error"
+            step_status["slack"] = "skipped"
     elif slack_cfg.get("webhook_env") or slack_cfg.get("webhook_url"):
         try:
             from outputs.slack_notify import send_notification
-            send_notification(client_id, results, slack_cfg)
-            step_status["slack"] = "ok"
+            ok = send_notification(client_id, results, slack_cfg)
+            if ok is True:
+                step_status["slack"] = "ok"
+            elif ok is False:
+                step_status["slack"] = "error"
+            else:
+                step_status["slack"] = "skipped"
         except Exception as e:
             log.error(f"[{client_id}] Slack通知エラー: {e}")
             step_status["slack"] = "error"
+        step_status["lark"] = "skipped"
     else:
         step_status["slack"] = "skipped"
+        step_status["lark"] = "skipped"
 
     # CRM保存（TwentyCRM統合版）
     crm_cfg = client_cfg.get("crm", {}).get("twenty", {})
@@ -268,8 +295,16 @@ def output_results(client_id, client_cfg, results, report_version="v2"):
         try:
             from outputs.crm_twenty import TwentyCRM
             crm = TwentyCRM()
-            crm.save_health_snapshot(client_id, results)
-            step_status["crm"] = "ok"
+            if not crm.api_url or not crm.api_key:
+                log.info(f"[{client_id}] CRM未設定（PhaseB以降のためスキップ）")
+                step_status["crm"] = "skipped"
+            else:
+                note_id = crm.save_health_snapshot(client_id, results)
+                if note_id:
+                    step_status["crm"] = "ok"
+                else:
+                    log.warning(f"[{client_id}] CRM保存失敗")
+                    step_status["crm"] = "error"
         except Exception as e:
             log.error(f"[{client_id}] CRM保存エラー: {e}")
             step_status["crm"] = "error"
@@ -340,8 +375,9 @@ def _phase_analyze(client_id, client_cfg, data, thresholds):
                 results["fraud_action"] = None
                 step_status["fraud_action"] = "skipped"
             else:
-                if results["fraud_audit"].get("fraud_rate"):
-                    fraud_data["fraud_rate"] = results["fraud_audit"]["fraud_rate"]
+                fraud_rate = results["fraud_audit"].get("fraud_rate")
+                if fraud_rate is not None:
+                    fraud_data["fraud_rate"] = _percent_to_fraction(fraud_rate)
                 from analyzers.fraud_action import run_fraud_action as fraud_action_run
                 results["fraud_action"] = fraud_action_run(client_id, fraud_data, client_cfg, thresholds)
                 step_status["fraud_action"] = "ok"
@@ -545,12 +581,23 @@ def main():
     clients = cfg.get("clients", {})
 
     if target == "all":
-        targets = {k: v for k, v in clients.items() if v.get("active")}
+        target_ids = [k for k, v in clients.items() if v.get("active")]
     elif target in clients:
-        targets = {target: clients[target]}
+        target_ids = [target]
     else:
-        log.error(f"クライアント '{target}' が見つかりません")
-        sys.exit(1)
+        loaded = load_client_config(target)
+        if loaded.source == "default":
+            log.error(f"クライアント '{target}' が見つかりません")
+            sys.exit(1)
+        target_ids = [target]
+
+    targets = {}
+    for cid in target_ids:
+        ccfg = load_client_config(cid)
+        if ccfg.source == "default":
+            log.error(f"クライアント '{cid}' が見つかりません")
+            sys.exit(1)
+        targets[cid] = ccfg
 
     log.info(f"実行対象: {list(targets.keys())} / report_version={report_version} / dry_run={dry_run}")
     all_results = {}
