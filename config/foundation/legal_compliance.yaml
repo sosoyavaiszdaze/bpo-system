@@ -1,0 +1,405 @@
+# Foundation Layer: 法令遵守 (12 ルール)
+# 関連 ADR: ADR-013 (本層の設計判断)
+# 重要免責: 全ルールに legal_reference.disclaimer を必須記載
+#           Zynect は法務専門家ではなく、指摘レベルでの気づき提示
+
+name: "Foundation - Legal Compliance"
+version: "1.0"
+last_updated: "2026-05-05"
+layer: foundation
+category: legal_compliance
+
+rules:
+  - id: F-LC-01
+    layer: foundation
+    category: legal_compliance
+    name: "景品表示法 第5条第1号 優良誤認表示の疑義検知"
+    severity: critical
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.legal_review_completed == False or rule_evaluation.has_superior_misleading_keywords == True"
+      operator: OR
+    data_source:
+      - source: client_state
+        fields: [legal_review_completed, vertical, category_subtype]
+      - source: ad_platform_api
+        platform: meta
+        fields: [creative_text_samples]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    evidence_fields: [creative_text_samples, suspect_keywords]
+    legal_reference:
+      law: "景品表示法 (不当景品類及び不当表示防止法)"
+      article: "第5条第1号"
+      description: "商品・サービスの内容について、実際よりも著しく優良であると示す表示の禁止"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終的な遵守判断はクライアントの法務担当者にご委ねください。"
+    rationale: "誇大広告は措置命令・課徴金リスクが大きく、検知は最優先"
+    skip_if: null
+
+  - id: F-LC-02
+    layer: foundation
+    category: legal_compliance
+    name: "景品表示法 第5条第2号 有利誤認表示の疑義検知"
+    severity: critical
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "rule_evaluation.has_dual_price_display == True or rule_evaluation.has_no_period_specification == True"
+      operator: OR
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [creative_text_samples, price_display]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    evidence_fields: [creative_text_samples, dual_price_examples]
+    legal_reference:
+      law: "景品表示法"
+      article: "第5条第2号"
+      description: "取引条件について、実際よりも著しく有利であると示す表示の禁止"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終的な遵守判断はクライアントの法務担当者にご委ねください。"
+    rationale: "二重価格表示や期間限定表示の不備は措置命令対象"
+
+  - id: F-LC-03
+    layer: foundation
+    category: legal_compliance
+    name: "景品表示法 打消し表示の視認性"
+    severity: high
+    polarity: negative
+    axis_position: TO-06
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-LC-01
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "rule_evaluation.has_disclaimer_text_visibility_issue == True"
+      operator: AND
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [creative_image_urls, creative_text_samples]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    legal_reference:
+      law: "景品表示法 + 消費者庁ガイドライン"
+      article: "打消し表示に関する留意点"
+      description: "強調表示と打消し表示の視認性が同等でない場合、有利誤認・優良誤認となる"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終的な遵守判断はクライアントの法務担当者にご委ねください。"
+    rationale: "小さい注意書き / 短時間表示は実質的な打消しとして機能しないリスク"
+
+  - id: F-LC-04
+    layer: foundation
+    category: legal_compliance
+    name: "特定商取引法 表記事項の網羅性"
+    severity: critical
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c, subscription_saas, education]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.tokushoho_required_fields_complete == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [tokushoho_required_fields_complete, vertical]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    legal_reference:
+      law: "特定商取引法"
+      article: "第11条 通信販売における広告"
+      description: "事業者名・代表者名・住所・電話番号・販売価格・送料・支払方法・引渡時期・返品特約等の表示義務"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終的な遵守判断はクライアントの法務担当者にご委ねください。"
+    rationale: "表記不備は事業停止命令リスク、定期購入トラブルの主因"
+
+  - id: F-LC-05
+    layer: foundation
+    category: legal_compliance
+    name: "ステマ規制 (2023年10月施行) 対応"
+    severity: critical
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.influencer_marketing_used == True and client_state.pr_disclosure_implemented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [influencer_marketing_used, pr_disclosure_implemented]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    legal_reference:
+      law: "景品表示法 + 消費者庁告示 (2023年10月1日施行)"
+      article: "一般消費者が事業者の表示であることを判別することが困難である表示"
+      description: "インフルエンサー投稿等で「広告」「PR」明示が必要、無表示は措置命令対象"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終的な遵守判断はクライアントの法務担当者にご委ねください。"
+    rationale: "2023年10月施行の新規制、UGC/レビュー活用時の必須対応"
+
+  - id: F-LC-06
+    layer: foundation
+    category: legal_compliance
+    name: "個人情報保護法 取得経路の同意取得状況"
+    severity: high
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.privacy_policy_updated == False or client_state.consent_management_implemented == False"
+      operator: OR
+    data_source:
+      - source: client_state
+        fields: [privacy_policy_updated, consent_management_implemented]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    legal_reference:
+      law: "個人情報保護法 (2022年4月改正)"
+      article: "第17条〜第19条"
+      description: "利用目的の特定 + 取得経路の通知 + 同意取得"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終的な遵守判断はクライアントの法務担当者にご委ねください。"
+    rationale: "Cookie 取得・行動データ収集時の同意取得、3年に一度の改正で要件強化中"
+
+  - id: F-LC-07
+    layer: foundation
+    category: legal_compliance
+    name: "消費者契約法 不実告知・断定的判断の検知"
+    severity: high
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [finance, real_estate, education, healthcare_clinic]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "rule_evaluation.has_definitive_judgment_keywords == True"
+      operator: AND
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [creative_text_samples]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    legal_reference:
+      law: "消費者契約法"
+      article: "第4条第1項"
+      description: "事実と異なる告知・将来不確実な事項の断定的判断は契約取消事由"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終的な遵守判断はクライアントの法務担当者にご委ねください。"
+    rationale: "金融・不動産・教育・医療系の「絶対」「必ず」表記リスク"
+
+  - id: F-LC-08
+    layer: foundation
+    category: legal_compliance
+    name: "著作権・商標権 第三者侵害の可能性"
+    severity: high
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.creative_assets_rights_verified == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [creative_assets_rights_verified]
+    cooldown_days: 60
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    legal_reference:
+      law: "著作権法 / 商標法"
+      article: "著作権法第21条等 / 商標法第25条"
+      description: "第三者の著作物・商標の無断使用は損害賠償・差止リスク"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終的な遵守判断はクライアントの法務担当者にご委ねください。"
+    rationale: "AI 生成画像 / フリー素材 / インフルエンサー投稿の権利確認不足リスク"
+
+  - id: F-LC-09
+    layer: foundation
+    category: legal_compliance
+    name: "不正競争防止法 比較広告のリスク評価"
+    severity: medium
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "rule_evaluation.has_competitor_comparison_keywords == True"
+      operator: AND
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [creative_text_samples]
+    cooldown_days: 60
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    legal_reference:
+      law: "不正競争防止法"
+      article: "第2条第1項第15号"
+      description: "競合他社の商品・営業を誹謗中傷する内容は不正競争行為"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終的な遵守判断はクライアントの法務担当者にご委ねください。"
+    rationale: "「No.1」「業界最安」表示の根拠不足は措置命令リスク"
+
+  - id: F-LC-10
+    layer: foundation
+    category: legal_compliance
+    name: "電気通信事業法 外部送信規律 (2023年6月施行)"
+    severity: high
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.external_transmission_disclosure_done == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [external_transmission_disclosure_done]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    legal_reference:
+      law: "電気通信事業法 (2023年6月施行)"
+      article: "外部送信規律 (第27条の12)"
+      description: "Cookie 等で外部送信される情報の利用者通知・公表義務"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終的な遵守判断はクライアントの法務担当者にご委ねください。"
+    rationale: "Pixel/タグ設置時の通知・公表義務、未対応はサービス停止リスク"
+
+  - id: F-LC-11
+    layer: foundation
+    category: legal_compliance
+    name: "法務体制の有無 (法令系全体の前提条件)"
+    severity: medium
+    polarity: neutral
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.legal_team_assigned == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [legal_team_assigned]
+    cooldown_days: 90
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    legal_reference:
+      law: "(該当なし、運用体制確認)"
+      article: "—"
+      description: "法令系指摘の最終判断者の確認"
+      disclaimer: "本指摘は法令違反ではなく、運用体制の確認質問です。"
+    rationale: "F-LC-* 各種ルールが発火した際の意思決定者を事前確認"
+
+  - id: F-LC-12
+    layer: foundation
+    category: legal_compliance
+    name: "過去違反履歴・行政指導の確認"
+    severity: medium
+    polarity: neutral
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-LC-11
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.past_violations_disclosed == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [past_violations_disclosed]
+    cooldown_days: 90
+    daily_cap_group: adr_013_legal
+    template: _client_request_legal_compliance_general.md.j2
+    legal_reference:
+      law: "(該当なし、リスク管理確認)"
+      article: "—"
+      description: "過去の措置命令・行政指導の有無を把握、再発防止"
+      disclaimer: "本指摘は法令違反ではなく、リスク管理上の確認質問です。"
+    rationale: "再発防止チェックの基礎情報、消費者庁公表事例検索の前提"

@@ -1,0 +1,340 @@
+# Foundation Layer: 計測基盤 (12 ルール)
+# 関連 ADR: ADR-003 (pixel_health 連動) との整合必須
+
+name: "Foundation - Measurement Foundation"
+version: "1.0"
+last_updated: "2026-05-05"
+layer: foundation
+category: measurement_foundation
+
+rules:
+  - id: F-MF-01
+    layer: foundation
+    category: measurement_foundation
+    name: "Pixel/タグの重複発火検知"
+    severity: high
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: M01
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [meta, google, tiktok]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "rule_evaluation.M01_violated == True or ad_platform_data.duplicate_pixel_count > 1"
+      operator: OR
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [duplicate_pixel_count, pixel_dormant_days]
+      - source: rule_evaluation
+        rule_ids: [M01]
+    cooldown_days: 14
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "二重発火 = CV 二重計上、CPA 過小算出による予算誤配分の根本原因"
+
+  - id: F-MF-02
+    layer: foundation
+    category: measurement_foundation
+    name: "CV 重複カウント排除 (dedupe key 設定)"
+    severity: high
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: F-MF-01
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.cv_dedupe_key_implemented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [cv_dedupe_key_implemented]
+    cooldown_days: 14
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "ADR-004 conversion_mapping.yaml と整合、event_id ベースの dedup 必須"
+
+  - id: F-MF-03
+    layer: foundation
+    category: measurement_foundation
+    name: "UTM パラメータ設計の一貫性"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.utm_naming_convention_documented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [utm_naming_convention_documented]
+    cooldown_days: 30
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "GA4 アトリビューション分析の基礎、命名規則の不一致は分析不能化"
+
+  - id: F-MF-04
+    layer: foundation
+    category: measurement_foundation
+    name: "GTM/YTM debug mode 残存検知"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "ad_platform_data.gtm_debug_mode_active == True"
+      operator: AND
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [gtm_debug_mode_active]
+    cooldown_days: 14
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "本番で debug mode 残存はパフォーマンス劣化 + 開発 UI 露出リスク"
+
+  - id: F-MF-05
+    layer: foundation
+    category: measurement_foundation
+    name: "GA4 プロパティ設定の網羅性"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [google]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.ga4_property_configured_full == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [ga4_property_configured_full]
+    cooldown_days: 30
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "Universal Analytics 廃止 (2023/7) 後、GA4 完全移行が必須"
+
+  - id: F-MF-06
+    layer: foundation
+    category: measurement_foundation
+    name: "ファーストパーティ Cookie 基盤の整備度"
+    severity: medium
+    polarity: negative
+    axis_position: TO-11
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.first_party_cookie_strategy_documented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [first_party_cookie_strategy_documented]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "Chrome 3rd party Cookie 廃止対応、ファーストパーティ計測への移行計画"
+
+  - id: F-MF-07
+    layer: foundation
+    category: measurement_foundation
+    name: "サーバーサイド GTM 導入"
+    severity: medium
+    polarity: negative
+    axis_position: TO-11
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: F-MF-06
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [meta, google, tiktok]
+      business_models: [b2c, b2b]
+    trigger:
+      condition: "client_state.server_side_gtm_implemented == False and ad_platform_data.monthly_spend_jpy > 1000000"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [server_side_gtm_implemented]
+      - source: ad_platform_api
+        platform: meta
+        fields: [monthly_spend_jpy]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "月 100 万円超で ssGTM の費用対効果が顕在化、計測精度向上 + 1st party 化"
+
+  - id: F-MF-08
+    layer: foundation
+    category: measurement_foundation
+    name: "CV 定義の明文化 (マイクロ/マクロ/重 CV)"
+    severity: high
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.cv_definition_documented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [cv_definition_documented]
+    cooldown_days: 30
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "マイクロ CV (LP 滞在 / カート追加) と重 CV (購入) の使い分け、学習シグナル設計の基礎"
+
+  - id: F-MF-09
+    layer: foundation
+    category: measurement_foundation
+    name: "クロスドメイン計測の整合性"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: F-MF-03
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b]
+    trigger:
+      condition: "client_state.cross_domain_tracking_validated == False and client_state.uses_multiple_domains == True"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [cross_domain_tracking_validated, uses_multiple_domains]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "LP / EC / 会員ドメインが分かれる場合、セッション分断で CV 取りこぼし"
+
+  - id: F-MF-10
+    layer: foundation
+    category: measurement_foundation
+    name: "タイムゾーン統一 (JST 統一)"
+    severity: low
+    polarity: negative
+    axis_position: null
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.timezone_unified_jst == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [timezone_unified_jst]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "Meta=PST デフォルトのまま運用すると日次比較で 1 日ズレ、レポート不整合"
+
+  - id: F-MF-11
+    layer: foundation
+    category: measurement_foundation
+    name: "タグ読込順序の最適化"
+    severity: low
+    polarity: negative
+    axis_position: null
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b]
+    trigger:
+      condition: "client_state.tag_loading_order_optimized == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [tag_loading_order_optimized]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "GTM > GA4 > Pixel の順序最適化で Core Web Vitals 改善"
+
+  - id: F-MF-12
+    layer: foundation
+    category: measurement_foundation
+    name: "タグ管理者権限の棚卸し"
+    severity: medium
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.tag_admin_audit_done == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [tag_admin_audit_done]
+    cooldown_days: 180
+    daily_cap_group: default
+    template: _client_request_measurement_foundation.md.j2
+    rationale: "退職者の管理権限残存は重大セキュリティリスク、半年に 1 回棚卸し推奨"

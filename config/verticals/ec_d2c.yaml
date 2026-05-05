@@ -1,0 +1,370 @@
+# Vertical Layer: EC/D2C (12 ルール、5/5 中身実装)
+name: "Vertical - EC/D2C"
+version: "1.0"
+last_updated: "2026-05-05"
+layer: vertical
+category: ec_d2c
+
+rules:
+  - id: V-EC-01
+    layer: vertical
+    category: ec_d2c
+    name: "化粧品 一般化粧品 56 効能の範囲遵守 (薬機法 第66条)"
+    severity: critical
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.category_subtype == 'cosmetics' and rule_evaluation.has_yakkihou_violation_keywords == True"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [category_subtype]
+      - source: ad_platform_api
+        platform: meta
+        fields: [creative_text_samples]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_vertical_ec_legal.md.j2
+    legal_reference:
+      law: "薬機法 (医薬品、医療機器等の品質、有効性及び安全性の確保等に関する法律)"
+      article: "第66条"
+      description: "化粧品の効能効果は厚生労働省告示の 56 項目の範囲内で表現しなければならない"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。最終判断はクライアントの法務担当者にご委ねください。"
+    rationale: "薬機法違反は措置命令 + 刑事罰、化粧品 D2C で最頻のリスク"
+
+  - id: V-EC-02
+    layer: vertical
+    category: ec_d2c
+    name: "健康食品/サプリ 医薬品的効能効果の不使用 (薬機法)"
+    severity: critical
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.category_subtype in ['health_food', 'supplement'] and rule_evaluation.has_medical_efficacy_keywords == True"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [category_subtype]
+      - source: ad_platform_api
+        platform: meta
+        fields: [creative_text_samples]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_vertical_ec_legal.md.j2
+    legal_reference:
+      law: "薬機法 / 健康増進法"
+      article: "薬機法第68条 / 健康増進法第65条"
+      description: "健康食品で治療・治癒・予防等の医薬品的効能効果を標榜することは禁止"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。"
+    rationale: "「治る」「効く」「○○病に」等の表現は薬機法違反、健食 D2C の主要リスク"
+
+  - id: V-EC-03
+    layer: vertical
+    category: ec_d2c
+    name: "機能性表示食品/トクホ 届出範囲遵守"
+    severity: high
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: V-EC-02
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.category_subtype in ['functional_food', 'tokuho'] and client_state.shokuhin_hyoji_compliant == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [category_subtype, shokuhin_hyoji_compliant]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_vertical_ec_legal.md.j2
+    legal_reference:
+      law: "食品表示法"
+      article: "機能性表示食品制度 / 特定保健用食品制度"
+      description: "届出範囲を超える効果表示は薬機法違反、消費者庁届出書の表示を厳守"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。"
+    rationale: "届出範囲を超える表示は措置命令対象、機能性表示食品の主要リスク"
+
+  - id: V-EC-04
+    layer: vertical
+    category: ec_d2c
+    name: "F2 転換率 / LTV 連動の最適化基盤"
+    severity: medium
+    polarity: negative
+    axis_position: TO-10
+    root_cause_group: targeting
+    duplicate_factor: 0.4
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.f2_conversion_tracking_implemented == False or client_state.ltv_tracking_implemented == False"
+      operator: OR
+    data_source:
+      - source: client_state
+        fields: [f2_conversion_tracking_implemented, ltv_tracking_implemented]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_vertical_ec_general.md.j2
+    rationale: "EC/D2C の本質は LTV、F1 だけ最適化すると単価競争に陥る"
+
+  - id: V-EC-05
+    layer: vertical
+    category: ec_d2c
+    name: "商品フィード品質 (GMC / Catalog)"
+    severity: medium
+    polarity: negative
+    axis_position: TO-08
+    root_cause_group: creative_optimization
+    duplicate_factor: 0.5
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.product_feed_quality_score < 0.8"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [product_feed_quality_score]
+      - source: ad_platform_api
+        platform: meta
+        fields: [catalog_disapproved_count]
+    cooldown_days: 30
+    daily_cap_group: default
+    template: _client_request_vertical_ec_general.md.j2
+    rationale: "Advantage+ ショッピング / カタログ広告の前提、フィード不備で配信機会損失"
+
+  - id: V-EC-06
+    layer: vertical
+    category: ec_d2c
+    name: "在庫連動の出稿停止ロジック"
+    severity: medium
+    polarity: negative
+    axis_position: TO-07
+    root_cause_group: delivery_learning_or_structure
+    duplicate_factor: 0.3
+    prerequisite: V-EC-05
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.out_of_stock_pause_automation == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [out_of_stock_pause_automation]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_vertical_ec_general.md.j2
+    rationale: "売り切れ商品への配信は無駄費用、自動停止ロジックで予算保護"
+
+  - id: V-EC-07
+    layer: vertical
+    category: ec_d2c
+    name: "動的リマケ (DPA) 設定"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: targeting
+    duplicate_factor: 0.4
+    prerequisite: V-EC-05
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.dpa_configured == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [dpa_configured]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_vertical_ec_general.md.j2
+    rationale: "閲覧商品ベースのリマケは EC/D2C で最高 ROAS、未設定は機会損失"
+
+  - id: V-EC-08
+    layer: vertical
+    category: ec_d2c
+    name: "定期購入解約導線の景表法/特商法対応"
+    severity: critical
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-LC-04
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.subscription_offered == True and client_state.cancellation_flow_compliant == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [subscription_offered, cancellation_flow_compliant]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_vertical_ec_legal.md.j2
+    legal_reference:
+      law: "特定商取引法 (2022年6月改正)"
+      article: "第15条の2 (定期購入の表示義務)"
+      description: "解約条件・解約方法の明示、解約導線の確保が必須、不備は措置命令対象"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。"
+    rationale: "定期購入トラブル消費者相談の主因、特商法強化で行政処分頻発"
+
+  - id: V-EC-09
+    layer: vertical
+    category: ec_d2c
+    name: "クロスセル / アップセル計測"
+    severity: medium
+    polarity: negative
+    axis_position: TO-01
+    root_cause_group: targeting
+    duplicate_factor: 0.4
+    prerequisite: V-EC-04
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.cross_sell_tracking == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [cross_sell_tracking]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_vertical_ec_general.md.j2
+    rationale: "AOV 向上の起点、未計測だと施策効果が見えない"
+
+  - id: V-EC-10
+    layer: vertical
+    category: ec_d2c
+    name: "モール出店時の計測切り分け (Amazon/楽天等)"
+    severity: low
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.mall_listings_exist == True and client_state.mall_attribution_split == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [mall_listings_exist, mall_attribution_split]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_vertical_ec_general.md.j2
+    rationale: "自社 EC とモールで計測別管理、混在で CPA 集計が歪む"
+
+  - id: V-EC-11
+    layer: vertical
+    category: ec_d2c
+    name: "送料・税込表示の整合性"
+    severity: medium
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-LC-04
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.tax_shipping_disclosure_compliant == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [tax_shipping_disclosure_compliant]
+    cooldown_days: 60
+    daily_cap_group: adr_013_legal
+    template: _client_request_vertical_ec_legal.md.j2
+    legal_reference:
+      law: "特定商取引法 / 消費税法"
+      article: "総額表示義務 (2021年4月から完全義務化)"
+      description: "税込価格 + 送料の明示、未表示は景品表示法違反のリスク"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。"
+    rationale: "総額表示義務化以降、未対応は明確な違反"
+
+  - id: V-EC-12
+    layer: vertical
+    category: ec_d2c
+    name: "レビュー表示のステマ規制対応"
+    severity: high
+    polarity: negative
+    axis_position: TO-06
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-LC-05
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.review_collection_method != 'organic_only' and client_state.pr_disclosure_implemented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [review_collection_method, pr_disclosure_implemented]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_vertical_ec_legal.md.j2
+    legal_reference:
+      law: "景品表示法 + 消費者庁告示 (2023年10月施行)"
+      article: "ステマ規制"
+      description: "依頼レビュー / 報酬付きレビューは「広告」「PR」明示が必須"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。"
+    rationale: "EC/D2C はレビュー活用が一般的、ステマ規制違反リスクが高い"

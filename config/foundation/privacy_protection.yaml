@@ -1,0 +1,303 @@
+# Foundation Layer: プライバシー保護 (10 ルール)
+# 関連 ADR: ADR-013
+
+name: "Foundation - Privacy Protection"
+version: "1.0"
+last_updated: "2026-05-05"
+layer: foundation
+category: privacy_protection
+
+rules:
+  - id: F-PP-01
+    layer: foundation
+    category: privacy_protection
+    name: "CMP (同意管理プラットフォーム) 導入と粒度"
+    severity: high
+    polarity: negative
+    axis_position: null
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.cmp_implemented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [cmp_implemented, cmp_provider]
+    cooldown_days: 30
+    daily_cap_group: default
+    template: _client_request_privacy_general.md.j2
+    rationale: "改正電気通信事業法・個情法対応の基盤、未導入は法的リスク + 計測精度低下"
+
+  - id: F-PP-02
+    layer: foundation
+    category: privacy_protection
+    name: "改正電気通信事業法 外部送信規律対応"
+    severity: high
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-PP-01
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "client_state.external_transmission_disclosure_done == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [external_transmission_disclosure_done]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_privacy_general.md.j2
+    legal_reference:
+      law: "電気通信事業法"
+      article: "第27条の12 (2023年6月施行)"
+      description: "Cookie・端末識別子等で外部送信される情報の利用者通知義務"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。"
+    rationale: "Meta Pixel / GA4 等の外部送信は対象、未対応はサービス停止リスク"
+
+  - id: F-PP-03
+    layer: foundation
+    category: privacy_protection
+    name: "iOS App Tracking Transparency (ATT) 対応"
+    severity: high
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [meta, google, tiktok]
+      business_models: [b2c]
+    trigger:
+      condition: "ad_platform_data.ios_traffic_share > 0.2 and client_state.skan_implemented == False"
+      operator: AND
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [ios_traffic_share, skan_postback_count]
+      - source: client_state
+        fields: [skan_implemented]
+    cooldown_days: 14
+    daily_cap_group: default
+    template: _client_request_privacy_general.md.j2
+    rationale: "iOS opt-out で計測欠損 30-40%、SKAdNetwork 連携で補完必須"
+
+  - id: F-PP-04
+    layer: foundation
+    category: privacy_protection
+    name: "SKAdNetwork (SKAN) 4.0 設定確認"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: F-PP-03
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.skan_version != 'v4'"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [skan_implemented, skan_version, skan_conversion_values_configured]
+    cooldown_days: 30
+    daily_cap_group: default
+    template: _client_request_privacy_general.md.j2
+    rationale: "SKAN 4.0 の coarse/fine value、3 ポストバック対応で iOS 計測精度向上"
+
+  - id: F-PP-05
+    layer: foundation
+    category: privacy_protection
+    name: "Privacy Sandbox 移行準備状況"
+    severity: medium
+    polarity: neutral
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.privacy_sandbox_evaluation_done == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [privacy_sandbox_evaluation_done]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_privacy_general.md.j2
+    rationale: "Chrome 3rd party Cookie 廃止対応、Topics API / Protected Audience の評価"
+
+  - id: F-PP-06
+    layer: foundation
+    category: privacy_protection
+    name: "3rd party Cookie 依存度の数値化"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: F-PP-05
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.third_party_cookie_dependency_score is None or client_state.third_party_cookie_dependency_score > 0.3"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [third_party_cookie_dependency_score]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_privacy_general.md.j2
+    rationale: "Chrome 廃止後の計測影響を事前定量化、移行計画の基礎データ"
+
+  - id: F-PP-07
+    layer: foundation
+    category: privacy_protection
+    name: "GDPR 対応 (EU IP 流入時の同意管理)"
+    severity: high
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-PP-01
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c, b2b, both]
+    trigger:
+      condition: "ad_platform_data.eu_traffic_share > 0.05 and client_state.gdpr_consent_implemented == False"
+      operator: AND
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [eu_traffic_share]
+      - source: client_state
+        fields: [gdpr_consent_implemented]
+    cooldown_days: 30
+    daily_cap_group: adr_013_legal
+    template: _client_request_privacy_general.md.j2
+    legal_reference:
+      law: "GDPR (EU 一般データ保護規則)"
+      article: "Article 6, 7"
+      description: "EU 居住者の個人データ処理には明示的同意が必要、違反は最大 2,000 万 EUR or 売上 4%"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。"
+    rationale: "EU 流入比率 5% 超なら GDPR 必須、CMP TCF v2.2 準拠を推奨"
+
+  - id: F-PP-08
+    layer: foundation
+    category: privacy_protection
+    name: "CCPA/CPRA 対応 (米国カリフォルニア IP 流入時)"
+    severity: medium
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-PP-01
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "ad_platform_data.california_traffic_share > 0.05 and client_state.ccpa_compliant == False"
+      operator: AND
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [california_traffic_share]
+      - source: client_state
+        fields: [ccpa_compliant]
+    cooldown_days: 60
+    daily_cap_group: adr_013_legal
+    template: _client_request_privacy_general.md.j2
+    legal_reference:
+      law: "CCPA / CPRA (California Consumer Privacy Act)"
+      article: "1798.100 et seq."
+      description: "カリフォルニア州居住者の Do Not Sell オプトアウト権"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。"
+    rationale: "米国 CA 流入比率 5% 超で GPC 信号対応必須"
+
+  - id: F-PP-09
+    layer: foundation
+    category: privacy_protection
+    name: "Do Not Track (DNT) シグナルの尊重"
+    severity: low
+    polarity: negative
+    axis_position: null
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.dnt_signal_respected == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [dnt_signal_respected]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_privacy_general.md.j2
+    rationale: "ブラウザ DNT 設定の尊重、ベストプラクティスとして推奨"
+
+  - id: F-PP-10
+    layer: foundation
+    category: privacy_protection
+    name: "同意取得経路の監査ログ保持"
+    severity: medium
+    polarity: negative
+    axis_position: null
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: F-PP-01
+    applies_to:
+      countries: [JP]
+      verticals: [all]
+      ec_platforms: [all]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.consent_audit_log_retention_months < 12"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [consent_audit_log_retention_months]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_privacy_general.md.j2
+    rationale: "GDPR は 12 ヶ月以上の監査ログ保持を推奨、エビデンス管理"

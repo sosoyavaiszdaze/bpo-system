@@ -93,11 +93,33 @@ clients:
       lark:
         webhook_env: "LARK_WEBHOOK_BANDAL"
   pilotton:
+    # === ADR-013 多層ルール体系 (5/5 拡張) ===
+    country: JP
+    vertical: ec_d2c                     # Layer 1 マッチング (verticals/ec_d2c.yaml)
+    ec_platform: ecforce                 # Layer 2 マッチング (ec_platforms/ecforce.yaml)
+    ad_platforms: [meta]                 # Phase B で google 追加予定
+    business_model: b2c
+    category_subtype: cosmetics_health   # 薬機法対象 (V-EC-01/02 の trigger 用)
+    auto_proposal:
+      enabled: true
+      daily_cap: 1                       # ADR-012 default cap
+      legal_disclaimer_required: true    # ADR-013 D-6 法令系の disclaimer 強制
+    chatwork_rooms:
+      main: 435851481                    # ADR-011 自動通知グループ (kickoff で改名)
+      staging: 435851481                 # 内部レビュー期間中は本番と共用
+    chatwork_bot_token_env: CHATWORK_BOT_API_TOKEN
+    economics:
+      aov_jpy: 15000                     # ADR-009 仮値 (kickoff 後実値)
+      ltv_aov_ratio: 3.0
+      operational_cost_per_indication_jpy: 1000
+      false_positive_tolerance: 0.05
+
     company:
       name: 株式会社パイロットン
       honorific: 御中
       industry: beauty_d2c  # 内部参照キー（v3.1 で beauty_d2c 業界を新設）
       industry_label: 美容・D2C # 表示用（顧客向けレポートでの業界表示）
+      ec_platform: ecforce            # Layer 2 マッチング用 (重複記載、互換性のため company 側にも保持)
     contact:
       name: '[要入力: 担当者氏名]'
       honorific: 様
