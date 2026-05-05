@@ -968,7 +968,7 @@ class TestV2RuleCounts:
         assert len(rules["rules"]) == 108
 
     def test_meta_70_rules(self):
-        """Meta YAML = 70件"""
+        """Meta YAML = 70件 (Day 2 で 65→70 に拡張、Day 5.1 で root_cause_group 等付与)"""
         from engine.yaml_evaluator import load_rules
         rules = load_rules("meta")
         assert len(rules["rules"]) == 70

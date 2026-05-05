@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  BPO System 日次 ChatWork ジョブ (ADR-005 / Phase A)
+
+  実行: 毎日 09:00 JST (Asia/Tokyo)
+  内容: scripts/daily_chatwork_check.py --client pilotton --prefix "[テスト] "
+  Phase A 内部レビュー期間 (最初の 2 週間) は [テスト] プレフィクス付き投稿
+  本番化時は ProgramArguments の "--prefix" 行 2 つを削除
+
+  登録: launchctl load ~/Library/LaunchAgents/com.zynect.bpo.daily-chatwork.plist
+  解除: launchctl unload ~/Library/LaunchAgents/com.zynect.bpo.daily-chatwork.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.zynect.bpo.daily-chatwork</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/trunktrunk/bpo-system/bpo-system/venv/bin/python3</string>
+        <string>/Users/trunktrunk/bpo-system/bpo-system/scripts/daily_chatwork_check.py</string>
+        <string>--client</string>
+        <string>pilotton</string>
+        <string>--prefix</string>
+        <string>[テスト] </string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/trunktrunk/bpo-system/bpo-system</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>TZ</key>
+        <string>Asia/Tokyo</string>
+        <key>LANG</key>
+        <string>ja_JP.UTF-8</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/trunktrunk/bpo-system/bpo-system/logs/daily-chatwork.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/trunktrunk/bpo-system/bpo-system/logs/daily-chatwork.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

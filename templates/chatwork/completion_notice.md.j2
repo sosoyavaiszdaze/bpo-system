@@ -1,0 +1,35 @@
+[info][title]【{{ client_display_name }}】指摘解消のお知らせ {{ date }}（{{ completions|length }}件）[/title]
+ご対応いただいた以下の指摘について、解消を確認しました。
+{% for c in completions %}
+
+■ 解消 {{ loop.index }}/{{ completions|length }}：{{ c.title }}
+　[{{ c.rule_id }}] 初回指摘日：{{ c.first_reported_at }} → 解消確認日：{{ c.resolved_at }}
+　────────────────────────────
+　▼ 指摘時の状態
+　　{{ c.before_state }}
+
+　▼ 解消後の状態
+　　{{ c.after_state }}
+{% if c.consecutive_clean_days %}
+　　※直近 {{ c.consecutive_clean_days }} 日連続でクリーンを確認（一時的な揺らぎではありません）
+{% endif %}
+
+　▼ 達成効果（月次換算）
+{% if c.achieved_effect %}
+　　・想定確実値：{{ c.achieved_effect.minimum }}
+　　・想定現実値：{{ c.achieved_effect.realistic }}
+{% if c.achieved_effect.optimistic %}
+　　・想定上限値：{{ c.achieved_effect.optimistic }}
+{% endif %}
+{% else %}
+　　効果数値は次回月次レポートで合算してご報告します。
+{% endif %}
+{% if c.note %}
+
+　▼ 補足
+　　{{ c.note }}
+{% endif %}
+{% endfor %}
+
+引き続き運用監視を継続します。
+[/info]

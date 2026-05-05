@@ -1,54 +1,46 @@
 # =============================================================================
 # v3 Priority Score Weights — Pattern C (effort重視、クイックウィン優先)
+# v3.1 Task F: 6グループ再構築 + duplicate_factor + pixel_health 連動
 # =============================================================================
-# 用途: 優先アクション Top5 のスコアリング係数。
+# 用途: 優先アクション Top5 のスコアリング係数 + 重複排除集計の係数
 # 設計根拠: docs/report_design/v3_priority_score_weights.md パターンC
+# 重複排除設計: docs/decisions/meta_rules_classification.md（v3.1 で生成）
 #
-# 使用箇所:
-#   engine/priority_ranker.py
-#
-# パラメータ調整方針:
-#   - quick_win_bonus を 1.0〜2.0 で動かして、quick_win 偏重の度合いを調整
-#   - effort_normalization を "linear" に切り替えると工数インパクトが弱まる
-#   - 別パターン（A: severity / B: confidence）に切替時は本ファイルを差替
+# 6 グループ構成（v3.1 で 8→6 に再構築）:
+#   measurement_foundation       — 計測基盤（Pixel/CAPI/EMQ/AEM/ドメイン検証）
+#   delivery_learning_or_structure — 配信学習 + 構造設定（学習フェーズ・予算分散・集約・キャンペーン目的）
+#   creative_optimization        — クリエイティブ最適化（CR 量産・疲弊対応・フォーマット網羅）
+#   budget_allocation            — 予算配分（CBO/ABO・予算上限・配分バランス）
+#   targeting                    — ターゲティング（オーディエンス・1Pデータ・除外）
+#   independent                  — 独立施策（他グループに依存しない単発改善）
 # =============================================================================
 
 pattern: "C"
 description: "effort重視（クイックウィン優先）— 小工数×大インパクトを上位化"
-version: "1.0"
-last_updated: "2026-05-01"
+version: "3.1"
+last_updated: "2026-05-02"
 
-# severity ごとの基本重み
+# === priority_score 計算用 ===
 severity_weights:
   critical: 4.8
   high: 2.5
   medium: 1.5
   low: 0.5
 
-# expected_impact.confidence ごとの重み
 confidence_weights:
   high: 1.0
   medium: 0.7
   low: 0.4
 
-# 工数（effort_hours）の正規化方式
-# - "linear":      score / max(effort_hours, 0.5)
-# - "square_root": score / sqrt(max(effort_hours, 0.5)) ← パターンC のデフォルト
 effort_normalization: square_root
-
-# quick_win=true のルールに掛けるボーナス倍率
 quick_win_bonus: 1.5
 
-# expected_impact 未設定ルール用フォールバック（円ベース）
-# severity に応じた仮の月次インパクト
 fallback_impact_yen:
   critical: 50000
   high: 20000
   medium: 8000
   low: 2000
 
-# 工数の標準推定値（quick_win=true のものは 0.5 時間で固定）
-# rule.category ごとに非 quick_win の標準工数を推定
 default_effort_hours_by_category:
   計測_トラッキング: 8.0
   計測: 8.0
@@ -67,12 +59,171 @@ default_effort_hours_by_category:
 default_effort_hours_fallback: 4.0
 quick_win_effort_hours: 0.5
 
-# Critical Alerts セクション設定
-# Top5 とは別枠で「⚠️ 今すぐ対処すべき重大問題」を最大3件固定表示
 critical_alerts:
   max_count: 3
   severity_threshold: critical
-  exclude_quick_wins: false  # quick_win=true でも critical なら警告に含める
+  exclude_quick_wins: false
 
-# 月次広告費の参照値（クライアント実データがない場合のフォールバック）
 default_monthly_spend_yen: 750000
+
+# =============================================================================
+# v3.1 Task F: 6グループ + duplicate_factor + pixel_health 連動
+# =============================================================================
+
+# 6グループへのルール分類
+# Meta は明示分類済み（F-1, F-6 で needs_review 判定済み）
+# Google / TikTok は Phase 2 で個別自動分類予定
+rule_root_cause:
+  measurement_foundation:
+    google: [G01, G02, G03, G04, G05, G06, G07, G08, G09, G09b, G10, G68, G78, G79, G81]
+    meta:
+      # Day 5.1 Task F: 主要分類済み（needs_review = false）
+      - M01  # Pixel発火状態
+      - M02  # CAPI実装状況
+      - M03  # イベントマッチ品質
+      - M04  # ドメイン検証
+      - M05  # 優先度イベント設定
+      - M06  # 重複イベント排除
+      - M07  # カスタムCV
+      - M08  # iOS14+の影響計測
+      - M62  # アトリビューション設定（needs_review、measurement_foundation 内に統合）
+    tiktok: [T01, T02, T03, T05]
+    common: [C02, C10]
+
+  delivery_learning_or_structure:
+    google: [G11, G11b, G11c, G12, G14, G15, G15b, G16, G17, G18, G35, G24, G25, G30, G31, G39, G40, G42, G43, G51, G53, G53b, G62, G64, G69, G71, G75]
+    meta:
+      - M09   # 学習フェーズ脱出率
+      - M10   # 1広告セットあたりCV数
+      - M11   # CBO vs ABO選択（needs_review、配分判断としてここに）
+      - M12   # 目標費用設定
+      - M13   # 予算変更の頻度
+      - M14   # キャンペーン目的の適正
+      - M15   # 広告セット過多
+      - M16   # ポリシー違反・不承認（needs_review、構造として）
+      - M18   # 広告アカウント制限リスク（needs_review）
+      - M44   # Advantage+カタログ整合
+      - M48   # ASC+との共存
+      - M55   # 年齢/性別の過剰絞り込み（needs_review）
+      - M64   # 地域ターゲティング精度（needs_review、構造寄り）
+      - M65   # 支払い方法ステータス
+      - M68   # 学習リセット要因イベント検出
+    tiktok: [T06, T07, T08, T09, T10, T22, T32, T33, T35, T39, T41, T42, T43, T45, T46]
+    common: [C06, C07, C11, C12]
+
+  creative_optimization:
+    google: [G22, G22b, G22c, G22d, G33, G34, G36, G37, G37b, G37c, G47, G48, G56, G58, G59, G63, G65, G65b, G66, G66b, G67, G74, G77]
+    meta:
+      - M21   # FBフィードCTR
+      - M22   # テキスト量過多
+      - M24   # 動画/画像の使い分け
+      - M25   # 1:1と4:5のアスペクト比
+      - M26   # IGフィードのビジュアル品質
+      - M27   # エンゲージメント率（結果指標）
+      - M28   # UGC風素材の活用
+      - M29   # キャプション文字数
+      - M30   # プロフィール誘導の整合
+      - M31   # リール動画尺
+      - M32   # 縦型9:16フル画面対応
+      - M33   # サウンド有無
+      - M34   # 動画完了率（結果指標）
+      - M35   # UGC/Spark系素材
+      - M36   # ストーリーズフルスクリーン活用
+      - M37   # スワイプアップ/CTA訴求
+      - M38   # FBストーリーズのCTR
+      - M41   # AN専用クリエイティブ
+      - M43   # 自動応答フロー（needs_review）
+      - M46   # 既存顧客予算キャップ（needs_review、CR系として）
+      - M47   # クリエイティブバリエーション
+      - M57   # フリークエンシー疲弊
+      - M58   # クリエイティブ入替日数
+      - M59   # Dynamic Creative Optimization
+      - M60   # Advantage+クリエイティブ
+      - M63   # 配信最適化目標の妥当性（needs_review）
+      - M66   # 広告-LPメッセージ整合スコア
+      - M67   # 勝ち広告LP逆生成プロセス
+    tiktok: [T13, T14, T15, T16, T17, T18, T19, T20, T21, T24, T25, T34, T36, T37, T38]
+    common: []
+
+  budget_allocation:
+    google: [G13, G13b]
+    meta:
+      - M20   # カタログ連携状態（needs_review、商品供給=配信源として budget 寄り）
+      - M45   # 入札上限の適正
+      - M52   # 広すぎる/狭すぎる設定（needs_review、targeting と境界）
+    tiktok: [T28]
+    common: [C03, C05, C09, C13, C15]
+
+  targeting:
+    google: [G19, G20, G21, G27, G27b, G28, G29, G32, G54, G55, G57, G61, G70, G70b, G72, G73, G76, G80]
+    meta:
+      - M17   # アカウント品質スコア（needs_review、ターゲット適合性指標として）
+      - M19   # ビジネスマネージャー権限（needs_review、運用衛生）
+      - M23   # プレースメント手動最適化（needs_review、配信面=targeting）
+      - M39   # AN品質管理
+      - M40   # ブランドセーフティ除外
+      - M42   # Messenger配信のCV計測（needs_review）
+      - M50   # LLA鮮度
+      - M51   # カスタムオーディエンス更新頻度
+      - M53   # 既存顧客除外設定
+      - M54   # Advantage詳細ターゲット+設定
+      - M56   # Aggregated Event Measurement（needs_review、計測 vs ターゲットの境界）
+      - M61   # 1Pデータ活用
+      - M69   # Advantage+文脈の除外オーディエンス
+      - M70   # LLA seed の LTV Top 層集中度
+    tiktok: [T11, T12, T23, T26, T27, T29, T30, T31, T44]
+    common: []
+
+  independent:
+    google: [G23, G26, G26-NEW1, G26-NEW2, G26b, G26c, G26d, G26e, G38, G41, G44, G45, G45-NEW, G50, G52, G60, G81-NEW, G82-NEW]
+    meta:
+      - M49   # オーディエンスオーバーラップ（独立した自社競合解消）
+    tiktok: [T40]
+    common: [C01, C04, C08, C14]
+
+# =============================================================================
+# duplicate_factor — 同グループ内 2 件目以降に乗じる重複係数
+# 値が小さい = 重複度が高い（同じ根本原因で改善する）
+# 値が 1.0 = 完全独立（各施策が独立に効果発揮）
+# =============================================================================
+duplicate_factors:
+  measurement_foundation: 0.2          # 計測基盤は最も重複度高（CAPI実装が他全てを底上げ）
+  delivery_learning_or_structure: 0.3   # 学習保護も重複度高
+  creative_optimization: 0.5            # CR 系は中程度
+  budget_allocation: 0.4                # 予算系は配分相関あり
+  targeting: 0.4                        # ターゲティングも一定の相関
+  independent: 1.0                      # 独立施策は満額加算
+  other: 1.0                            # 未分類
+
+# =============================================================================
+# pixel_health 連動オーバーライド
+# Pixel 休眠検知時、計測基盤の修復を最優先化するため duplicate_factor を再調整。
+# 非 measurement 施策は計測修復前は効果が薄まるため confidence_decay を乗じる。
+# =============================================================================
+pixel_health_overrides:
+  dormant_threshold_days: 270           # この日数以上発火がないピクセルは休眠扱い
+  measurement_foundation_duplicate_factor_when_dormant: 0.1  # 計測修復が最優先のため重複係数を更に低く
+  non_measurement_confidence_decay_when_dormant: 0.7         # 非計測施策の効果は 70% に減衰
+
+# =============================================================================
+# シナリオ予測の振れ幅（confidence ベース、Task G フォールバック）
+# ルール側に scenarios フィールドがあれば優先採用
+# =============================================================================
+scenario_band_pct:
+  high: 0.30
+  medium: 0.40
+  low: 0.50
+
+# =============================================================================
+# v3.0 後方互換: 旧 overlap_factor 名と既存集計関数のため一時的に維持
+# Phase 2 で完全削除予定
+# =============================================================================
+rule_root_cause_legacy_v30: false  # true にすると旧 8 グループを併用（現在は使わない）
+overlap_factor:
+  measurement_foundation: 0.2
+  delivery_learning_or_structure: 0.3
+  creative_optimization: 0.5
+  budget_allocation: 0.4
+  targeting: 0.4
+  independent: 1.0
+  other: 1.0

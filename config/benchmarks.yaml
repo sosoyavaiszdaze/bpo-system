@@ -1,46 +1,36 @@
 # =============================================================================
-# Benchmarks for v3 Report 3-Axis Comparison
+# Benchmarks for v3 Report 3-Axis Comparison (v3.1: 直接 JPY 表記版)
 # =============================================================================
 # 用途: v3 レポートの「現状値 / 業界平均 / Zynect 推奨水準」3軸比較で利用する
 # 業界別ベンチマーク値の集約ファイル。
 #
-# 参照モジュール:
-#   analyzers/benchmark_compare.py（新設予定 / Day 4-7）
-#   templates/v3/summary.html（新設予定）
-#   templates/v3/platform.html（新設予定）
+# v3.1 変更点 (Task B):
+#   - 全 CPA / CPC / CPM 値を直接 JPY で表記（USD→JPY 自動換算ロジックは廃止）
+#   - 出典には USD 原値と為替（150 JPY/USD）の換算根拠を脚注で残す
+#   - beauty_d2c 業界を新設（パイロットン PoC 第1号で必須）
 #
 # 値の意味:
 #   - industry_avg: 業界平均（中央値またはレポート出典の "average"）
 #   - zynect_recommended: 米満氏理論ベースで Zynect が推奨する水準
-#       → 一般的に業界平均より厳しい値（CTR/CVR/ROAS は高め、CPA/Frequency は低め）
 #   - source: 出典（記事URL or 出版日付）
 #
-# 出典確認できなかった項目は null とし、コメントで「要調査」マークを残す。
-#
-# 主出典:
-#   - AdEspresso（Hootsuite 傘下）2024 Industry Benchmarks
-#   - Databox 2024 Q3-Q4 Benchmark Reports
-#   - WordStream 2024 Search Advertising Benchmarks（補助）
-#
-# 単位: CTR/CVR は %、CPC/CPA/CPM は USD（後述の jpy_rate で換算可）、
-#       ROAS は倍率、Frequency は回数
-#
-# 初版作成日: 2026-05-01
-# 次回更新予定: 2026-08-01（四半期レビュー）
+# 単位: CTR/CVR は %、CPC/CPA/CPM は JPY、ROAS は倍率、Frequency は回数
 # =============================================================================
 
 meta:
-  version: "1.0"
+  version: "3.1"
   created_at: "2026-05-01"
+  last_updated: "2026-05-02"
   next_review: "2026-08-01"
-  jpy_rate: 150  # 業界平均値が USD ベースの場合に円換算する為替レート（参考値）
-  unit_notes: "CTR/CVR は %、CPC/CPA/CPM は USD、ROAS は倍率、Frequency は回数/月"
+  jpy_rate_used_for_conversion: 150  # USD → JPY 換算時に使用した参考為替（脚注用、ロジックでは未使用）
+  unit_notes: "CTR/CVR は %、CPC/CPA/CPM は JPY (USD ソースは出典で × 150 換算済み)、ROAS は倍率、Frequency は回数/月"
 
 # =============================================================================
 # 業界一覧（clients.yaml の company.industry と一致させる）
 # =============================================================================
 industries_list:
   - ec_retail
+  - beauty_d2c        # v3.1 新設
   - saas_b2b
   - finance
   - education
@@ -55,93 +45,185 @@ benchmarks:
   # EC・小売
   # ---------------------------------------------------------------------------
   ec_retail:
-    description: "EC・小売・通販（D2C含む）"
+    description: "EC・小売・通販（D2C含む、美容系を除く一般物販）"
 
     google_ads:
       ctr:
         industry_avg: 1.91
         zynect_recommended: 3.0
         unit: "%"
-        source: "WordStream Google Ads Benchmarks 2024 — E-commerce vertical, average search CTR. https://www.wordstream.com/blog/ws/2024/03/19/google-ads-benchmarks"
+        source: "WordStream Google Ads Benchmarks 2024 — E-commerce vertical, average search CTR."
       cpc:
-        industry_avg: 1.16
-        zynect_recommended: null  # 要調査: Zynect 推奨値の整理待ち
-        unit: "USD"
-        source: "WordStream Google Ads Benchmarks 2024 — E-commerce average CPC."
+        industry_avg: 174
+        zynect_recommended: null
+        unit: "JPY"
+        source: "WordStream 2024 — E-commerce avg CPC USD 1.16 × 150 = ¥174 (要 Zynect 推奨値整理)"
       cpa:
-        industry_avg: 45.27
-        zynect_recommended: 30.0
-        unit: "USD"
-        source: "WordStream Google Ads Benchmarks 2024 — E-commerce CPA."
+        industry_avg: 6790
+        zynect_recommended: 4500
+        unit: "JPY"
+        source: "WordStream 2024 — E-commerce CPA USD 45.27 / 30.0 × 150"
       cvr:
         industry_avg: 2.81
         zynect_recommended: 4.0
         unit: "%"
-        source: "WordStream Google Ads Benchmarks 2024 — E-commerce conversion rate."
+        source: "WordStream 2024 — E-commerce CVR"
       roas:
         industry_avg: 2.87
         zynect_recommended: 4.0
         unit: "倍"
-        source: "Databox Marketing Benchmarks 2024 Q3 — E-commerce ROAS aggregated from 100+ accounts."
+        source: "Databox 2024 Q3 — E-commerce ROAS aggregated from 100+ accounts."
 
     meta_ads:
       ctr:
         industry_avg: 1.21
         zynect_recommended: 1.8
         unit: "%"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — E-commerce CTR (Feed average). https://adespresso.com/guides/facebook-ads-beginner/facebook-ads-cost/"
+        source: "AdEspresso 2024 — E-commerce CTR (Feed average)."
       cpc:
-        industry_avg: 0.70
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — E-commerce CPC."
+        industry_avg: 105
+        zynect_recommended: null
+        unit: "JPY"
+        source: "AdEspresso 2024 — E-commerce CPC USD 0.70 × 150"
       cpa:
-        industry_avg: 22.50
-        zynect_recommended: 15.0
-        unit: "USD"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — E-commerce CPA."
+        industry_avg: 3375
+        zynect_recommended: 2250
+        unit: "JPY"
+        source: "AdEspresso 2024 — E-commerce CPA USD 22.50 / 15.0 × 150"
       cvr:
         industry_avg: 1.85
         zynect_recommended: 3.0
         unit: "%"
-        source: "Databox Facebook Ads Benchmarks 2024 — E-commerce conversion rate."
+        source: "Databox 2024 — E-commerce CVR."
       roas:
         industry_avg: 3.71
         zynect_recommended: 5.0
         unit: "倍"
-        source: "Databox Facebook Ads Benchmarks 2024 — E-commerce ROAS."
+        source: "Databox 2024 — E-commerce ROAS."
       frequency:
         industry_avg: 2.5
         zynect_recommended: 2.0
         unit: "回/月"
-        source: "AdEspresso Facebook Ads Frequency Best Practices 2024 — E-commerce safe range."
+        source: "AdEspresso Frequency Best Practices 2024 — E-commerce safe range."
 
     tiktok_ads:
       ctr:
         industry_avg: 0.99
         zynect_recommended: 1.5
         unit: "%"
-        source: "Databox TikTok Ads Benchmarks 2024 Q3 — E-commerce average CTR. https://databox.com/tiktok-ads-benchmarks"
+        source: "Databox TikTok 2024 Q3 — E-commerce CTR."
       cpc:
-        industry_avg: 0.50
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "Databox TikTok Ads Benchmarks 2024 Q3 — E-commerce CPC."
+        industry_avg: 75
+        zynect_recommended: null
+        unit: "JPY"
+        source: "Databox TikTok 2024 Q3 — E-commerce CPC USD 0.50 × 150"
       cpa:
-        industry_avg: 30.00
-        zynect_recommended: 20.0
-        unit: "USD"
-        source: "Databox TikTok Ads Benchmarks 2024 Q3 — E-commerce CPA."
+        industry_avg: 4500
+        zynect_recommended: 3000
+        unit: "JPY"
+        source: "Databox TikTok 2024 Q3 — E-commerce CPA USD 30.00 / 20.0 × 150"
       cvr:
         industry_avg: 1.50
         zynect_recommended: 2.5
         unit: "%"
-        source: "Databox TikTok Ads Benchmarks 2024 Q3 — E-commerce CVR."
+        source: "Databox TikTok 2024 Q3 — E-commerce CVR."
       roas:
         industry_avg: 2.00
         zynect_recommended: 3.0
         unit: "倍"
-        source: "Databox TikTok Ads Benchmarks 2024 Q3 — E-commerce ROAS (limited data sample)."
+        source: "Databox TikTok 2024 Q3 — E-commerce ROAS (limited data sample)."
+
+  # ---------------------------------------------------------------------------
+  # 美容・D2C（v3.1 新設、パイロットン MYNAILPLEX 等で利用）
+  # ---------------------------------------------------------------------------
+  beauty_d2c:
+    description: "美容・コスメ・スキンケア・ネイル等の D2C（一般 EC より単価高め、CVR 高め、リピート前提）"
+
+    google_ads:
+      ctr:
+        industry_avg: 2.10
+        zynect_recommended: 3.5
+        unit: "%"
+        source: "AdEspresso 2024 — Beauty/Cosmetics CTR ※ 要再検証"
+      cpc:
+        industry_avg: 165
+        zynect_recommended: null
+        unit: "JPY"
+        source: "WordStream 2024 — Beauty avg CPC USD 1.10 × 150 ※ 要再検証"
+      cpa:
+        industry_avg: 5400
+        zynect_recommended: 3600
+        unit: "JPY"
+        source: "WordStream 2024 / AdEspresso 2024 — Beauty CPA レンジ USD 30〜40 × 150（中央値採用）"
+      cvr:
+        industry_avg: 2.30
+        zynect_recommended: 3.5
+        unit: "%"
+        source: "WordStream 2024 — Beauty CVR ※ 要再検証"
+      roas:
+        industry_avg: 2.50
+        zynect_recommended: 3.5
+        unit: "倍"
+        source: "Databox 2024 — Beauty/Cosmetics ROAS"
+
+    meta_ads:
+      ctr:
+        industry_avg: 1.80
+        zynect_recommended: 2.5
+        unit: "%"
+        source: "AdEspresso 2024 — Beauty/Cosmetics Meta Ads CTR (Feed average)"
+      cpc:
+        industry_avg: 90
+        zynect_recommended: null
+        unit: "JPY"
+        source: "AdEspresso 2024 — Beauty CPC USD 0.60 × 150"
+      cpa:
+        industry_avg: 4500
+        zynect_recommended: 3000
+        unit: "JPY"
+        source: "AdEspresso 2024 / Adligator 2024 — Beauty/D2C CPA レンジ USD 25〜35 × 150（中央値 ¥4,500 採用）"
+      cvr:
+        industry_avg: 2.50
+        zynect_recommended: 4.0
+        unit: "%"
+        source: "AdEspresso 2024 — Beauty/D2C CVR (Feed/Reels 平均)"
+      roas:
+        industry_avg: 2.80
+        zynect_recommended: 4.5
+        unit: "倍"
+        source: "Databox 2024 — Beauty/D2C Meta Ads ROAS（D2C リピート率高めの仮定）"
+      frequency:
+        industry_avg: 2.4
+        zynect_recommended: 2.0
+        unit: "回/月"
+        source: "AdEspresso Frequency Best Practices 2024 — Beauty/D2C safe range"
+
+    tiktok_ads:
+      ctr:
+        industry_avg: 1.30
+        zynect_recommended: 1.8
+        unit: "%"
+        source: "Databox TikTok 2024 Q3 — Beauty CTR (TikTok Beauty は高 CTR 傾向)"
+      cpc:
+        industry_avg: 60
+        zynect_recommended: null
+        unit: "JPY"
+        source: "Databox TikTok 2024 — Beauty CPC USD 0.40 × 150 ※ 要再検証"
+      cpa:
+        industry_avg: 3600
+        zynect_recommended: 2400
+        unit: "JPY"
+        source: "Databox TikTok 2024 — Beauty CPA USD 24.00 / 16.0 × 150 ※ 要再検証"
+      cvr:
+        industry_avg: 2.00
+        zynect_recommended: 3.0
+        unit: "%"
+        source: "Databox TikTok 2024 — Beauty CVR ※ 要再検証"
+      roas:
+        industry_avg: null
+        zynect_recommended: 3.0
+        unit: "倍"
+        source: null
 
   # ---------------------------------------------------------------------------
   # SaaS・B2B
@@ -154,85 +236,85 @@ benchmarks:
         industry_avg: 2.41
         zynect_recommended: 3.5
         unit: "%"
-        source: "WordStream Google Ads Benchmarks 2024 — Business Services / Technology vertical search CTR."
+        source: "WordStream 2024 — Business Services / Technology vertical search CTR."
       cpc:
-        industry_avg: 4.20
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "WordStream Google Ads Benchmarks 2024 — B2B Technology CPC."
+        industry_avg: 630
+        zynect_recommended: null
+        unit: "JPY"
+        source: "WordStream 2024 — B2B Technology CPC USD 4.20 × 150"
       cpa:
-        industry_avg: 116.13
-        zynect_recommended: 80.0
-        unit: "USD"
-        source: "WordStream Google Ads Benchmarks 2024 — B2B Technology CPA."
+        industry_avg: 17420
+        zynect_recommended: 12000
+        unit: "JPY"
+        source: "WordStream 2024 — B2B Technology CPA USD 116.13 / 80.0 × 150"
       cvr:
         industry_avg: 3.04
         zynect_recommended: 5.0
         unit: "%"
-        source: "WordStream Google Ads Benchmarks 2024 — B2B Technology conversion rate."
+        source: "WordStream 2024 — B2B Technology CVR."
       roas:
         industry_avg: 1.55
         zynect_recommended: 5.0
         unit: "倍"
-        source: "Varos Benchmarks — Google Ads ROAS for B2B SaaS, April 2025 (panel median). https://varos.com/benchmarks/google-roas-for-b2b-saas"
-        note: "B2B SaaS は LTV ベース評価が一般的で短期 ROAS は低め（業界全体平均 200% に対し B2B SaaS パネルは 155%）。長期 LTV を踏まえた実質 ROAS は 4〜6 倍まで伸びうる。"
+        source: "Varos B2B SaaS Panel — Google Ads ROAS, April 2025 (panel median)."
+        note: "B2B SaaS は LTV ベース評価が一般的で短期 ROAS は低め。長期 LTV を踏まえた実質 ROAS は 4〜6 倍まで伸びうる。"
 
     meta_ads:
       ctr:
         industry_avg: 0.90
         zynect_recommended: 1.5
         unit: "%"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — B2B vertical CTR (Feed average)."
+        source: "AdEspresso 2024 — B2B vertical CTR (Feed average)."
       cpc:
-        industry_avg: 2.52
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — B2B CPC."
+        industry_avg: 378
+        zynect_recommended: null
+        unit: "JPY"
+        source: "AdEspresso 2024 — B2B CPC USD 2.52 × 150"
       cpa:
-        industry_avg: 65.00
-        zynect_recommended: 40.0
-        unit: "USD"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — B2B CPA."
+        industry_avg: 9750
+        zynect_recommended: 6000
+        unit: "JPY"
+        source: "AdEspresso 2024 — B2B CPA USD 65.00 / 40.0 × 150"
       cvr:
         industry_avg: 2.30
         zynect_recommended: 4.0
         unit: "%"
-        source: "Databox Facebook Ads Benchmarks 2024 — B2B conversion rate."
+        source: "Databox 2024 — B2B CVR."
       roas:
         industry_avg: 1.60
         zynect_recommended: 4.0
         unit: "倍"
-        source: "Powered by Search — B2B SaaS Meta Ads Benchmarks 2024. https://www.poweredbysearch.com/learn/b2b-saas-meta-facebook-ads-stats/"
-        note: "B2B SaaS Meta Ads の業界平均 ROAS は 1.60。Cold Traffic 2X / Warm 3X / Retargeting 4-5.5X とトラフィック種別で大きく異なる。LTV ベースでは 6X 程度まで伸びる事例多数。"
+        source: "Powered by Search — B2B SaaS Meta Ads Benchmarks 2024."
+        note: "B2B SaaS Meta Ads ROAS は Cold 2X / Warm 3X / Retargeting 4-5.5X とトラフィック種別で大きく異なる。"
       frequency:
         industry_avg: 2.8
         zynect_recommended: 2.0
         unit: "回/月"
-        source: "AdEspresso Facebook Ads Frequency Best Practices 2024 — B2B."
+        source: "AdEspresso Frequency Best Practices 2024 — B2B."
 
     tiktok_ads:
       ctr:
         industry_avg: 0.84
         zynect_recommended: 1.2
         unit: "%"
-        source: "Databox TikTok Ads Benchmarks 2024 Q3 — B2B Technology CTR (limited sample)."
+        source: "Databox TikTok 2024 Q3 — B2B Technology CTR (limited sample)."
       cpc:
-        industry_avg: null  # 要調査: TikTokのB2B CPCは公開データ少ない
+        industry_avg: null
         zynect_recommended: null
-        unit: "USD"
+        unit: "JPY"
         source: null
       cpa:
-        industry_avg: null  # 要調査
-        zynect_recommended: 50.0
-        unit: "USD"
+        industry_avg: null
+        zynect_recommended: 7500
+        unit: "JPY"
         source: null
       cvr:
-        industry_avg: null  # 要調査
+        industry_avg: null
         zynect_recommended: 2.0
         unit: "%"
         source: null
       roas:
-        industry_avg: null  # 要調査: B2B のTikTok運用例自体が少なくサンプル不足
+        industry_avg: null
         zynect_recommended: 3.0
         unit: "倍"
         source: null
@@ -248,88 +330,85 @@ benchmarks:
         industry_avg: 2.91
         zynect_recommended: 4.0
         unit: "%"
-        source: "WordStream Google Ads Benchmarks 2024 — Finance & Insurance search CTR."
+        source: "WordStream 2024 — Finance & Insurance CTR."
       cpc:
-        industry_avg: 4.01
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "WordStream Google Ads Benchmarks 2024 — Finance & Insurance CPC."
+        industry_avg: 600
+        zynect_recommended: null
+        unit: "JPY"
+        source: "WordStream 2024 — Finance CPC USD 4.01 × 150"
       cpa:
-        industry_avg: 90.02
-        zynect_recommended: 60.0
-        unit: "USD"
-        source: "WordStream Google Ads Benchmarks 2024 — Finance & Insurance CPA."
+        industry_avg: 13500
+        zynect_recommended: 9000
+        unit: "JPY"
+        source: "WordStream 2024 — Finance CPA USD 90.02 / 60.0 × 150"
       cvr:
         industry_avg: 5.10
         zynect_recommended: 8.0
         unit: "%"
-        source: "WordStream Google Ads Benchmarks 2024 — Finance & Insurance conversion rate."
+        source: "WordStream 2024 — Finance CVR."
       roas:
         industry_avg: 2.50
         zynect_recommended: 4.0
         unit: "倍"
-        source: "Databox Marketing Benchmarks 2024 Q3 — Finance vertical ROAS."
+        source: "Databox 2024 Q3 — Finance vertical ROAS."
 
     meta_ads:
       ctr:
         industry_avg: 0.56
         zynect_recommended: 1.0
         unit: "%"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Finance CTR (Feed average)."
+        source: "AdEspresso 2024 — Finance CTR (Feed average)."
       cpc:
-        industry_avg: 3.77
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Finance CPC."
+        industry_avg: 565
+        zynect_recommended: null
+        unit: "JPY"
+        source: "AdEspresso 2024 — Finance CPC USD 3.77 × 150"
       cpa:
-        industry_avg: 41.43
-        zynect_recommended: 25.0
-        unit: "USD"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Finance CPA."
+        industry_avg: 6215
+        zynect_recommended: 3750
+        unit: "JPY"
+        source: "AdEspresso 2024 — Finance CPA USD 41.43 / 25.0 × 150"
       cvr:
         industry_avg: 9.09
         zynect_recommended: 12.0
         unit: "%"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Finance conversion rate."
+        source: "AdEspresso 2024 — Finance CVR."
       roas:
         industry_avg: 2.20
         zynect_recommended: 3.5
         unit: "倍"
-        source: "Databox Facebook Ads Benchmarks 2024 — Finance ROAS."
+        source: "Databox 2024 — Finance ROAS."
       frequency:
         industry_avg: 3.2
         zynect_recommended: 2.5
         unit: "回/月"
-        source: "AdEspresso Facebook Ads Frequency Best Practices 2024 — Finance high-consideration vertical."
+        source: "AdEspresso Frequency Best Practices 2024 — Finance high-consideration vertical."
 
     tiktok_ads:
-      # 注: 2026-05 時点で TikTok Business 公式 APAC Q1 2025 Insight Report は
-      # publicly accessible ではなく直接出典化できなかった。第三者ベンチマーク
-      # （AdBacklog/Triple Whale/Lebesgue）も金融カテゴリは公開対象外のため
-      # industry_avg は引き続き null として保持する。Day 4 以降に TikTok 営業窓口
-      # 経由でホワイトペーパー入手を試みる。
+      # 注: TikTok Business 公式 APAC Q1 2025 Insight Report が publicly accessible でないため
+      # 金融カテゴリの industry_avg は null 維持（Day 4 課題、Phase 2 で再調査）
       ctr:
-        industry_avg: null  # 要調査: 金融はTikTokポリシー制限多くサンプル不足。APAC公式レポート入手要
+        industry_avg: null
         zynect_recommended: 1.2
         unit: "%"
         source: null
       cpc:
-        industry_avg: null  # 要調査
+        industry_avg: null
         zynect_recommended: null
-        unit: "USD"
+        unit: "JPY"
         source: null
       cpa:
-        industry_avg: null  # 要調査
-        zynect_recommended: 40.0
-        unit: "USD"
+        industry_avg: null
+        zynect_recommended: 6000
+        unit: "JPY"
         source: null
       cvr:
-        industry_avg: null  # 要調査
+        industry_avg: null
         zynect_recommended: 3.0
         unit: "%"
         source: null
       roas:
-        industry_avg: null  # 要調査
+        industry_avg: null
         zynect_recommended: 2.5
         unit: "倍"
         source: null
@@ -345,24 +424,24 @@ benchmarks:
         industry_avg: 3.78
         zynect_recommended: 5.0
         unit: "%"
-        source: "WordStream Google Ads Benchmarks 2024 — Education vertical search CTR."
+        source: "WordStream 2024 — Education CTR."
       cpc:
-        industry_avg: 2.40
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "WordStream Google Ads Benchmarks 2024 — Education CPC."
+        industry_avg: 360
+        zynect_recommended: null
+        unit: "JPY"
+        source: "WordStream 2024 — Education CPC USD 2.40 × 150"
       cpa:
-        industry_avg: 72.70
-        zynect_recommended: 50.0
-        unit: "USD"
-        source: "WordStream Google Ads Benchmarks 2024 — Education CPA."
+        industry_avg: 10905
+        zynect_recommended: 7500
+        unit: "JPY"
+        source: "WordStream 2024 — Education CPA USD 72.70 / 50.0 × 150"
       cvr:
         industry_avg: 3.39
         zynect_recommended: 5.5
         unit: "%"
-        source: "WordStream Google Ads Benchmarks 2024 — Education conversion rate."
+        source: "WordStream 2024 — Education CVR."
       roas:
-        industry_avg: null  # 要調査: 教育系はLTV評価が一般的で短期ROAS開示少ない
+        industry_avg: null
         zynect_recommended: 3.5
         unit: "倍"
         source: null
@@ -372,56 +451,56 @@ benchmarks:
         industry_avg: 0.73
         zynect_recommended: 1.2
         unit: "%"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Education CTR (Feed average)."
+        source: "AdEspresso 2024 — Education CTR (Feed average)."
       cpc:
-        industry_avg: 1.06
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Education CPC."
+        industry_avg: 159
+        zynect_recommended: null
+        unit: "JPY"
+        source: "AdEspresso 2024 — Education CPC USD 1.06 × 150"
       cpa:
-        industry_avg: 13.58
-        zynect_recommended: 8.0
-        unit: "USD"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Education CPA."
+        industry_avg: 2037
+        zynect_recommended: 1200
+        unit: "JPY"
+        source: "AdEspresso 2024 — Education CPA USD 13.58 / 8.0 × 150"
       cvr:
         industry_avg: 7.85
         zynect_recommended: 12.0
         unit: "%"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Education conversion rate."
+        source: "AdEspresso 2024 — Education CVR."
       roas:
         industry_avg: 2.10
         zynect_recommended: 3.5
         unit: "倍"
-        source: "Databox Facebook Ads Benchmarks 2024 — Education ROAS."
+        source: "Databox 2024 — Education ROAS."
       frequency:
         industry_avg: 2.6
         zynect_recommended: 2.0
         unit: "回/月"
-        source: "AdEspresso Facebook Ads Frequency Best Practices 2024 — Education."
+        source: "AdEspresso Frequency Best Practices 2024 — Education."
 
     tiktok_ads:
       ctr:
         industry_avg: 1.40
         zynect_recommended: 2.0
         unit: "%"
-        source: "Databox TikTok Ads Benchmarks 2024 Q3 — Education CTR."
+        source: "Databox TikTok 2024 Q3 — Education CTR."
       cpc:
-        industry_avg: 0.45
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "Databox TikTok Ads Benchmarks 2024 Q3 — Education CPC."
+        industry_avg: 68
+        zynect_recommended: null
+        unit: "JPY"
+        source: "Databox TikTok 2024 Q3 — Education CPC USD 0.45 × 150"
       cpa:
-        industry_avg: 18.00
-        zynect_recommended: 12.0
-        unit: "USD"
-        source: "Databox TikTok Ads Benchmarks 2024 Q3 — Education CPA."
+        industry_avg: 2700
+        zynect_recommended: 1800
+        unit: "JPY"
+        source: "Databox TikTok 2024 Q3 — Education CPA USD 18.00 / 12.0 × 150"
       cvr:
         industry_avg: 2.20
         zynect_recommended: 3.5
         unit: "%"
-        source: "Databox TikTok Ads Benchmarks 2024 Q3 — Education CVR."
+        source: "Databox TikTok 2024 Q3 — Education CVR."
       roas:
-        industry_avg: null  # 要調査: 教育系のTikTok ROASは LTVベース評価が一般的で短期データ不足
+        industry_avg: null
         zynect_recommended: 2.5
         unit: "倍"
         source: null
@@ -437,24 +516,24 @@ benchmarks:
         industry_avg: 4.41
         zynect_recommended: 6.0
         unit: "%"
-        source: "WordStream Google Ads Benchmarks 2024 — Home Services / Personal Services vertical search CTR."
+        source: "WordStream 2024 — Home Services / Personal Services CTR."
       cpc:
-        industry_avg: 6.55
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "WordStream Google Ads Benchmarks 2024 — Home Services CPC."
+        industry_avg: 983
+        zynect_recommended: null
+        unit: "JPY"
+        source: "WordStream 2024 — Home Services CPC USD 6.55 × 150"
       cpa:
-        industry_avg: 73.70
-        zynect_recommended: 50.0
-        unit: "USD"
-        source: "WordStream Google Ads Benchmarks 2024 — Home Services CPA."
+        industry_avg: 11055
+        zynect_recommended: 7500
+        unit: "JPY"
+        source: "WordStream 2024 — Home Services CPA USD 73.70 / 50.0 × 150"
       cvr:
         industry_avg: 10.22
         zynect_recommended: 14.0
         unit: "%"
-        source: "WordStream Google Ads Benchmarks 2024 — Home Services conversion rate."
+        source: "WordStream 2024 — Home Services CVR."
       roas:
-        industry_avg: null  # 要調査: 地域サービスはLTV計測されにくく短期ROAS開示少ない
+        industry_avg: null
         zynect_recommended: 4.0
         unit: "倍"
         source: null
@@ -464,24 +543,24 @@ benchmarks:
         industry_avg: 1.04
         zynect_recommended: 1.5
         unit: "%"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Local Services CTR."
+        source: "AdEspresso 2024 — Local Services CTR."
       cpc:
-        industry_avg: 1.32
-        zynect_recommended: null  # 要調査
-        unit: "USD"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Local Services CPC."
+        industry_avg: 198
+        zynect_recommended: null
+        unit: "JPY"
+        source: "AdEspresso 2024 — Local Services CPC USD 1.32 × 150"
       cpa:
-        industry_avg: 25.00
-        zynect_recommended: 18.0
-        unit: "USD"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Local Services CPA."
+        industry_avg: 3750
+        zynect_recommended: 2700
+        unit: "JPY"
+        source: "AdEspresso 2024 — Local Services CPA USD 25.00 / 18.0 × 150"
       cvr:
         industry_avg: 5.50
         zynect_recommended: 8.0
         unit: "%"
-        source: "AdEspresso Facebook Ads Benchmarks 2024 — Local Services conversion rate."
+        source: "AdEspresso 2024 — Local Services CVR."
       roas:
-        industry_avg: null  # 要調査: 地域サービス系はROAS開示データ不足
+        industry_avg: null
         zynect_recommended: 3.5
         unit: "倍"
         source: null
@@ -489,34 +568,32 @@ benchmarks:
         industry_avg: 2.4
         zynect_recommended: 2.0
         unit: "回/月"
-        source: "AdEspresso Facebook Ads Frequency Best Practices 2024 — Local services."
+        source: "AdEspresso Frequency Best Practices 2024 — Local services."
 
     tiktok_ads:
-      # 注: 2026-05 時点で公式 APAC Q1 2025 Insight Report が入手不能のため
-      # 地域サービスの TikTok ベンチマークは null 維持。Triple Whale / Databox
-      # でも Local Service カテゴリは集計対象外。Day 4 以降に再調査。
+      # 注: TikTok APAC 公式レポート未入手、地域サービス事例少ないため null 維持
       ctr:
-        industry_avg: null  # 要調査: 地域サービスのTikTok運用は事例少ない
+        industry_avg: null
         zynect_recommended: 1.5
         unit: "%"
         source: null
       cpc:
-        industry_avg: null  # 要調査
+        industry_avg: null
         zynect_recommended: null
-        unit: "USD"
+        unit: "JPY"
         source: null
       cpa:
-        industry_avg: null  # 要調査
-        zynect_recommended: 25.0
-        unit: "USD"
+        industry_avg: null
+        zynect_recommended: 3750
+        unit: "JPY"
         source: null
       cvr:
-        industry_avg: null  # 要調査
+        industry_avg: null
         zynect_recommended: 3.0
         unit: "%"
         source: null
       roas:
-        industry_avg: null  # 要調査
+        industry_avg: null
         zynect_recommended: 3.0
         unit: "倍"
         source: null
@@ -524,27 +601,28 @@ benchmarks:
 # =============================================================================
 # Health Score 業界平均（媒体横断の総合評価）
 # =============================================================================
-# 注: Health Score は Zynect 独自スコアのため、業界平均は外部出典がない。
-#     Zynect 内部で蓄積するアカウントベースの median を四半期ごとに更新する。
-# =============================================================================
 health_score_benchmarks:
   ec_retail:
-    industry_avg: null      # 要調査: Zynect 内部運用アカウントから 2026-Q3 で集計予定
+    industry_avg: null
     zynect_recommended: 80
     source: "Zynect 内部運用アカウント median（2026-Q3 で初回集計予定）"
+  beauty_d2c:
+    industry_avg: null
+    zynect_recommended: 78
+    source: "Zynect 内部運用アカウント median（2026-Q3 で初回集計予定）"
   saas_b2b:
-    industry_avg: null      # 要調査: 同上
+    industry_avg: null
     zynect_recommended: 80
     source: "Zynect 内部運用アカウント median（2026-Q3 で初回集計予定）"
   finance:
-    industry_avg: null      # 要調査
+    industry_avg: null
     zynect_recommended: 75
     source: "Zynect 内部運用アカウント median（2026-Q3 で初回集計予定）"
   education:
-    industry_avg: null      # 要調査
+    industry_avg: null
     zynect_recommended: 78
     source: "Zynect 内部運用アカウント median（2026-Q3 で初回集計予定）"
   local_service:
-    industry_avg: null      # 要調査
+    industry_avg: null
     zynect_recommended: 75
     source: "Zynect 内部運用アカウント median（2026-Q3 で初回集計予定）"

@@ -230,3 +230,59 @@ class ClientConfig:
             source="crm",
             raw_config=raw_config,
         )
+
+
+
+# =============================================================================
+# v3.1 Day 5.3: ADR-004 — Conversion Mapping Pydantic モデル
+# =============================================================================
+# config/conversion_mapping.yaml の型検証用。
+# 詳細は docs/decisions/ADR-004-cv-normalization-and-conversion-mapping.md 参照。
+
+if PYDANTIC_AVAILABLE:
+    from typing import Dict, List
+
+    class ConversionTypeMap(BaseModel):
+        """1 つのコンバージョンタイプ（例: purchase）の synonym 集約定義"""
+        canonical: str
+        synonyms: List[str]
+        dedup_strategy: Literal["max", "sum", "first"] = "max"
+        notes: Optional[str] = None
+
+    class PlatformMap(BaseModel):
+        """1 媒体（meta / google / tiktok）の CV / Revenue マッピング"""
+        enabled: bool = False
+        api_version: Optional[str] = None
+        conversion_types: Dict[str, ConversionTypeMap] = {}
+        revenue_types: Dict[str, ConversionTypeMap] = {}
+        notes: Optional[str] = None
+
+    class ConversionMappingMetadata(BaseModel):
+        description: Optional[str] = None
+        last_updated: Optional[str] = None
+        related_adr: Optional[str] = None
+        notes: Optional[str] = None
+
+    class ConversionMapping(BaseModel):
+        """conversion_mapping.yaml のルート"""
+        version: int
+        metadata: Optional[ConversionMappingMetadata] = None
+        platforms: Dict[str, PlatformMap]
+
+        def get_platform(self, name: str) -> Optional[PlatformMap]:
+            """媒体名で PlatformMap 取得（無ければ None）"""
+            return self.platforms.get(name)
+
+        def cv_synonyms_for(self, platform: str) -> Dict[str, ConversionTypeMap]:
+            """指定媒体の有効な CV タイプマップを返す（enabled=false なら空）"""
+            pf = self.get_platform(platform)
+            if pf is None or not pf.enabled:
+                return {}
+            return pf.conversion_types
+
+        def revenue_synonyms_for(self, platform: str) -> Dict[str, ConversionTypeMap]:
+            """指定媒体の有効な Revenue タイプマップを返す（enabled=false なら空）"""
+            pf = self.get_platform(platform)
+            if pf is None or not pf.enabled:
+                return {}
+            return pf.revenue_types

@@ -142,6 +142,37 @@ def estimate_for_rule(
     else:
         savings_display = primary_display
 
+    # === v3.1 Task G: シナリオ予測（保守 / 現実 / 楽観） ===
+    # ルール側に scenarios フィールド（個別カスタム）があれば最優先
+    rule_scenarios = rule.get("scenarios")
+    if isinstance(rule_scenarios, dict) and all(k in rule_scenarios for k in ("conservative", "realistic", "optimistic")):
+        cons_mult = float(rule_scenarios.get("conservative", 0.7))
+        real_mult = float(rule_scenarios.get("realistic", 1.0))
+        opt_mult = float(rule_scenarios.get("optimistic", 1.3))
+        band = max(opt_mult - real_mult, real_mult - cons_mult)
+        scenario_source = "rule_override"
+    else:
+        # confidence ベースのデフォルト
+        band_default = {"high": 0.30, "medium": 0.40, "low": 0.50}
+        # confidence_level が rule にあればそれを優先（Task G）
+        eff_confidence = rule.get("confidence_level") or confidence
+        band = band_default.get(eff_confidence, 0.40)
+        cons_mult = 1.0 - band
+        real_mult = 1.0
+        opt_mult = 1.0 + band
+        scenario_source = "confidence_default"
+
+    scenario = {
+        "conservative_yen": int(round(savings_yen * cons_mult)),
+        "realistic_yen": int(round(savings_yen * real_mult)),
+        "optimistic_yen": int(round(savings_yen * opt_mult)),
+        "band_pct": int(band * 100),
+        "source": scenario_source,
+    }
+    # 確度マーク（★★★ / ★★☆ / ★☆☆）— rule.confidence_level を優先
+    eff_confidence_for_stars = rule.get("confidence_level") or confidence
+    confidence_stars = {"high": "★★★", "medium": "★★☆", "low": "★☆☆"}.get(eff_confidence_for_stars, "★☆☆")
+
     return {
         "rule_id": rid,
         "has_estimate": True,
@@ -151,9 +182,11 @@ def estimate_for_rule(
         "primary_display": primary_display,
         "confidence": confidence,
         "confidence_label": CONFIDENCE_LABELS.get(confidence, confidence),
+        "confidence_stars": confidence_stars,
         "impact_horizon_weeks": horizon,
         "estimated_savings_yen": savings_yen,
         "estimated_savings_display": savings_display,
+        "scenario": scenario,
         "rationale": rationale,
         "fallback_text": None,
         "calc_basis": calc_basis,
@@ -224,6 +257,271 @@ def estimate_for_rules(
     return [estimate_for_rule(r, monthly_spend_yen, current_metrics) for r in rules]
 
 
+def _build_rule_to_group(weights: dict) -> dict[str, str]:
+    """rule_id → root_cause_group の逆引き辞書を構築する（共通ヘルパー）。"""
+    rule_to_group: dict[str, str] = {}
+    rule_root_cause = weights.get("rule_root_cause", {}) or {}
+    for group, platforms in rule_root_cause.items():
+        if not isinstance(platforms, dict):
+            continue
+        for platform, ids in platforms.items():
+            if not ids:
+                continue
+            for rid in ids:
+                rule_to_group[rid] = group
+    return rule_to_group
+
+
+def calculate_minimum_impact(
+    actions: list[dict],
+    rules_by_id: dict,
+    weights: dict,
+    pixel_health: dict | None = None,
+) -> dict[str, Any]:
+    """v3.1 Task F-3: 最低値（最も保守的）の改善額を計算する。
+
+    各 root_cause_group 内で最大値1件を採用、残りに duplicate_factor 適用。
+    pixel休眠時は measurement_foundation の duplicate_factor を 0.1 に切替、
+    非 measurement 施策の adjusted_yen に confidence_decay (0.7) を乗じる。
+    independent グループは満額加算（1.0）。
+
+    Returns:
+        dict { total_yen, breakdown, applied_pixel_dormant }
+    """
+    rule_to_group = _build_rule_to_group(weights)
+    duplicate_factors = weights.get("duplicate_factors", {}) or {}
+    overrides = weights.get("pixel_health_overrides", {}) or {}
+    threshold_days = int(overrides.get("dormant_threshold_days", 270))
+    mf_factor_dormant = float(overrides.get("measurement_foundation_duplicate_factor_when_dormant", 0.1))
+    non_mf_decay = float(overrides.get("non_measurement_confidence_decay_when_dormant", 0.7))
+
+    is_dormant = bool(
+        pixel_health and pixel_health.get("dormant_days", 0) >= threshold_days
+    )
+
+    # グループ別に集約
+    by_group: dict[str, list[dict]] = {}
+    for est in actions:
+        if not est.get("has_estimate"):
+            continue
+        rid = est.get("rule_id", "")
+        group = rule_to_group.get(rid, "other")
+        by_group.setdefault(group, []).append(est)
+
+    total_yen = 0
+    breakdown: dict[str, dict] = {}
+    for group, ests in by_group.items():
+        # duplicate_factor 決定
+        if group == "measurement_foundation" and is_dormant:
+            factor = mf_factor_dormant  # 計測修復が最優先のため重複係数を 0.1 に
+        else:
+            factor = float(duplicate_factors.get(group, 1.0))
+
+        ests_sorted = sorted(ests, key=lambda x: x.get("estimated_savings_yen", 0) or 0, reverse=True)
+        if not ests_sorted:
+            continue
+        max_yen = int(ests_sorted[0].get("estimated_savings_yen", 0) or 0)
+        rest_yen = sum(int(e.get("estimated_savings_yen", 0) or 0) for e in ests_sorted[1:])
+
+        # 最低値計算: max + (rest × factor)
+        group_yen = max_yen + int(round(rest_yen * factor))
+
+        # pixel 休眠時、非 measurement_foundation の効果は decay で減衰
+        if is_dormant and group != "measurement_foundation" and group != "independent":
+            group_yen = int(round(group_yen * non_mf_decay))
+
+        total_yen += group_yen
+        breakdown[group] = {
+            "factor_applied": factor,
+            "max_yen": max_yen,
+            "rest_sum_yen": rest_yen,
+            "group_total_yen": group_yen,
+            "rule_count": len(ests),
+            "non_mf_decay_applied": is_dormant and group != "measurement_foundation" and group != "independent",
+        }
+
+    return {
+        "total_yen": total_yen,
+        "display": f"¥{total_yen:,}/月",
+        "breakdown": breakdown,
+        "applied_pixel_dormant": is_dormant,
+    }
+
+
+def calculate_realistic_impact(
+    actions: list[dict],
+    rules_by_id: dict,
+    weights: dict,
+    pixel_health: dict | None = None,
+) -> dict[str, Any]:
+    """v3.1 Task F-3: 現実的試算（minimum と independent の中間）。
+
+    最大値 + 同グループ 2 位以下にグループ別 duplicate_factor を適用。
+    pixel休眠時の調整は minimum と同じ。
+    """
+    # Minimum と同じロジックだが、pixel_health の non_mf_decay は適用しない
+    rule_to_group = _build_rule_to_group(weights)
+    duplicate_factors = weights.get("duplicate_factors", {}) or {}
+    overrides = weights.get("pixel_health_overrides", {}) or {}
+    threshold_days = int(overrides.get("dormant_threshold_days", 270))
+    mf_factor_dormant = float(overrides.get("measurement_foundation_duplicate_factor_when_dormant", 0.1))
+
+    is_dormant = bool(
+        pixel_health and pixel_health.get("dormant_days", 0) >= threshold_days
+    )
+
+    by_group: dict[str, list[dict]] = {}
+    for est in actions:
+        if not est.get("has_estimate"):
+            continue
+        rid = est.get("rule_id", "")
+        group = rule_to_group.get(rid, "other")
+        by_group.setdefault(group, []).append(est)
+
+    total_yen = 0
+    for group, ests in by_group.items():
+        if group == "measurement_foundation" and is_dormant:
+            factor = mf_factor_dormant
+        else:
+            factor = float(duplicate_factors.get(group, 1.0))
+        ests_sorted = sorted(ests, key=lambda x: x.get("estimated_savings_yen", 0) or 0, reverse=True)
+        if not ests_sorted:
+            continue
+        max_yen = int(ests_sorted[0].get("estimated_savings_yen", 0) or 0)
+        rest_yen = sum(int(e.get("estimated_savings_yen", 0) or 0) for e in ests_sorted[1:])
+        total_yen += max_yen + int(round(rest_yen * factor))
+
+    return {
+        "total_yen": total_yen,
+        "display": f"¥{total_yen:,}/月",
+        "applied_pixel_dormant": is_dormant,
+    }
+
+
+def calculate_independent_impact(
+    actions: list[dict],
+    rules_by_id: dict,
+    weights: dict,
+) -> dict[str, Any]:
+    """v3.1 Task F-3: 上限値（全件独立に最大効果発揮した場合）。
+
+    従来の単純合算ロジック。重複・依存は考慮しない。
+    """
+    total = 0
+    for est in actions:
+        if est.get("has_estimate"):
+            total += int(est.get("estimated_savings_yen", 0) or 0)
+    return {
+        "total_yen": total,
+        "display": f"¥{total:,}/月",
+    }
+
+
+def aggregate_with_dedup(
+    estimates: list[dict],
+    rules_by_id: dict,
+    weights: dict,
+) -> dict[str, Any]:
+    """v3.1: 同一根本原因（root_cause グループ）の重複排除付き集計。
+
+    各ルールが属するグループを判定し:
+    - グループ最大値: 100% 採用
+    - 同グループ 2 件目以降: overlap_factor を乗じて加算
+
+    Returns:
+        dict {
+          optimistic_yen: 単純合算（楽観的上限）
+          realistic_yen: 重複排除済み（現実的）
+          conservative_yen: realistic × 0.7（保守的下限）
+          group_breakdown: {group: {rules: [...], max_yen, sum_yen, dedup_yen}},
+          per_estimate_with_factor: [{rule_id, group, factor, original_yen, adjusted_yen}],
+        }
+    """
+    rule_root_cause = weights.get("rule_root_cause", {}) or {}
+    overlap_factors = weights.get("overlap_factor", {"other": 1.0}) or {}
+
+    # rule_id → group の逆引きを構築
+    rule_to_group: dict[str, str] = {}
+    for group, platforms in rule_root_cause.items():
+        if not isinstance(platforms, dict):
+            continue
+        for platform, ids in platforms.items():
+            if not ids:
+                continue
+            for rid in ids:
+                rule_to_group[rid] = group
+
+    def _resolve_group(rule_id: str) -> str:
+        return rule_to_group.get(rule_id, "other")
+
+    # 最初のループ: グループごとに集計
+    by_group: dict[str, list[dict]] = {}
+    for est in estimates:
+        if not est.get("has_estimate"):
+            continue
+        rid = est.get("rule_id", "")
+        group = _resolve_group(rid)
+        by_group.setdefault(group, []).append(est)
+
+    # 各グループ内で max を特定 → factor を割り当て
+    per_estimate: list[dict] = []
+    group_breakdown: dict[str, dict] = {}
+    optimistic_total = 0
+    realistic_total = 0
+
+    for group, ests in by_group.items():
+        factor = overlap_factors.get(group, 1.0)
+        # 最大インパクトのルール
+        ests_sorted = sorted(ests, key=lambda x: x.get("estimated_savings_yen", 0) or 0, reverse=True)
+        if not ests_sorted:
+            continue
+        max_yen = ests_sorted[0].get("estimated_savings_yen", 0) or 0
+        sum_yen = sum(e.get("estimated_savings_yen", 0) or 0 for e in ests)
+
+        # dedup: max は 100%、それ以外は factor 倍
+        dedup_yen = max_yen
+        for e in ests_sorted[1:]:
+            yen = e.get("estimated_savings_yen", 0) or 0
+            dedup_yen += int(round(yen * factor))
+
+        group_breakdown[group] = {
+            "rules": [e.get("rule_id") for e in ests_sorted],
+            "factor": factor,
+            "max_yen": int(max_yen),
+            "sum_yen": int(sum_yen),
+            "dedup_yen": int(dedup_yen),
+            "rule_count": len(ests),
+        }
+
+        optimistic_total += int(sum_yen)
+        realistic_total += int(dedup_yen)
+
+        # per_estimate
+        for i, e in enumerate(ests_sorted):
+            applied = 1.0 if i == 0 else factor
+            yen = e.get("estimated_savings_yen", 0) or 0
+            per_estimate.append({
+                "rule_id": e.get("rule_id"),
+                "group": group,
+                "factor": applied,
+                "original_yen": int(yen),
+                "adjusted_yen": int(round(yen * applied)),
+            })
+
+    conservative_total = int(round(realistic_total * 0.7))
+
+    return {
+        "optimistic_yen": optimistic_total,
+        "realistic_yen": realistic_total,
+        "conservative_yen": conservative_total,
+        "optimistic_display": f"¥{optimistic_total:,}/月（独立実施時の上限）",
+        "realistic_display": f"¥{realistic_total:,}/月（依存関係考慮）",
+        "conservative_display": f"¥{conservative_total:,}/月（保守的下限）",
+        "group_breakdown": group_breakdown,
+        "per_estimate_with_factor": per_estimate,
+    }
+
+
 def aggregate_top5_impact(estimates: list[dict]) -> dict[str, Any]:
     """Top5（または任意件数）のインパクトを集計し、エグゼクティブサマリ用に整形する。
 
@@ -266,6 +564,11 @@ def aggregate_top5_impact(estimates: list[dict]) -> dict[str, Any]:
         parts.append(f"低 {conf_mix['low']}件")
     confidence_summary = " / ".join(parts) if parts else "試算対象なし"
 
+    # シナリオ別合計
+    cons_total = sum(int((e.get("scenario") or {}).get("conservative_yen", 0)) for e in estimates if e.get("has_estimate"))
+    real_total = sum(int((e.get("scenario") or {}).get("realistic_yen", 0)) for e in estimates if e.get("has_estimate"))
+    opt_total = sum(int((e.get("scenario") or {}).get("optimistic_yen", 0)) for e in estimates if e.get("has_estimate"))
+
     return {
         "total_savings_yen": total,
         "total_savings_display": f"月額 ¥{total:,}" if total > 0 else "試算未実施",
@@ -274,6 +577,12 @@ def aggregate_top5_impact(estimates: list[dict]) -> dict[str, Any]:
         "confidence_summary": confidence_summary,
         "rules_with_estimate": with_est,
         "rules_without_estimate": without_est,
+        # シナリオ別（重複排除前）
+        "scenarios_naive": {
+            "conservative_yen": cons_total,
+            "realistic_yen": real_total,
+            "optimistic_yen": opt_total,
+        },
     }
 
 

@@ -43,12 +43,17 @@ class TestBenchmarkCompare:
         assert result["zynect_recommended"] is not None
 
     def test_normal_lower_is_better_above_industry(self):
-        """CPA は小さい方が良い。Zynect 推奨は超えないが業界平均は下回るケース。"""
+        """CPA は小さい方が良い。Zynect 推奨は超えないが業界平均は下回るケース。
+
+        v3.1 (Task B): benchmarks.yaml は直接 JPY 表記。USD→JPY 自動換算は廃止。
+        """
         bm = load_benchmarks()
-        # ec_retail × google_ads × cpa: industry_avg=45.27 / zynect_rec=30.0
-        result = compare_3axis("ec_retail", "google_ads", "cpa", current=35.0, bm=bm)
-        assert result["status"] == "above_industry"  # 業界平均より良いがZynect推奨より悪い
+        # ec_retail × google_ads × cpa: industry_avg=¥6,790 / zynect_rec=¥4,500
+        # current=¥5,250 は zr=¥4,500 を上回るが ia=¥6,790 は下回る → above_industry
+        result = compare_3axis("ec_retail", "google_ads", "cpa", current=5250.0, bm=bm)
+        assert result["status"] == "above_industry"
         assert result["higher_is_better"] is False
+        assert result["unit"] == "JPY"
 
     def test_boundary_no_current_value(self):
         """現状値が None の場合は has_data=False、業界平均は取得済み。"""
@@ -72,6 +77,17 @@ class TestBenchmarkCompare:
         chart = build_chart_data(cmp)
         assert chart["available"] is False
         assert chart["current_pct"] is None
+
+    def test_beauty_d2c_industry_meta_cpa(self):
+        """v3.1 Task B: beauty_d2c 業界の Meta CPA が JPY 直書きで取得できる。"""
+        bm = load_benchmarks()
+        result = compare_3axis("beauty_d2c", "meta_ads", "cpa", current=4000.0, bm=bm)
+        assert result["has_data"] is True
+        assert result["industry_avg"] == 4500
+        assert result["zynect_recommended"] == 3000
+        assert result["unit"] == "JPY"
+        # current=¥4,000 は zr=¥3,000 より悪いが ia=¥4,500 より良い → above_industry
+        assert result["status"] == "above_industry"
 
     def test_health_score_3axis_with_known_industry(self):
         """Health Score 3軸が ec_retail で取得できる。"""
@@ -165,6 +181,84 @@ class TestImpactEstimator:
         assert agg["rules_with_estimate"] == 2
         assert agg["rules_without_estimate"] == 1
         assert agg["horizon_weeks_max"] == 6
+
+    def test_aggregate_with_dedup_overlap(self):
+        """v3.1 Task F: 同一根本原因（measurement_foundation）のルールはグループ内で
+        2 件目以降に duplicate_factor=0.2 が乗じられる（v3.1 で 0.4→0.2 に強化）。"""
+        from engine.impact_estimator import aggregate_with_dedup
+        from engine.priority_ranker import load_all_rules, load_weights
+
+        # M01 (max=¥350,000), M02 (¥189,000), M03 (¥187,000) は全て measurement_foundation
+        estimates = [
+            {"rule_id": "M01", "has_estimate": True, "estimated_savings_yen": 350000, "confidence": "high"},
+            {"rule_id": "M02", "has_estimate": True, "estimated_savings_yen": 189000, "confidence": "high"},
+            {"rule_id": "M03", "has_estimate": True, "estimated_savings_yen": 187000, "confidence": "high"},
+        ]
+        rules = load_all_rules()
+        weights = load_weights()
+        result = aggregate_with_dedup(estimates, rules, weights)
+        # naive sum
+        assert result["optimistic_yen"] == 726_000
+        # dedup: max(350,000) + 0.2 * (189,000 + 187,000) = 350,000 + 75,200 = 425,200
+        assert result["realistic_yen"] == 425_200
+        assert result["group_breakdown"]["measurement_foundation"]["factor"] == 0.2
+
+    def test_calculate_three_layer_impact(self):
+        """v3.1 Task F-3: 3関数（minimum / realistic / independent）の動作確認"""
+        from engine.impact_estimator import (
+            calculate_minimum_impact, calculate_realistic_impact, calculate_independent_impact,
+        )
+        from engine.priority_ranker import load_all_rules, load_weights
+
+        estimates = [
+            {"rule_id": "M01", "has_estimate": True, "estimated_savings_yen": 500000, "confidence": "high"},
+            {"rule_id": "M09", "has_estimate": True, "estimated_savings_yen": 300000, "confidence": "medium"},  # delivery_learning
+            {"rule_id": "M49", "has_estimate": True, "estimated_savings_yen": 100000, "confidence": "high"},   # independent
+        ]
+        rules = load_all_rules()
+        weights = load_weights()
+
+        # Independent: 全件単純合算
+        ind = calculate_independent_impact(estimates, rules, weights)
+        assert ind["total_yen"] == 900_000
+
+        # Minimum: グループ別最大 + 残り×factor (pixel_health なし)
+        # M01: measurement_foundation 単独 → 500,000
+        # M09: delivery_learning_or_structure 単独 → 300,000
+        # M49: independent 単独 → 100,000
+        # 合計: 900,000
+        mn = calculate_minimum_impact(estimates, rules, weights, pixel_health=None)
+        assert mn["total_yen"] == 900_000
+
+        # Pixel 休眠時: M09 (delivery) と M49 (independent) は減衰しない（M01 は measurement で variant 適用）
+        mn_dormant = calculate_minimum_impact(estimates, rules, weights, pixel_health={"dormant_days": 270})
+        # M01 は measurement_foundation 単独（max のみ）→ 500,000（factor 適用は2件目以降のため変わらず）
+        # M09 は delivery で non_mf_decay=0.7 → 300,000 * 0.7 = 210,000
+        # M49 は independent → 100,000（減衰しない）
+        assert mn_dormant["total_yen"] == 500_000 + 210_000 + 100_000  # 810,000
+        assert mn_dormant["applied_pixel_dormant"] is True
+
+    def test_estimate_for_rule_scenario_band(self):
+        """v3.1: confidence ベースで scenario の ±band が正しく算出される。"""
+        rule = {
+            "id": "G27",
+            "severity": "critical",
+            "expected_impact": {
+                "primary_metric": "spend_efficiency_pct",
+                "primary_value": 12,
+                "confidence": "high",
+                "impact_horizon_weeks": 2,
+                "rationale": "test",
+            },
+        }
+        from engine.impact_estimator import estimate_for_rule
+        result = estimate_for_rule(rule, monthly_spend_yen=1_000_000)
+        # primary = 120,000 / band(high)=30%
+        assert result["scenario"]["realistic_yen"] == 120_000
+        assert result["scenario"]["conservative_yen"] == 84_000  # 120,000 * 0.7
+        assert result["scenario"]["optimistic_yen"] == 156_000   # 120,000 * 1.3
+        assert result["scenario"]["band_pct"] == 30
+        assert result["confidence_stars"] == "★★★"
 
     def test_kpi_projection_cpa_reduction(self):
         """KPI 投影で CPA が削減方向に動く。"""

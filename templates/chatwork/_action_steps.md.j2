@@ -1,0 +1,265 @@
+{# ChatWork 改善手順マクロ (ADR-005 / G タスク 層1+層3)
+
+   方針:
+     層1 (抽象度↑): 具体的なボタン名/メニュー位置を断定せず、「目的 + ゴール状態 + 選択肢」
+                    で記述。UI が変わっても陳腐化しない構造。
+     層3 (WebSearch 反映): 2026-05 時点の公式情報 (Meta One-Click CAPI 2026/4 リリース、
+                          AEM 8 イベント枠撤廃 2025/6) を取り込み済み。
+
+   対応 rule_id (canonical / legacy alias):
+     - DQ-CAPI-MISSING / M02         — CAPI (Conversion API) 未実装
+     - PIXEL-DORMANT   / M01         — Pixel 休眠
+     - DOMAIN-NOT-VERIFIED / M09     — ドメイン認証未完了
+     - AEM-NOT-CONFIGURED / M61      — AEM 設定 (※2025/6 制限撤廃により内容刷新)
+     - FIRST-PARTY-DATA-MISSING / M04 — 1st パーティデータ未連携
+     - 未知 rule_id                   — 「弊社までご返信ください」フォールバック
+
+   payload 任意フィールド (あれば文中に展開):
+     payload.platform_kind: "ecforce" | "shopify" | "custom" | None  (CAPI 用)
+     payload.dormant_days: int                            (PIXEL-DORMANT 用)
+     payload.recommended_method: "dns" | "html_file" | "meta_tag"  (DOMAIN 用)
+#}
+
+{% macro render_steps(rule_id, payload) %}
+{%- set rid = rule_id|upper -%}
+{%- set caps = payload or {} -%}
+{%- if rid in ("DQ-CAPI-MISSING", "M02") -%}
+{{ _capi_steps(caps) }}
+{%- elif rid in ("PIXEL-DORMANT", "M01") -%}
+{{ _pixel_dormant_steps(caps) }}
+{%- elif rid in ("DOMAIN-NOT-VERIFIED", "M09") -%}
+{{ _domain_verification_steps(caps) }}
+{%- elif rid in ("AEM-NOT-CONFIGURED", "M61") -%}
+{{ _aem_steps(caps) }}
+{%- elif rid in ("FIRST-PARTY-DATA-MISSING", "M04") -%}
+{{ _first_party_data_steps(caps) }}
+{%- else -%}
+{{ _fallback_steps(rule_id) }}
+{%- endif -%}
+{% endmacro %}
+
+
+{# ===== 1. CAPI 未実装 ===== #}
+{% macro _capi_steps(caps) %}
+　【目的】 ブラウザ経由 (Pixel) で計測欠損が発生する CV を、サーバ経由 (CAPI) で
+　　　　   補完し、学習シグナルを回復する。
+　【ゴール状態】 Events Manager の該当 Pixel で、Pixel イベントと CAPI イベントが
+　　　　　　　　 重複排除済みの状態で受信されており、EMQ スコアが 6.0 以上に到達。
+
+　【実装方法 (難易度の昇順 — 自社環境に合うものを選択)】
+
+　▼ 方法A: Meta One-Click CAPI (2026 年 4 月リリース、最も簡単)
+　　・Events Manager 上で「Conversions API のワンクリック有効化」が表示されていれば
+　　  ボタン 1 つで Pixel と並走する CAPI 連携が自動構築される
+　　・ECサイトのフォーム送信や購入完了が自動で CAPI 経由送信される
+　　・コード追加なし、運用工数最小
+
+　▼ 方法B: ECフォース 標準連携 (ECフォースをご利用の場合)
+　　・ECフォース管理画面 → 「外部連携アカウント管理」→「FB CV API」タブを開く
+　　・Meta Pixel ID + Meta Business Manager で発行したアクセストークンを入力
+　　・購入 (purchase)、カート追加 (add_to_cart)、リード (lead) 等の標準イベントが
+　　  ECフォースのサーバから直接 CAPI 経由で送信される
+　　・追加コード実装不要、Pixel との dedup_key (event_id) も自動付与
+　　・テストイベント機能で疎通確認可能 (Meta Events Manager の「テストイベント」タブ)
+　　・(参考) Shopify など他 EC プラットフォームをご利用の場合は
+　　   各プラットフォームの公式 Meta CAPI 連携機能を選択
+
+　▼ 方法C: CAPI Gateway (Meta 提供のノーコード・マネージドサーバ)
+　　・Events Manager の Conversions API 設定で「ゲートウェイ経由で送信」を選択
+　　・Meta が用意するクラウドインフラに自社ドメインからイベントを送るだけで連携完了
+　　・自社サーバの構築不要、月額料金は AWS 等の実費のみ
+
+　▼ 方法D: Server-side GTM 経由 (中間難度、柔軟性◎)
+　　・GTM サーバーサイドコンテナを GCP Cloud Run / AWS App Runner 等に立てる
+　　・既存 GA4 タグから ssGTM へイベント転送 → ssGTM 内の Meta CAPI タグで Meta へ送信
+　　・1 つのコンテナで Meta / Google / TikTok の CAPI を同時管理できる利点
+
+　▼ 方法E: 自社サーバから直接 API 叩き込み (最大の柔軟性)
+　　・Meta Graph API のエンドポイント: graph.facebook.com/{バージョン}/{pixel_id}/events
+　　・必須パラメータ: event_name / event_time / action_source / user_data / event_id
+　　・event_id は Pixel と CAPI で同じ値にする (重複排除キーになる)
+　　・user_data の email / phone は事前に SHA256 ハッシュ化してから送信
+
+　【動作確認】
+　　・Events Manager の該当 Pixel → 「テストイベント」タブで CAPI 経由イベントが
+　　  「Server」ラベル付きで表示されること
+　　・Pixel と CAPI の dedup_key (event_id) が一致し「重複排除済み」と表示されること
+　　・48 時間後に「データの質」セクションで EMQ スコア 6.0 以上を確認
+
+　【参考効果指標 (Meta 公式)】
+　　・CAPI 実装サイトは未実装比で平均 17.8% の CPA 改善傾向 (Meta 2026 公式数値)
+{% endmacro %}
+
+
+{# ===== 2. Pixel 休眠 ===== #}
+{% macro _pixel_dormant_steps(caps) %}
+{%- set days = caps.get("dormant_days") -%}
+{%- if days %}
+　【現状】 直近 {{ days }} 日間 Pixel イベント受信なし (休眠状態)
+{% endif %}
+　【目的】 休眠 Pixel と稼働 Pixel が混在する状態を解消し、計測対象を 1 つに統合する。
+　【ゴール状態】 アクティブな Pixel が 1 サイトあたり 1 つに整理され、全広告アカウント
+　　　　　　　　 の既定 Pixel として再紐付けされている。
+
+　【判断基準】
+　　・直近 30 日間 イベント受信 0 件 → 「休眠」と判断、統合候補
+　　・同一サイト URL に複数 Pixel が存在 → メイン Pixel 1 つに集約
+　　・過去キャンペーンで使用された Pixel → 完全削除はせず「非アクティブ化」推奨
+　　  (Meta は 2026 年現在、Pixel の完全削除機能を提供していない)
+
+　【作業の流れ】
+　　1. Events Manager の Pixel 一覧で各 Pixel の直近 30 日イベント数を確認
+　　2. 残す Pixel (= メイン) を 1 つ決める。判断基準は以下の優先順:
+　　　 a. CAPI 連携が既に済んでいる Pixel
+　　　 b. 直近イベント数が最も多い Pixel
+　　　 c. 最も古くから使われている Pixel (履歴の蓄積が大きい)
+　　3. 統合対象の Pixel を「データソース」設定で非アクティブ化
+　　4. 全広告セットの「コンバージョンイベント」設定をメイン Pixel 参照に切替
+　　5. カタログ広告 / Advantage+ ショッピングを使う場合は Commerce Manager 側でも
+　　   メイン Pixel への紐付けを再確認
+
+　【削除前のバックアップ推奨】
+　　・統合前に各 Pixel の Pixel ID / 過去 30 日イベント種別・件数をスクリーンショット保存
+　　・統合後に「やはり戻したい」となっても Meta はイベント履歴の復元を提供しないため
+　　・休眠 Pixel に紐付いていたカスタムオーディエンスは事前に export して退避
+
+　【動作確認】
+　　・テスト購入を 1 件発火し、メイン Pixel の「概要」タブでリアルタイム表示確認
+　　・48 時間後に「データの質」セクションで EMQ スコアが算出されていること
+　　・統合した Pixel に紐付いていた既存広告セットが新 Pixel を参照していること
+{% endmacro %}
+
+
+{# ===== 3. ドメイン認証未完了 ===== #}
+{% macro _domain_verification_steps(caps) %}
+{%- set method = (caps.get("recommended_method") or "")|lower -%}
+　【目的】 Meta に対して「このドメインは私たちが所有している」と証明する。
+　　　　   AEM 設定や iOS14.5+ 広告配信の前提条件となる。
+　【ゴール状態】 Meta Business Manager の「ドメイン」一覧で対象ドメインが「認証済み」
+　　　　　　　　 ステータスとして表示されている。
+
+　【3 方式の使い分け基準】
+　　・DNS TXT レコード方式: 推奨。最も永続的。サブドメイン含めて一括認証可能。
+　　                       DNS 編集権限が必要。反映まで 15 分〜4 時間。
+　　・HTML ファイル方式: DNS 編集権限が無いが Web サーバの管理権限はある場合の代替。
+　　                    ファイル配置から認証完了まで数分。
+　　・メタタグ方式: HTML テンプレートを直接編集できる場合の最短実装。
+　　              非エンジニアにも理解しやすい。
+
+{% if method == "html_file" %}
+　【方式B: HTML ファイル設置】
+　　・Meta が発行する一意の HTML ファイル (固有のファイル名) をダウンロード
+　　・サイトのドキュメントルート (= ドメイン直下 https://{domain}/{filename}.html) に配置
+　　・ブラウザでアクセスして Meta 指定の内容が表示されることを確認
+　　・Meta 側で「認証」を実行 → 「認証済み」になることを確認
+{% elif method == "meta_tag" %}
+　【方式C: meta タグ埋込】
+　　・Meta が発行する <meta name="facebook-domain-verification" content="..."> をコピー
+　　・サイトの全ページの <head> 内 (= 共通テンプレートのヘッダ) に貼付
+　　・デプロイ後、ブラウザの「ページソースを表示」で該当タグの存在を確認
+　　・Meta 側で「認証」を実行 → 「認証済み」になることを確認
+{% else %}
+　【方式A: DNS TXT レコード (推奨)】
+　　・Meta が発行する TXT レコード (例: facebook-domain-verification=xxxxx) をコピー
+　　・ドメイン管理サービス (Route 53 / お名前.com / Cloudflare 等) で TXT レコードを追加
+　　　 ホスト名は @ (ドメインルート)、値は上記 facebook-domain-verification=xxxxx
+　　・DNS 反映を待つ (通常 15 分以内、最大 4 時間)
+　　・Meta 側で「認証」を実行 → 「認証済み」になることを確認
+{% endif %}
+
+　【認証後に有効化される運用】
+　・AEM (集計イベント測定) 設定が解放される (M61 の前提条件)
+　・iOS14.5+ ユーザに対する広告配信の最適化が改善される
+　・複数 BM で同ドメインを使う場合は親 BM を 1 つ決めて他 BM はリンク参照
+
+　【メンテナンス情報】
+　・認証完了後は DNS / HTML / meta タグの認証用記述を削除しても認証ステータスは維持される
+　　ただし「保険」として残しておく方が、再認証が必要になった際の作業が省ける
+　・サブドメイン (shop.example.com 等) は親ドメイン認証で一括カバーされる
+{% endmacro %}
+
+
+{# ===== 4. AEM (集計イベント測定) ===== #}
+{# 重要: 2025 年 6 月の Meta 仕様変更で「8 イベント枠の手動優先順位設定」は撤廃された。
+   現在は AEM タブ自体が Events Manager から削除されており、全イベントが自動集計される。
+   過去の指摘で「AEM 優先度未設定」が記録されている場合は、以下のチェックに置換える。 #}
+{% macro _aem_steps(caps) %}
+　【⚠️ 仕様変更 (2025 年 6 月以降)】
+　　Meta は AEM の 8 イベント枠制限と手動優先順位設定を撤廃しました。
+　　Events Manager から「集計イベント測定」タブも削除されています。
+　　現在、対象ドメインの全標準・カスタムイベントは自動集計されます。
+
+　【目的】 (新仕様) iOS14.5+ ユーザ経由の CV を最大限計測するため、
+　　　　   ドメイン認証 + value 最適化を有効化する。
+　【ゴール状態】 ドメイン認証済み + Purchase 等の重要イベントで value 最適化が有効、
+　　　　　　　　 SKAdNetwork 経由の CV が広告マネージャに集計されている状態。
+
+　【現在実施すべきチェック】
+　　1. 対象ドメインが Meta に「認証済み」として登録されているか確認 (M09 完了が前提)
+　　2. Events Manager の該当 Pixel で「データの質」スコアを確認
+　　3. Purchase / Lead 等のキーイベントで value 最適化を有効化
+　　4. value 最適化で参照する金額の最小〜最大レンジを実績ベースに設定
+　　   (例: ¥3,000 〜 ¥50,000 の購入が中心なら、その範囲を Meta に伝える)
+　　5. 設定変更後 72 時間は学習期間扱い、CPA / ROAS 評価は 4 日目以降に行う
+
+　【value 最適化の意義】
+　　・iOS opt-out ユーザの CV であっても合算 value を Meta が推定して最適化に使う
+　　・ROAS 系広告セットを使う場合は事実上必須
+
+　【動作確認】
+　　・Ads Manager のレポートで「Apple SKAN」ラベル付きの CV が計上されていること
+　　・SKAN ポストバック到着まで最大 72 時間ラグがあるため、評価は 4 日目以降
+　　・「値最適化が有効です」と Events Manager 上に表示されていること
+
+　【過去テンプレートの陳腐化注記】
+　　Web 上には旧仕様 (8 イベント枠優先順位設定) を解説する記事が多数残存します。
+　　Meta 公式ヘルプセンター および Events Manager の現実 UI を優先してください。
+{% endmacro %}
+
+
+{# ===== 5. 1st パーティデータ未連携 ===== #}
+{% macro _first_party_data_steps(caps) %}
+　【目的】 自社が保有する顧客リストを Meta に連携し、
+　　　　   既存顧客の除外配信、類似オーディエンス (Lookalike) のシード作成を実現する。
+　【ゴール状態】 Meta Audiences にカスタムオーディエンスが作成され、
+　　　　　　　　 マッチ率 30% 以上、Lookalike 1〜3% のシードとして使用可能。
+
+　【Customer File 形式仕様】
+　　・ファイル形式: CSV または TXT (UTF-8、ヘッダー必須、ZIP は不可)
+　　・必須カラム: email (推奨) または phone (どちらか最低 1 つ)
+　　・推奨カラム: 多いほどマッチ率が上がる
+　　　 first_name / last_name / city / state / zip / country / dob (生年月日) / gender
+　　・1 ファイル最大 1,000 万行、ファイルサイズは大規模アップロード可能
+
+　【ハッシュ化 (SHA256, no salt)】
+　　・Meta 側で自動ハッシュ化されない場合に備え、事前ハッシュ化を推奨
+　　・対象フィールド: email / phone / first_name / last_name / city / state / zip / dob
+　　・正規化: 小文字化 + 前後空白除去 → SHA256
+　　・phone は E.164 形式 (+819012345678 等の国番号付き) → SHA256
+　　・dob は YYYYMMDD 形式 → SHA256
+　　・email_lc_sha256 / phone_sha256 が Meta マッチング上の主識別子
+
+　【アップロード手順】
+　　1. Meta Audiences で「カスタムオーディエンスを作成」→「カスタマーリスト」
+　　2. データ利用同意のチェック
+　　3. CSV をアップロード または Customer Match API 経由で送信
+　　4. 列マッピング画面で email / phone 等を Meta フィールドに紐付け
+　　5. 30 〜 60 分でマッチ率が表示される
+
+　【マッチ率の目安】
+　　・30% 未満: メールアドレス品質に問題あり (古いリスト、退会顧客混入)
+　　・30 〜 50%: 標準的、Lookalike シードとして使用可
+　　・50% 超: 良好、購買頻度の高い顧客リストとして優秀
+
+　【データ更新運用】
+　　・週次 〜 月次で差分 CSV をアップロード (既存リストの「更新」機能で追記)
+　　・解約・退会顧客は除外リストとして別オーディエンス化 → 広告除外設定で配信
+　　・GDPR / 個人情報保護法対応: 削除依頼は別途削除リスト化して反映
+{% endmacro %}
+
+
+{# ===== フォールバック ===== #}
+{% macro _fallback_steps(rule_id) %}
+　本指摘 ({{ rule_id }}) の改善手順は別途ご相談ください。
+　弊社 (Zynect Media) 担当より個別に手順をご案内します。
+{% endmacro %}

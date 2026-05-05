@@ -49,6 +49,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: measurement_foundation
+  priority_in_group: 1
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: high
 - id: M02
   name: CAPI実装状況
   category: 計測_トラッキング
@@ -82,6 +88,13 @@ rules:
     confidence: high
     impact_horizon_weeks: 2
     rationale: CAPI未実装はiOS14以降の計測欠損を補えずCV数を15〜25%失っている状態。実装でPixel欠損分が補われReported CVが回復し、AI入札の学習データも厚くなる。
+  implementation_steps:
+  - Events Manager → 設定 → コンバージョン API のステータスを確認
+  - '未実装の場合: サーバー側で Conversions API SDK (Python/Node) を実装、Pixel と同じ event_id でデデュプ'
+  - '実装済みの場合: EMQ スコアと「重複なし」判定を確認'
+  - ハッシュ化メールアドレス / 電話番号 / fbc / fbp を必ず送信
+  verification_method: Events Manager の「コンバージョン API ヘルス」が緑色 / EMQ ≥ 7.0
+  estimated_duration: 実装 3〜5 営業日 / EMQ 改善まで 2〜4 週
   enabled: true
   meta_principle_alignment:
     primary: M-α
@@ -89,6 +102,16 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: measurement_foundation
+  priority_in_group: 3
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: high
+  scenarios:
+    conservative: 0.6
+    realistic: 1.0
+    optimistic: 1.4
 - id: M03
   name: イベントマッチ品質
   category: 計測_トラッキング
@@ -120,6 +143,13 @@ rules:
     confidence: high
     impact_horizon_weeks: 2
     rationale: Purchase EMQ 6.0→8.0の改善で CPA約10〜15%改善（Triple Whale実証）。ハッシュ化メール常時送信が最も効果的な改善策で実装難易度も中程度。
+  implementation_steps:
+  - Events Manager → イベントテストで現在の EMQ スコアを確認
+  - 'EMQ 7 未満の場合: ハッシュ化 email を全イベントに必須化'
+  - 電話番号、外部 ID、fbc/fbp も追加してマッチ精度向上
+  - PII 送信のプライバシーポリシー記載確認
+  verification_method: Purchase イベント EMQ 8.0+ / AddToCart 7.0+ に到達
+  estimated_duration: 実装 1〜2 営業日 / 効果 2 週後から実感
   enabled: true
   meta_principle_alignment:
     primary: M-α
@@ -127,6 +157,16 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: measurement_foundation
+  priority_in_group: 5
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: high
+  scenarios:
+    conservative: 0.7
+    realistic: 1.0
+    optimistic: 1.3
 - id: M04
   name: ドメイン検証
   category: 計測_トラッキング
@@ -158,6 +198,13 @@ rules:
     confidence: high
     impact_horizon_weeks: 1
     rationale: ドメイン検証はAEM（Aggregated Event Measurement）の前提条件。未検証ではiOS14後のCV計測が機能せず、優先度イベント設定も活きない。設定自体は数十分で完了。
+  implementation_steps:
+  - ビジネス設定 → ブランドセーフティ → ドメイン検証ページを開く
+  - 対象ドメイン（LP の親ドメイン）を追加
+  - メタタグ / DNS TXT レコード / HTML ファイルアップロードのいずれかで認証
+  - 認証完了後、AEM で優先度イベントを 8 件まで設定
+  verification_method: ドメイン検証ステータスが「確認済み」/ AEM 優先度イベント表示が有効
+  estimated_duration: 認証 30 分〜1 営業日（DNS 反映待ち） / AEM 効果は週次反映
   enabled: true
   meta_principle_alignment:
     primary: M-θ
@@ -165,6 +212,16 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: measurement_foundation
+  priority_in_group: 2
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: high
+  scenarios:
+    conservative: 0.7
+    realistic: 1.0
+    optimistic: 1.2
 - id: M05
   name: 優先度イベントの設定
   category: 計測_トラッキング
@@ -203,6 +260,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: measurement_foundation
+  priority_in_group: 4
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: medium
 - id: M06
   name: 重複イベント排除
   category: 計測_トラッキング
@@ -242,6 +305,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: measurement_foundation
+  priority_in_group: 6
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: high
 - id: M07
   name: カスタムコンバージョン設定
   category: 計測_トラッキング
@@ -276,6 +345,12 @@ rules:
   category_type: principle_based
   # disabled 維持理由 (2026-05): context_dependent
   disabled_reason: context_dependent
+  root_cause_group: measurement_foundation
+  priority_in_group: 7
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: medium
 - id: M08
   name: iOS14+の影響計測
   category: 計測_トラッキング
@@ -314,6 +389,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: measurement_foundation
+  priority_in_group: 8
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: medium
 - id: M09
   name: 学習フェーズ脱出率
   category: 予算_入札
@@ -346,6 +427,13 @@ rules:
     confidence: medium
     impact_horizon_weeks: 4
     rationale: 学習フェーズ滞留中の広告セットは CPA変動±35%。脱出後は±12%程度に収束しCPA約20%改善。50CV/週基準を満たすには予算集中または広告セット集約が必要。
+  implementation_steps:
+  - 学習中の広告セット一覧を Ads Manager で抽出
+  - 予算 / ターゲット / 最適化イベントを 7 日間変更しないことを徹底
+  - 週 50CV 未満の広告セットは集約検討（同類似ペルソナを統合）
+  - Advantage+ Audience の有効化で学習速度を約 30% 加速可能
+  verification_method: 学習フェーズ → 「最適化済み」へ遷移 / 週次 CV ≥ 50
+  estimated_duration: 学習脱出 1〜2 週 / CPA 安定まで 4 週
   enabled: true
   meta_principle_alignment:
     primary: M-β
@@ -353,6 +441,16 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 1
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: medium
+  scenarios:
+    conservative: 0.5
+    realistic: 1.0
+    optimistic: 1.5
 - id: M10
   name: 1広告セットあたりCV数
   category: 予算_入札
@@ -393,6 +491,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 2
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: medium
 - id: M11
   name: CBO vs ABO選択
   category: 予算_入札
@@ -424,6 +528,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 7
+  classification_confidence: 0.65
+  classification_rationale: CBO/ABO は予算配分とも捉えられる。budget_allocation との境界判定で needs_review。
+  needs_review: true
+  confidence_level: medium
 - id: M12
   name: 目標費用設定
   category: 予算_入札
@@ -462,6 +572,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 5
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M13
   name: 予算変更の頻度
   category: 予算_入札
@@ -501,6 +617,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 3
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: medium
 - id: M14
   name: キャンペーン目的の適正
   category: 構造_設定
@@ -538,6 +660,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 4
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: medium
 - id: M15
   name: 広告セット過多
   category: 構造_設定
@@ -576,6 +704,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 8
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M16
   name: ポリシー違反・不承認
   category: 構造_設定
@@ -607,6 +741,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: operational_hygiene
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 9
+  classification_confidence: 0.6
+  classification_rationale: ポリシー違反は運用衛生で構造設定とは異なるが配信可否に直結するため delivery グループに統合。要再検討。
+  needs_review: true
+  confidence_level: high
 - id: M17
   name: アカウント品質スコア
   category: 構造_設定
@@ -646,6 +786,12 @@ rules:
   category_type: principle_based
   # disabled 維持理由 (2026-05): monitor_only_low_audit_priority
   disabled_reason: monitor_only_low_audit_priority
+  root_cause_group: targeting
+  priority_in_group: 10
+  classification_confidence: 0.55
+  classification_rationale: アカウント品質スコアは結果指標。creative または targeting どちらに属するか議論余地あり（needs_review）。
+  needs_review: true
+  confidence_level: low
 - id: M18
   name: 広告アカウント制限リスク
   category: 構造_設定
@@ -677,6 +823,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: operational_hygiene
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 10
+  classification_confidence: 0.55
+  classification_rationale: アカウント制限リスクは事業継続性、構造とは異なる軸。independent の方が妥当な可能性（needs_review）。
+  needs_review: true
+  confidence_level: high
 - id: M19
   name: ビジネスマネージャー権限
   category: 構造_設定
@@ -701,6 +853,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: operational_hygiene
+  root_cause_group: targeting
+  priority_in_group: 11
+  classification_confidence: 0.4
+  classification_rationale: BM 権限は運用衛生でターゲティングとも独立した IT セキュリティ。independent への変更要検討。
+  needs_review: true
+  confidence_level: medium
 - id: M20
   name: カタログ連携状態
   category: 構造_設定
@@ -740,6 +898,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: budget_allocation
+  priority_in_group: 1
+  classification_confidence: 0.65
+  classification_rationale: カタログ連携は商品供給=配信源として budget 寄りに分類したが、measurement_foundation 寄りでもある（needs_review）。
+  needs_review: true
+  confidence_level: medium
 - id: M21
   name: FBフィードCTR
   category: クリエイティブ
@@ -773,6 +937,12 @@ rules:
   category_type: principle_based
   # 判断保留 (2026-05): 有効化前に追加検証が必要
   review_required: true
+  root_cause_group: creative_optimization
+  priority_in_group: 6
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M22
   name: テキスト量過多
   category: クリエイティブ
@@ -805,6 +975,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 7
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M23
   name: プレースメント手動最適化
   category: 構造_設定
@@ -837,6 +1013,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 12
+  classification_confidence: 0.65
+  classification_rationale: プレースメント手動最適化は配信面=ターゲティングに含めたが、creative_optimization 寄りでもある（needs_review）。
+  needs_review: true
+  confidence_level: medium
 - id: M24
   name: 動画/画像の使い分け
   category: クリエイティブ
@@ -868,6 +1050,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 8
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M25
   name: 1:1と4:5のアスペクト比
   category: クリエイティブ
@@ -900,6 +1088,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 9
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M26
   name: IGフィードのビジュアル品質
   category: クリエイティブ
@@ -933,6 +1127,12 @@ rules:
   category_type: principle_based
   # 判断保留 (2026-05): 有効化前に追加検証が必要
   review_required: true
+  root_cause_group: creative_optimization
+  priority_in_group: 10
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M27
   name: エンゲージメント率
   category: クリエイティブ
@@ -965,6 +1165,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 11
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M28
   name: UGC風素材の活用
   category: クリエイティブ
@@ -998,6 +1204,12 @@ rules:
   category_type: principle_based
   # 判断保留 (2026-05): 有効化前に追加検証が必要
   review_required: true
+  root_cause_group: creative_optimization
+  priority_in_group: 12
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M29
   name: キャプション文字数
   category: クリエイティブ
@@ -1030,6 +1242,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 13
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M30
   name: プロフィール誘導の整合
   category: クリエイティブ
@@ -1063,6 +1281,12 @@ rules:
   category_type: principle_based
   # 判断保留 (2026-05): 有効化前に追加検証が必要
   review_required: true
+  root_cause_group: creative_optimization
+  priority_in_group: 14
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M31
   name: リール動画尺
   category: クリエイティブ
@@ -1096,6 +1320,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 15
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M32
   name: 縦型9:16フル画面対応
   category: クリエイティブ
@@ -1128,6 +1358,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 16
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M33
   name: サウンド有無
   category: クリエイティブ
@@ -1160,6 +1396,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 17
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M34
   name: 動画完了率
   category: クリエイティブ
@@ -1193,6 +1435,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 18
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M35
   name: UGC/Spark系素材
   category: クリエイティブ
@@ -1224,6 +1472,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 19
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M36
   name: ストーリーズフルスクリーン活用
   category: クリエイティブ
@@ -1256,6 +1510,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 20
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M37
   name: スワイプアップ/CTA訴求
   category: クリエイティブ
@@ -1288,6 +1548,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 21
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M38
   name: FBストーリーズのCTR
   category: クリエイティブ
@@ -1321,6 +1587,12 @@ rules:
   category_type: principle_based
   # 判断保留 (2026-05): 有効化前に追加検証が必要
   review_required: true
+  root_cause_group: creative_optimization
+  priority_in_group: 22
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M39
   name: AN品質管理
   category: 構造_設定
@@ -1359,6 +1631,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 8
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M40
   name: ブランドセーフティ除外
   category: 構造_設定
@@ -1391,6 +1669,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 9
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M41
   name: AN専用クリエイティブ
   category: クリエイティブ
@@ -1424,6 +1708,12 @@ rules:
   category_type: principle_based
   # 判断保留 (2026-05): 有効化前に追加検証が必要
   review_required: true
+  root_cause_group: creative_optimization
+  priority_in_group: 23
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M42
   name: Messenger配信のCV計測
   category: 計測_トラッキング
@@ -1458,6 +1748,12 @@ rules:
   category_type: principle_based
   # 判断保留 (2026-05): 有効化前に追加検証が必要
   review_required: true
+  root_cause_group: targeting
+  priority_in_group: 13
+  classification_confidence: 0.6
+  classification_rationale: Messenger CV計測は計測 vs ターゲットの境界。measurement_foundation の方が妥当な可能性（needs_review）。
+  needs_review: true
+  confidence_level: medium
 - id: M43
   name: 自動応答フロー
   category: 構造_設定
@@ -1491,6 +1787,12 @@ rules:
   category_type: principle_based
   # 判断保留 (2026-05): 有効化前に追加検証が必要
   review_required: true
+  root_cause_group: creative_optimization
+  priority_in_group: 24
+  classification_confidence: 0.55
+  classification_rationale: 自動応答フローは LP 代替着地点で creative とも targeting ともつかず（needs_review）。
+  needs_review: true
+  confidence_level: medium
 - id: M44
   name: Advantage+カタログ整合
   category: 構造_設定
@@ -1531,6 +1833,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 11
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M45
   name: 入札上限の適正
   category: 予算_入札
@@ -1568,6 +1876,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: budget_allocation
+  priority_in_group: 2
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M46
   name: 既存顧客予算キャップ
   category: クリエイティブ
@@ -1600,6 +1914,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 25
+  classification_confidence: 0.5
+  classification_rationale: 既存顧客予算キャップは ASC 内自動化制御。creative より targeting/budget 寄りの可能性（needs_review）。
+  needs_review: true
+  confidence_level: medium
 - id: M47
   name: クリエイティブバリエーション
   category: クリエイティブ
@@ -1639,6 +1959,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 1
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: high
 - id: M48
   name: ASC+との共存
   category: 構造_設定
@@ -1671,6 +1997,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 12
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M49
   name: オーディエンスオーバーラップ
   category: ターゲティング
@@ -1710,6 +2042,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: independent
+  priority_in_group: 1
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M50
   name: LLA(類似オーディエンス)の鮮度
   category: ターゲティング
@@ -1741,6 +2079,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 2
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M51
   name: カスタムオーディエンス更新頻度
   category: ターゲティング
@@ -1773,6 +2117,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 3
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M52
   name: 広すぎる/狭すぎる設定
   category: ターゲティング
@@ -1812,6 +2162,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: budget_allocation
+  priority_in_group: 3
+  classification_confidence: 0.55
+  classification_rationale: 広すぎ/狭すぎは粒度判定。targeting の方が直感的（needs_review）。
+  needs_review: true
+  confidence_level: medium
 - id: M53
   name: 既存顧客除外設定
   category: ターゲティング
@@ -1843,6 +2199,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 4
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M54
   name: Advantage詳細ターゲット+設定
   category: ターゲティング
@@ -1874,6 +2236,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 5
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M55
   name: 年齢/性別の過剰絞り込み
   category: ターゲティング
@@ -1907,6 +2275,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 13
+  classification_confidence: 0.6
+  classification_rationale: 年齢/性別の過剰絞り込みは targeting 寄りでもある（needs_review）。
+  needs_review: true
+  confidence_level: medium
 - id: M56
   name: Aggregated Event Measurement
   category: 計測_トラッキング
@@ -1938,6 +2312,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 14
+  classification_confidence: 0.55
+  classification_rationale: AEM は計測欠損対応で measurement_foundation の方が妥当（needs_review）。
+  needs_review: true
+  confidence_level: medium
 - id: M57
   name: フリークエンシー疲弊
   category: クリエイティブ
@@ -1975,6 +2355,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 2
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: high
 - id: M58
   name: クリエイティブ入替日数
   category: クリエイティブ
@@ -2014,6 +2400,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 3
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: medium
 - id: M59
   name: Dynamic Creative Optimization
   category: クリエイティブ
@@ -2053,6 +2445,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 4
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M60
   name: Advantage+クリエイティブ
   category: 構造_設定
@@ -2084,6 +2482,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 5
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M61
   name: ファーストパーティデータ活用
   category: ターゲティング
@@ -2116,6 +2520,13 @@ rules:
     confidence: medium
     impact_horizon_weeks: 4
     rationale: 1Pデータ供給でターゲティング精度が向上、マッチ率60%以上が最低ライン。Customer File定期更新でカスタムオーディエンスとLLAの精度が改善しCPA約15%減。
+  implementation_steps:
+  - Customer File（顧客リスト CSV）を月次で再アップロード
+  - ハッシュ化メール / 電話 / 住所のマッチ率 60%+ を確認
+  - Lookalike Audience は LTV Top 1〜5% で seed
+  - 新規獲得時は既存顧客を除外オーディエンスに設定
+  verification_method: Audiences 画面でマッチ率表示 / LLA seed の更新日が直近 30 日以内
+  estimated_duration: 初回設定 2〜4 営業日 / 効果は 4 週後から段階的に
   enabled: true
   meta_principle_alignment:
     primary: M-ι
@@ -2123,6 +2534,16 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 1
+  classification_confidence: 0.95
+  classification_rationale: Day 5.1 Task F-1 で人手分類確定（高確度）
+  needs_review: false
+  confidence_level: medium
+  scenarios:
+    conservative: 0.6
+    realistic: 1.0
+    optimistic: 1.4
 - id: M62
   name: アトリビューション設定
   category: 計測_トラッキング
@@ -2162,6 +2583,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: measurement_foundation
+  priority_in_group: 9
+  classification_confidence: 0.7
+  classification_rationale: アトリビューション設定は計測軸の選択。measurement に統合したが独立扱いも可（needs_review）。
+  needs_review: true
+  confidence_level: low
 - id: M63
   name: 配信最適化目標の妥当性
   category: 構造_設定
@@ -2193,6 +2620,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 26
+  classification_confidence: 0.55
+  classification_rationale: 配信最適化目標は学習対象の選択。delivery_learning_or_structure 寄りでもある（needs_review）。
+  needs_review: true
+  confidence_level: medium
 - id: M64
   name: 地域ターゲティング精度
   category: 構造_設定
@@ -2225,6 +2658,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 14
+  classification_confidence: 0.55
+  classification_rationale: 地域ターゲティング精度は targeting 寄りだが、構造判定として delivery に分類（needs_review）。
+  needs_review: true
+  confidence_level: medium
 - id: M65
   name: 支払い方法ステータス
   category: 構造_設定
@@ -2249,6 +2688,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1
   category_type: operational_hygiene
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 15
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M66
   name: 広告-LPメッセージ整合スコア
   category: クリエイティブ
@@ -2286,6 +2731,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1_new_rules
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 27
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M67
   name: 勝ち広告LP逆生成プロセス
   category: クリエイティブ
@@ -2318,6 +2769,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1_new_rules
   category_type: principle_based
+  root_cause_group: creative_optimization
+  priority_in_group: 28
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M68
   name: 学習リセット要因イベント検出
   category: 予算_入札
@@ -2357,6 +2814,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1_new_rules
   category_type: principle_based
+  root_cause_group: delivery_learning_or_structure
+  priority_in_group: 6
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M69
   name: Advantage+文脈の除外オーディエンス
   category: ターゲティング
@@ -2389,6 +2852,12 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1_new_rules
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 6
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium
 - id: M70
   name: LLA seed の LTV Top 層集中度
   category: ターゲティング
@@ -2421,3 +2890,9 @@ rules:
   last_redesign: '2026-05'
   redesign_source: phase3_meta_principles_v1_new_rules
   category_type: principle_based
+  root_cause_group: targeting
+  priority_in_group: 7
+  classification_confidence: 0.85
+  classification_rationale: priority_weights.yaml の rule_root_cause.meta に明示マップ済み
+  needs_review: false
+  confidence_level: medium

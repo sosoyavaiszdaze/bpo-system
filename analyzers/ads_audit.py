@@ -228,6 +228,115 @@ def run_audit(client_id, data, thresholds):
     return result
 
 
+def detect_pixel_health(pixels: list[dict]) -> dict:
+    """v3.1 Task F-5: clients.yaml の pixels リストから健全性指標を算出する。
+
+    フィールド優先順位（v3.1 Task 1 で追加された明示フィールドを最優先）:
+        1. pixel["dormant_days"] (int) — 直接指定された休眠日数
+        2. pixel["duplicate"] (bool) — 直接指定された重複フラグ
+        3. pixel["last_fired_time"] (ISO8601) — Meta API 取得値の自動換算
+        4. pixel["note"] からの正規表現抽出（"最終発火 N日前"）
+        5. 名前ヒューリスティック（"削除"/"廃止"）
+
+    Returns:
+        dict {
+            'dormant_days': max未発火日数（休眠と判定された pixel のうち最大値）,
+            'duplicate_pixel_detected': 重複疑いピクセルの有無,
+            'dormant_pixel_count': 休眠ピクセル数,
+            'active_pixel_count': アクティブピクセル数（30日以内発火）,
+            'total_pixel_count': 総数,
+        }
+    """
+    if not pixels:
+        return {
+            "dormant_days": 0,
+            "duplicate_pixel_detected": False,
+            "dormant_pixel_count": 0,
+            "active_pixel_count": 0,
+            "total_pixel_count": 0,
+        }
+
+    import re
+
+    # === 重複検出 ===
+    # 1. 明示フラグ pixel["duplicate"] が true の pixel が 1 件以上あれば「重複検出」
+    explicit_duplicate = any(bool(p.get("duplicate")) for p in pixels)
+
+    # 2. 名前正規化での自動検出（フォールバック）
+    def _norm(s: str) -> str:
+        if not s:
+            return ""
+        return s.lower().replace("clocking", "clooking").replace("ピクセル", "pixel").replace("_", "").replace(" ", "")
+
+    seen_normalized: dict[str, list[str]] = {}
+    for p in pixels:
+        nm = _norm(p.get("name", ""))
+        key = nm.split("lp")[0] if "lp" in nm else nm[:8]
+        if not key:
+            continue
+        seen_normalized.setdefault(key, []).append(p.get("name", ""))
+    auto_duplicate = any(len(v) > 1 for v in seen_normalized.values())
+
+    duplicate_detected = explicit_duplicate or auto_duplicate
+
+    # === 休眠日数 / アクティブ判定 ===
+    dormant_days = 0
+    dormant_count = 0
+    active_count = 0
+    for p in pixels:
+        # 1. 明示フィールド最優先
+        days = p.get("dormant_days")
+        if days is not None:
+            try:
+                days = int(days)
+            except (TypeError, ValueError):
+                days = None
+
+        # 2. last_fired_time から計算
+        if days is None:
+            lf = p.get("last_fired_time")
+            if lf:
+                try:
+                    from datetime import datetime, timezone
+                    s = lf.replace("Z", "+00:00")
+                    if len(s) >= 5 and ":" not in s[-5:]:
+                        s = s[:-2] + ":" + s[-2:]
+                    dt = datetime.fromisoformat(s)
+                    days = (datetime.now(timezone.utc) - dt).days
+                except (ValueError, AttributeError):
+                    pass
+
+        # 3. note 正規表現
+        if days is None:
+            note = p.get("note", "") or ""
+            m = re.search(r"最終発火\s*(\d+)日前", note)
+            if m:
+                days = int(m.group(1))
+
+        # 4. 廃止予定ヒューリスティック（dormant_count にのみ計上、dormant_days には反映しない）
+        if days is None:
+            note = p.get("note", "") or ""
+            if "削除" in p.get("name", "") or "廃止" in note:
+                dormant_count += 1
+            continue
+
+        if days >= 270:
+            dormant_count += 1
+            if days > dormant_days:
+                dormant_days = days
+        elif days <= 30:
+            active_count += 1
+        # 30 < days < 270 は中間ゾーン（active でも dormant でもない）
+
+    return {
+        "dormant_days": dormant_days,
+        "duplicate_pixel_detected": duplicate_detected,
+        "dormant_pixel_count": dormant_count,
+        "active_pixel_count": active_count,
+        "total_pixel_count": len(pixels),
+    }
+
+
 def _build_platform_summary(campaigns, issues, platform_scores):
     """プラットフォーム別サマリーを構築。
 

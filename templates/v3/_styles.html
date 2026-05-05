@@ -10,9 +10,54 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: #fff; color: #1a1a1a; font-family: var(--font-sans); line-height: 1.6; }
-.page { padding: 28mm 18mm; min-height: 100vh; page-break-after: always; }
+@page { size: A4; margin: 12mm 12mm 16mm 12mm; }
+/* v3.1: PDF 見切れ修正 — A4 高さ計算 + page-break 制御 */
+.page {
+  padding: 6mm 8mm 10mm;
+  min-height: 0;  /* min-height: 100vh は Playwright で見切れの原因 */
+  page-break-after: always;
+  page-break-inside: auto;
+}
 .page:last-child { page-break-after: auto; }
 .page-break { page-break-before: always; }
+
+/* page-break-inside 制御: 重要ブロックが分断されないように（Task A: 全主要ブロックに適用） */
+.action-item,
+.crit-item,
+.crit-box,
+.insight-item,
+.scenario-block,
+.roadmap-row,
+.roadmap-section,
+.pf-section,
+.bar3,
+.dedup-summary,
+.kpi-table,
+.summary-3lines,
+.term-list dt,
+.term-list dt + dd,
+.principle-row,
+.no-data-placeholder,
+.action-steps,
+.score-circle,
+.impact-three-layer,
+.layer-confident,
+.layer-realistic,
+.layer-upper,
+.timeline-item,
+.timeline-row {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+/* セクション見出しとそれに続く最初のブロックは離さない */
+.section-title,
+.section-subtitle,
+.pf-section h3 {
+  page-break-after: avoid;
+  break-after: avoid;
+}
+/* テーブル行も分断しない */
+.kpi-table tr, .at tr { page-break-inside: avoid; break-inside: avoid; }
 
 /* === ヘッダー / フッター共通 === */
 .page-header {
@@ -208,6 +253,168 @@ body { background: #fff; color: #1a1a1a; font-family: var(--font-sans); line-hei
 
 /* === 共通: 情報注記 === */
 .note-hint { font-size: 10px; color: #888; font-family: var(--font-mono); margin-top: 6px; }
+
+/* === v3.1: シナリオ別予測（保守/現実/楽観） === */
+.scenario-block { margin: 10px 0 6px 32px; padding: 10px 12px; background: #fafaf8; border-radius: 6px; border: 0.5px solid #e5e5e2; }
+.scenario-title { font-size: 10px; color: #888; font-family: var(--font-mono); letter-spacing: 0.05em; margin-bottom: 6px; text-transform: uppercase; }
+.scenario-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.scenario-cell { padding: 6px 8px; border-radius: 4px; text-align: center; }
+.scenario-cons { background: #FCEBEB; }
+.scenario-real { background: #EAF3DE; border: 1px solid #97C459; }
+.scenario-opt  { background: #E1F5EE; }
+.scenario-lab { font-size: 9px; color: #555; font-family: var(--font-mono); letter-spacing: 0.05em; margin-bottom: 3px; }
+.scenario-val { font-size: 13px; font-weight: 500; color: #1a1a1a; font-family: var(--font-mono); }
+.scenario-real .scenario-val { color: #27500A; }
+
+/* === v3.1: 重複排除サマリ === */
+.dedup-summary { margin: 12px 0 8px; padding: 12px 14px; background: linear-gradient(180deg, #fafaf8 0%, #fff 100%); border: 0.5px solid #e0e0e0; border-radius: 8px; }
+.dedup-title { font-size: 11px; color: #1a1a1a; font-weight: 500; margin-bottom: 8px; }
+.dedup-row { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 8px; margin-bottom: 6px; }
+.dedup-cell { padding: 8px 10px; border-radius: 5px; }
+.dedup-cell.dedup-opt  { background: #F5F0E8; }
+.dedup-cell.dedup-real { background: #EAF3DE; border: 1px solid #97C459; }
+.dedup-cell.dedup-cons { background: #FCEBEB; }
+.dedup-lab { font-size: 9px; color: #555; font-family: var(--font-mono); margin-bottom: 4px; letter-spacing: 0.04em; }
+.dedup-val { font-size: 12px; font-weight: 500; font-family: var(--font-mono); color: #1a1a1a; }
+.dedup-highlight { color: #27500A; font-size: 13px; }
+.dedup-note { font-size: 9px; color: #888; margin-top: 4px; line-height: 1.6; }
+
+/* === v3.1: 改善ロードマップ === */
+.roadmap-section { margin: 22px 0 12px; padding: 14px 16px; background: #fafaf8; border-radius: 8px; border: 0.5px solid #e0e0e0; page-break-inside: avoid; }
+.roadmap-title { font-size: 12px; font-weight: 500; color: #1a1a1a; margin-bottom: 12px; }
+.roadmap-row { display: grid; grid-template-columns: 26px minmax(160px, 1.6fr) 3fr 50px; gap: 8px; align-items: center; padding: 4px 0; font-size: 11px; }
+.roadmap-rank { background: #1a1a1a; color: #fff; width: 22px; height: 22px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; display: flex; align-items: center; justify-content: center; }
+.roadmap-name { font-size: 11px; color: #1a1a1a; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roadmap-bar-track { position: relative; height: 16px; background: #efefec; border-radius: 8px; overflow: hidden; }
+.roadmap-bar { height: 100%; border-radius: 8px; display: flex; align-items: center; padding: 0 8px; }
+.roadmap-bar-即効 { background: linear-gradient(90deg, #27500A 0%, #97C459 100%); }
+.roadmap-bar-中期 { background: linear-gradient(90deg, #BA7517 0%, #EFB84C 100%); }
+.roadmap-bar-長期 { background: linear-gradient(90deg, #666 0%, #aaa 100%); }
+.roadmap-bar-label { font-size: 9px; color: #fff; font-family: var(--font-mono); font-weight: 500; }
+.roadmap-tier { font-size: 9px; color: #555; font-family: var(--font-mono); text-align: right; }
+.roadmap-axis { position: relative; height: 12px; margin-top: 4px; padding-left: 200px; font-size: 8px; color: #aaa; font-family: var(--font-mono); }
+.roadmap-axis span { position: absolute; }
+.roadmap-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 9px; color: #666; }
+.roadmap-legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; margin-right: 5px; }
+
+/* horizon バッジ */
+.tag-horizon { background: #F5F0E8; color: #555; }
+
+/* === v3.1 Task E: タイムラインページ === */
+.timeline-section { padding: 14px 16px; background: #fafaf8; border-radius: 8px; border: 0.5px solid #e0e0e0; margin-bottom: 18px; }
+.timeline-header { position: relative; padding-left: 200px; margin-bottom: 8px; height: 14px; }
+.timeline-axis-labels { position: relative; height: 12px; }
+.timeline-axis-labels span { position: absolute; font-size: 8px; color: #aaa; font-family: var(--font-mono); }
+.timeline-row { display: grid; grid-template-columns: 26px 174px 1fr 50px; gap: 8px; align-items: center; padding: 5px 0; font-size: 11px; }
+.timeline-rank { background: #1a1a1a; color: #fff; width: 22px; height: 22px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; display: flex; align-items: center; justify-content: center; }
+.timeline-name { font-size: 11px; color: #1a1a1a; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-bar-track { position: relative; height: 16px; background: #efefec; border-radius: 8px; overflow: hidden; }
+.timeline-bar { height: 100%; border-radius: 8px; display: flex; align-items: center; padding: 0 8px; }
+.timeline-bar-即効 { background: linear-gradient(90deg, #27500A 0%, #97C459 100%); }
+.timeline-bar-中期 { background: linear-gradient(90deg, #BA7517 0%, #EFB84C 100%); }
+.timeline-bar-長期 { background: linear-gradient(90deg, #666 0%, #aaa 100%); }
+.timeline-bar-label { font-size: 9px; color: #fff; font-family: var(--font-mono); font-weight: 500; }
+.timeline-tier { font-size: 9px; color: #555; font-family: var(--font-mono); text-align: right; }
+
+/* 累積効果折れ線 */
+.cumulative-section { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; page-break-inside: avoid; }
+.cumulative-title { font-size: 12px; font-weight: 500; color: #1a1a1a; margin-bottom: 10px; }
+.cumulative-graph { width: 100%; height: 200px; }
+.cumulative-note { font-size: 10px; color: #666; margin-top: 6px; }
+
+/* 学習フェーズ注記 */
+.timeline-note-box { background: #FAEEDA; border: 0.5px solid #EFB84C; border-radius: 8px; padding: 12px 14px; margin-top: 12px; page-break-inside: avoid; }
+.timeline-note-title { font-size: 11px; font-weight: 500; color: #854F0B; margin-bottom: 6px; }
+.timeline-note-list { list-style: none; padding-left: 0; margin: 0; }
+.timeline-note-list li { font-size: 11px; color: #555; line-height: 1.7; padding: 3px 0 3px 14px; position: relative; }
+.timeline-note-list li::before { content: "▸"; color: #BA7517; position: absolute; left: 0; }
+.timeline-note-list strong { color: #1a1a1a; font-weight: 500; }
+.timeline-note-foot { font-size: 10px; color: #555; margin-top: 8px; padding-top: 6px; border-top: 0.5px dashed #EFB84C; line-height: 1.7; }
+
+/* === v3.1 Task F: 3層インパクト表示 === */
+.impact-three-layer { margin: 18px 0 10px; padding: 16px 18px; background: linear-gradient(180deg, #fafaf8 0%, #fff 100%); border: 0.5px solid #e0e0e0; border-radius: 10px; page-break-inside: avoid; }
+.layer-confident { border-left: 3px solid #27500A; padding: 6px 12px; margin-bottom: 10px; background: #EAF3DE; border-radius: 0 4px 4px 0; }
+.layer-confident h3 { font-size: 12px; font-weight: 500; color: #27500A; margin-bottom: 6px; }
+.layer-confident .amount-large { font-size: 24px; font-weight: 500; color: #27500A; font-family: var(--font-mono); margin-bottom: 4px; }
+.layer-confident .note { font-size: 10px; color: #555; line-height: 1.7; }
+.layer-confident .note-warning { font-size: 10px; color: #791F1F; line-height: 1.7; padding: 4px 8px; background: #FCEBEB; border-radius: 4px; margin-top: 5px; }
+
+.layer-realistic { padding: 6px 12px; margin-bottom: 8px; background: #fafaf8; border-radius: 4px; }
+.layer-realistic h4 { font-size: 11px; font-weight: 500; color: #555; margin-bottom: 4px; }
+.layer-realistic .amount-medium { font-size: 16px; font-weight: 500; color: #1a1a1a; font-family: var(--font-mono); }
+.layer-realistic .note-small { font-size: 9px; color: #888; }
+
+.layer-upper { padding: 4px 12px; background: #f5f0e8; border-radius: 4px; opacity: 0.85; }
+.layer-upper h5 { font-size: 10px; font-weight: 400; color: #666; margin-bottom: 2px; }
+.layer-upper .amount-small { font-size: 12px; color: #888; font-family: var(--font-mono); }
+.layer-upper .note-tiny { font-size: 9px; color: #aaa; }
+
+/* グループ内 priority 順序ダイアグラム */
+.priority-diagram { padding: 10px 12px; background: #fafaf8; border-radius: 6px; margin-top: 10px; font-size: 10px; }
+.priority-diagram-title { font-size: 10px; color: #666; font-family: var(--font-mono); margin-bottom: 6px; letter-spacing: 0.05em; }
+.priority-flow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.priority-step { padding: 4px 8px; background: #fff; border: 0.5px solid #ccc; border-radius: 4px; font-family: var(--font-mono); font-size: 10px; }
+.priority-step.priority-current { background: #27500A; color: #fff; border-color: #27500A; }
+.priority-arrow { color: #999; font-family: var(--font-mono); }
+
+/* === v3.1.2 Day 5.3 A-T3: Top5 + 3層インパクト統合表（pptx P8 同期） === */
+.top5-unified-table {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #fafaf8 0%, #fff 100%);
+  border: 0.5px solid #e0e0e0;
+  border-radius: 8px;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.top5-table-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+.top5-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+}
+.top5-table thead th {
+  background: #1a1a1a;
+  color: #fff;
+  font-weight: 500;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 10px;
+}
+.top5-table tbody td {
+  padding: 6px 8px;
+  border-bottom: 0.5px solid #efefec;
+  background: #fff;
+  vertical-align: middle;
+}
+.top5-table tbody tr:nth-child(even) td { background: #fafaf8; }
+.top5-table .t5-col-rank { width: 24px; text-align: center; }
+.top5-table .t5-col-action { font-family: var(--font-sans); }
+.top5-table .t5-col-group { width: 36px; text-align: center; color: #555; }
+.top5-table .t5-col-factor { width: 50px; text-align: center; color: #555; }
+.top5-table .t5-col-yen { width: 85px; text-align: right; }
+.top5-table .t5-col-confident { color: #27500A; }
+.top5-table .t5-col-upper { color: #888; }
+.top5-table .t5-col-conf { width: 40px; text-align: center; }
+.top5-table .t5-row-total td {
+  background: #EAF3DE !important;
+  font-weight: 500;
+  border-top: 1px solid #97C459;
+  border-bottom: 1px solid #97C459;
+}
+.top5-table-legend {
+  font-size: 8.5px;
+  color: #888;
+  line-height: 1.7;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+}
 
 /* === C7: データなしプレースホルダ === */
 .no-data-placeholder {
