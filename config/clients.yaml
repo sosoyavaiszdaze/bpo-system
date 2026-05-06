@@ -100,6 +100,29 @@ clients:
     ad_platforms: [meta]                 # Phase B で google 追加予定
     business_model: b2c
     category_subtype: cosmetics_health   # 薬機法対象 (V-EC-01/02 の trigger 用)
+
+    # === ADR-015 MarTech スタック総合管理 (5/7 新設) ===
+    # 自動検出 (Phase A 5/7): ec_platform / tag_manager / analytics / ad_platforms / capi_status
+    # ヒアリング (Phase A 5/8〜): ma / crm / cdp / ab_testing / chatbot
+    # probe_url は kickoff 後に LP/サンクスページの URL を登録予定
+    tech_stack:
+      probe_url: null                                # kickoff で確定後に設定
+      ec_platform:
+        value: ecforce
+        confidence: high
+        source: declared                             # 5/3 ChatWork ヒアリングで確認
+        last_verified: "2026-05-03"
+      tag_manager:  { value: unknown, confidence: low,  source: pending_hearing }
+      analytics:    { value: unknown, confidence: low,  source: pending_hearing }
+      cdp:          { value: unknown, confidence: low,  source: pending_hearing }
+      ma:           { value: unknown, confidence: low,  source: pending_hearing }
+      crm:          { value: unknown, confidence: low,  source: pending_hearing }
+      ad_platforms: [meta]                           # clients.yaml 上位の ad_platforms と整合
+      capi_status:
+        meta:   not_configured                       # 5/3 ヒアリング: CAPI 未実装
+        google: not_applicable                       # Google 広告未利用
+      ab_testing:   { value: unknown, confidence: low,  source: pending_hearing }
+      chatbot:      { value: unknown, confidence: low,  source: pending_hearing }
     auto_proposal:
       enabled: true
       daily_cap: 1                       # ADR-012 default cap
