@@ -55,18 +55,43 @@ except ImportError:
     _FCNTL_AVAILABLE = False
 
 
+class _LockTimeout(Exception):
+    """_FileLock の取得タイムアウト (raise_on_timeout=True 時に発生)"""
+
+
 class _FileLock:
     """fcntl.flock(LOCK_EX) ベースの排他ロック context manager
 
     Phase A 用途: launchd 9:00/9:15/9:30 の 3 連射が同時実行されたときの
-    chatwork_sent.json の read-modify-write race を防ぐ。
+    chatwork_sent.json の read-modify-write race + ChatWork POST 二重投稿を防ぐ。
 
     macOS / Linux 前提。Windows では fcntl が import できないため no-op。
+
+    タイムアウト時挙動 (5/8 P2 修正):
+        raise_on_timeout=True (デフォルト):
+            timeout 経過時に _LockTimeout を raise → 呼出元で安全停止 (送信せず)。
+            ChatWork POST フローで先行プロセスが HTTP 詰まりした場合、
+            後続プロセスは送信せずに次回 launchd 再試行に委ねる。
+        raise_on_timeout=False:
+            旧挙動。warning ログ + ロック無しで続行 (二重投稿リスクあり)。
+            既存呼出元の互換性確保用、新規利用は非推奨。
+
+    timeout のデフォルト (5/8 P2 修正):
+        90 秒。ChatWork API の最大リトライ時間 (timeout 15s × 3 retry + backoff
+        ≒ 50-60s) より十分長く設定し、正常な HTTP 完了を待てる範囲にする。
     """
 
-    def __init__(self, lock_path: str, timeout_sec: float = 10.0):
+    DEFAULT_TIMEOUT_SEC = 90.0
+
+    def __init__(
+        self,
+        lock_path: str,
+        timeout_sec: Optional[float] = None,
+        raise_on_timeout: bool = True,
+    ):
         self.lock_path = lock_path
-        self.timeout_sec = timeout_sec
+        self.timeout_sec = timeout_sec if timeout_sec is not None else self.DEFAULT_TIMEOUT_SEC
+        self.raise_on_timeout = raise_on_timeout
         self._fd: Optional[int] = None
 
     def __enter__(self):
@@ -83,10 +108,20 @@ class _FileLock:
                 return self
             except BlockingIOError:
                 if time.monotonic() > deadline:
-                    log.warning(
+                    msg = (
                         f"_FileLock: timeout waiting for {self.lock_path} "
-                        f"({self.timeout_sec}s); proceeding without lock"
+                        f"({self.timeout_sec}s)"
                     )
+                    if self.raise_on_timeout:
+                        # P2 修正: 安全側 (送信せず raise、次回 launchd 再試行に委ねる)
+                        log.warning(f"{msg}; raising _LockTimeout to abort send safely")
+                        try:
+                            os.close(self._fd)
+                        except Exception:
+                            pass
+                        self._fd = None
+                        raise _LockTimeout(msg)
+                    log.warning(f"{msg}; proceeding without lock (legacy behavior)")
                     return self
                 time.sleep(0.05)
 
@@ -210,8 +245,13 @@ class ChatWorkClient:
 
         ロックファイルは `{sent_log_path}.lock`。プロセス終了時に自動解除。
         Windows 環境では fcntl が無いため no-op (開発用、本番は macOS launchd)。
+
+        timeout 90s + raise_on_timeout=True (5/8 P2 修正):
+            ChatWork API の最大リトライ時間 (約 50-60s) より長く待機し、
+            正常な HTTP 完了を待つ。それでも取得できない場合は _LockTimeout で
+            raise → 安全側 (送信せず) で次回 launchd 再試行に委ねる。
         """
-        return _FileLock(self.sent_log_path + ".lock")
+        return _FileLock(self.sent_log_path + ".lock")  # default: 90s + raise_on_timeout=True
 
     # ---------- Rate Limit ----------
 
@@ -314,36 +354,42 @@ class ChatWorkClient:
         rid = self._resolve_room_id(room_id)
         key = idempotency_key or self._content_hash(rid, body)
 
-        # P1-C: check + send + record を flock で 1 トランザクション化
+        # P1-C + P2: check + send + record を flock で 1 トランザクション化。
+        # 90s の lock 取得失敗時は _LockTimeout → ChatWorkError 化して呼出元に伝播
+        # (送信せず次回 launchd 再試行に委ねる、二重投稿を確実に防ぐ)
         os.makedirs(os.path.dirname(self.sent_log_path), exist_ok=True)
-        with self._sent_store_lock():
-            # ロック取得後の最新状態で再確認 (lock 待機中に別プロセスが先送した可能性)
-            if self._is_already_sent(key):
-                log.info(f"ChatWork: 送信済みスキップ key={key[:12]}…")
-                return {"skipped": True, "idempotency_key": key}
+        try:
+            with self._sent_store_lock():
+                # ロック取得後の最新状態で再確認 (lock 待機中に別プロセスが先送した可能性)
+                if self._is_already_sent(key):
+                    log.info(f"ChatWork: 送信済みスキップ key={key[:12]}…")
+                    return {"skipped": True, "idempotency_key": key}
 
-            if self.dry_run:
-                log.info(f"ChatWork [dry_run] room={rid} len={len(body)} body[:60]={body[:60]!r}")
-                # _record_sent 内部の lock は再入可能ではないため直接 store を更新
+                if self.dry_run:
+                    log.info(f"ChatWork [dry_run] room={rid} len={len(body)} body[:60]={body[:60]!r}")
+                    store = self._load_sent()
+                    store[key] = {"room_id": rid, "dry_run": True, "ts": time.time()}
+                    self._save_sent(store)
+                    return {"dry_run": True, "idempotency_key": key, "room_id": rid}
+
+                form = urllib.parse.urlencode({"body": body, "self_unread": str(self_unread)}).encode("utf-8")
+                result = self._request(
+                    "POST",
+                    f"/rooms/{rid}/messages",
+                    data=form,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+                message_id = result.get("message_id", "")
                 store = self._load_sent()
-                store[key] = {"room_id": rid, "dry_run": True, "ts": time.time()}
+                store[key] = {"room_id": rid, "message_id": message_id, "ts": time.time()}
                 self._save_sent(store)
-                return {"dry_run": True, "idempotency_key": key, "room_id": rid}
-
-            form = urllib.parse.urlencode({"body": body, "self_unread": str(self_unread)}).encode("utf-8")
-            result = self._request(
-                "POST",
-                f"/rooms/{rid}/messages",
-                data=form,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-            message_id = result.get("message_id", "")
-            # ここでも _record_sent を呼ばず直接 store 更新 (再入回避)
-            store = self._load_sent()
-            store[key] = {"room_id": rid, "message_id": message_id, "ts": time.time()}
-            self._save_sent(store)
-            log.info(f"ChatWork 投稿成功 room={rid} message_id={message_id}")
-            return result
+                log.info(f"ChatWork 投稿成功 room={rid} message_id={message_id}")
+                return result
+        except _LockTimeout as e:
+            raise ChatWorkError(
+                f"ChatWork post_message: lock timeout (90s), refusing to send to avoid "
+                f"double-post (key={key[:12]}…). Will retry on next launchd run."
+            ) from e
 
     def upload_file(
         self,
@@ -369,60 +415,66 @@ class ChatWorkClient:
 
         key = idempotency_key or self._content_hash(rid, f"FILE:{filename}:{size}:{message}")
 
-        # P1-C: post_message と同様、check + upload + record を 1 つの flock 内に閉じる
+        # P1-C + P2: check + upload + record を 1 つの flock で 1 トランザクション化
         os.makedirs(os.path.dirname(self.sent_log_path), exist_ok=True)
-        with self._sent_store_lock():
-            if self._is_already_sent(key):
-                log.info(f"ChatWork: ファイル送信済みスキップ key={key[:12]}…")
-                return {"skipped": True, "idempotency_key": key}
+        try:
+            with self._sent_store_lock():
+                if self._is_already_sent(key):
+                    log.info(f"ChatWork: ファイル送信済みスキップ key={key[:12]}…")
+                    return {"skipped": True, "idempotency_key": key}
 
-            if self.dry_run:
-                log.info(f"ChatWork [dry_run] upload room={rid} file={filename} size={size}B")
-                store = self._load_sent()
-                store[key] = {"room_id": rid, "file": filename, "dry_run": True, "ts": time.time()}
-                self._save_sent(store)
-                return {"dry_run": True, "idempotency_key": key, "file": filename}
+                if self.dry_run:
+                    log.info(f"ChatWork [dry_run] upload room={rid} file={filename} size={size}B")
+                    store = self._load_sent()
+                    store[key] = {"room_id": rid, "file": filename, "dry_run": True, "ts": time.time()}
+                    self._save_sent(store)
+                    return {"dry_run": True, "idempotency_key": key, "file": filename}
 
-            boundary = f"----BPOChatWorkBoundary{uuid.uuid4().hex}"
-            with open(file_path, "rb") as f:
-                file_content = f.read()
-            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+                boundary = f"----BPOChatWorkBoundary{uuid.uuid4().hex}"
+                with open(file_path, "rb") as f:
+                    file_content = f.read()
+                content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
-            body_parts: list[bytes] = []
-            if message:
+                body_parts: list[bytes] = []
+                if message:
+                    body_parts.append(f"--{boundary}\r\n".encode("utf-8"))
+                    body_parts.append(b'Content-Disposition: form-data; name="message"\r\n\r\n')
+                    body_parts.append(message.encode("utf-8"))
+                    body_parts.append(b"\r\n")
                 body_parts.append(f"--{boundary}\r\n".encode("utf-8"))
-                body_parts.append(b'Content-Disposition: form-data; name="message"\r\n\r\n')
-                body_parts.append(message.encode("utf-8"))
+                body_parts.append(
+                    f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode("utf-8")
+                )
+                body_parts.append(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+                body_parts.append(file_content)
                 body_parts.append(b"\r\n")
-            body_parts.append(f"--{boundary}\r\n".encode("utf-8"))
-            body_parts.append(
-                f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode("utf-8")
-            )
-            body_parts.append(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
-            body_parts.append(file_content)
-            body_parts.append(b"\r\n")
-            body_parts.append(f"--{boundary}--\r\n".encode("utf-8"))
-            body = b"".join(body_parts)
+                body_parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+                body = b"".join(body_parts)
 
-            result = self._request(
-                "POST",
-                f"/rooms/{rid}/files",
-                data=body,
-                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-                timeout=60,  # ファイルアップロードは長め
-            )
-            file_id = result.get("file_id", "")
-            store = self._load_sent()
-            store[key] = {
-                "room_id": rid,
-                "file_id": file_id,
-                "filename": filename,
-                "size": size,
-                "ts": time.time(),
-            }
-            self._save_sent(store)
-            log.info(f"ChatWork ファイル投稿成功 room={rid} file_id={file_id} {filename}")
-            return result
+                result = self._request(
+                    "POST",
+                    f"/rooms/{rid}/files",
+                    data=body,
+                    headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+                    timeout=60,  # ファイルアップロードは長め
+                )
+                file_id = result.get("file_id", "")
+                store = self._load_sent()
+                store[key] = {
+                    "room_id": rid,
+                    "file_id": file_id,
+                    "filename": filename,
+                    "size": size,
+                    "ts": time.time(),
+                }
+                self._save_sent(store)
+                log.info(f"ChatWork ファイル投稿成功 room={rid} file_id={file_id} {filename}")
+                return result
+        except _LockTimeout as e:
+            raise ChatWorkError(
+                f"ChatWork upload_file: lock timeout (90s), refusing to upload to avoid "
+                f"double-upload (key={key[:12]}…). Will retry on next launchd run."
+            ) from e
 
 
 # ---------- module-level helpers ----------
