@@ -1,29 +1,33 @@
-{# 1 日 1 まとめ投稿テンプレート (5/8 通知 UX 改修)
+{# 1 日 1 まとめ投稿テンプレート (5/8 通知 UX 改修 + Codex 指摘修正)
 
    設計指針:
      - 冒頭は広告成果改善の文脈 (「法律違反」ではない)
-     - 優先度 A (今日確認) と B (今週中) の 2 階層
-     - 各項目に: 期待効果 / 確認質問 / 選択肢
-     - 法令補足は項目末尾の小さな注釈
+     - 優先度 A 上位 N 件 (詳細) + 優先度 A 4 件目以降 (要約) + 優先度 B (要約) の 3 セクション
+     - selected 全件が本文に必ず登場する (history 更新と本文表示が一致)
+     - Markdown の ** 強調は使わない (ChatWork でそのまま表示されるため)
 
    想定 context:
-     client_name (str), honorific (str, e.g. "御中")
+     client_name (str), honorific (str)
      today (str: YYYY-MM-DD)
-     items_priority_a (list of {title, performance_category_labels, expected_effect[],
-                                 next_action_question, action_options{A,B,C,...},
-                                 rule_id, legal_note})
-     items_priority_b (list of 同上)
-     items_priority_a_extra_count (int): A の上位 3 件以降の繰越件数
+     total_selected_count (int): selected 全件数 (タイトル件数表示用)
+     items_priority_a_detailed (list of items): 優先度 A 上位 3 件、詳細表示
+     items_priority_a_summary  (list of items): 優先度 A 4 件目以降、要約表示
+     items_priority_b          (list of items): 優先度 B、要約表示
+
+     各 item: {rule_id, customer_title, performance_category_labels[],
+              priority, expected_effect[], next_action_question,
+              action_options{A,B,C,...}, legal_note}
 #}
-[info][title]【{{ client_name }}{{ honorific }}】広告成果改善アクション {{ today }}（{{ items_priority_a|length + items_priority_b|length }}件）[/title]
-本日は、Meta 広告の **計測精度・配信学習・審査安定化** に関わる確認が
-{{ items_priority_a|length + items_priority_b|length }} 件あります。
-優先度順に、まずは上位 {{ items_priority_a|length }} 件だけ確認いただければ大丈夫です。
+[info][title]【{{ client_name }}{{ honorific }}】広告成果改善アクション {{ today }}（{{ total_selected_count }}件）[/title]
+本日は、Meta 広告の 計測精度・配信学習・審査安定化 に関わる確認が
+{{ total_selected_count }} 件あります。
+優先度順に、まずは上位 {{ items_priority_a_detailed|length }} 件だけ確認いただければ大丈夫です。
+{% if items_priority_a_detailed %}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 優先度A：今日確認したい {{ items_priority_a|length }} 件
+🔴 優先度A：今日確認したい {{ items_priority_a_detailed|length }} 件
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{% for item in items_priority_a %}
+{% for item in items_priority_a_detailed %}
 　【{{ loop.index }}】{{ item.customer_title }}
 
 　▼ 期待効果（{{ item.performance_category_labels|join(" / ") }}）
@@ -47,10 +51,23 @@
 
 {% endif %}
 {% endfor %}
+{% endif %}
+{% if items_priority_a_summary %}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔴 優先度A：今日確認したい項目（{{ items_priority_a_summary|length }} 件、要約）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{% for item in items_priority_a_summary %}
+　・{{ item.customer_title }}
+　　└ 期待効果: {{ item.performance_category_labels|join(" / ") }}
+　　└ 確認質問: {{ item.next_action_question }}
+　　└ ルール ID: {{ item.rule_id }}
+{% endfor %}
+{% endif %}
 {% if items_priority_b %}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟡 優先度B：今週中に確認したい項目（{{ items_priority_b|length }} 件、要約のみ）
+🟡 優先度B：今週中に確認したい項目（{{ items_priority_b|length }} 件、要約）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {% for item in items_priority_b %}
 　・{{ item.customer_title }}
@@ -59,13 +76,8 @@
 　　└ ルール ID: {{ item.rule_id }}
 {% endfor %}
 
-※ 優先度 B の各項目について詳細を確認したい場合は、ChatWork で「{{ items_priority_b[0].rule_id }} 詳細」のように
+※ 各項目について詳細を確認したい場合は、ChatWork で「{{ items_priority_b[0].rule_id }} 詳細」のように
 　 ルール ID をご返信ください。次回投稿で詳細をお送りします。
-{% endif %}
-{% if items_priority_a_extra_count and items_priority_a_extra_count > 0 %}
-
-※ 優先度 A の他に {{ items_priority_a_extra_count }} 件の確認候補がありますが、本日は上位
-　 {{ items_priority_a|length }} 件のみ表示しています。返信後に次の項目へ進みます。
 {% endif %}
 
 ──────────────────────────────────────

@@ -133,9 +133,16 @@ def run_auto_proposal(
     dry_run_count = attempted_count if is_dry_run else 0
     failed_count = attempted_count if is_failed else 0
 
-    # 実送信成功時のみ history 更新 (各 rule の daily_cap_group も保存)
+    # 実送信成功時のみ history 更新。
+    # 5/8 Codex 修正: 「本文に表示された rule_id」のみ更新する (displayed_rule_ids)。
+    # 旧実装は selected 全件を更新していたが、本文に出ない rule が送信済み扱いに
+    # なる問題があった。現実装では _render_and_post_bundle で全件本文に出る
+    # ので displayed_rule_ids = selected.id だが、将来 truncate 等が入っても安全。
     if not dry_run and not is_skipped and not is_dry_run and not is_failed:
+        displayed_set = set((bundle_result or {}).get("displayed_rule_ids") or [])
         for rule in selected:
+            if rule.get("id") not in displayed_set:
+                continue
             _update_history(
                 client_id, rule["id"], bundle_result, today_str,
                 daily_cap_group=rule.get("daily_cap_group", "default"),
@@ -649,18 +656,30 @@ def _render_and_post_bundle(
 ) -> dict:
     """selected の全 rule を 1 メッセージ (_daily_recommendations.md.j2) にまとめて投稿
 
+    5/8 Codex review 修正:
+        旧実装は priority A の 4 件目以降を本文非表示にしつつ history を全件更新し、
+        「本文に出ない rule が送信済み扱い」になる問題があった。
+        本実装では selected 全件を必ず本文に出し (priority A 上位 3 件は詳細、
+        4 件目以降は要約、priority B は要約)、displayed_rule_ids を返して
+        run_auto_proposal が history 更新の正しい対象を識別できるようにする。
+
     Returns:
         {
-            "rule_ids": [...],
-            "result": <chatwork.post_message 戻り値>,
-            "body_length": int,
-            "items_priority_a_count": int,
-            "items_priority_b_count": int,
+            "rule_ids":           [...],   # selected の全 rule_id (旧仕様互換)
+            "displayed_rule_ids": [...],   # 本文に表示された rule_id (history 更新対象)
+            "result":             <chatwork.post_message 戻り値>,
+            "body_length":        int,
+            "items_priority_a_detailed_count": int,
+            "items_priority_a_summary_count":  int,
+            "items_priority_b_count":          int,
         } or {"error": "..."} (selected 空 / 投稿失敗時)
     """
     if not selected_rules:
-        return {"rule_ids": [], "result": {"skipped": True}, "body_length": 0,
-                "items_priority_a_count": 0, "items_priority_b_count": 0}
+        return {"rule_ids": [], "displayed_rule_ids": [],
+                "result": {"skipped": True}, "body_length": 0,
+                "items_priority_a_detailed_count": 0,
+                "items_priority_a_summary_count": 0,
+                "items_priority_b_count": 0}
 
     from notifiers.chatwork_notifier import ChatWorkClient, ChatWorkError
     from templates.chatwork import render
@@ -671,9 +690,11 @@ def _render_and_post_bundle(
     items_a = [i for i in items if i["priority"] == "A"]
     items_b = [i for i in items if i["priority"] != "A"]
 
-    # 優先度 A は上位 N 件のみ表示、残りは "extra" に
-    items_a_extra_count = max(0, len(items_a) - DAILY_RECOMMENDATIONS_PRIORITY_A_TOP)
-    items_a_top = items_a[:DAILY_RECOMMENDATIONS_PRIORITY_A_TOP]
+    # priority A 上位 N 件: 詳細表示
+    # priority A 4 件目以降: 要約表示 (priority B と同じ表現)
+    # priority B: 要約表示
+    items_a_detailed = items_a[:DAILY_RECOMMENDATIONS_PRIORITY_A_TOP]
+    items_a_summary  = items_a[DAILY_RECOMMENDATIONS_PRIORITY_A_TOP:]
 
     company = client_cfg.get("company") or {}
     chatwork_rooms = client_cfg.get("chatwork_rooms") or {}
@@ -683,33 +704,45 @@ def _render_and_post_bundle(
         "client_name": company.get("name") or client_cfg.get("client_id", "クライアント"),
         "honorific":   company.get("honorific", "御中"),
         "today":       today_str,
-        "items_priority_a": items_a_top,
-        "items_priority_b": items_b,
-        "items_priority_a_extra_count": items_a_extra_count,
+        "total_selected_count": len(selected_rules),
+        "items_priority_a_detailed": items_a_detailed,
+        "items_priority_a_summary":  items_a_summary,
+        "items_priority_b":          items_b,
     }
 
     body = render("_daily_recommendations.md.j2", context)
 
+    # selected 全件 = 本文に表示 (詳細 + 要約)。displayed_rule_ids が history 更新対象
     rule_ids = [r.get("id") for r in selected_rules]
+    displayed_rule_ids = (
+        [i["rule_id"] for i in items_a_detailed]
+        + [i["rule_id"] for i in items_a_summary]
+        + [i["rule_id"] for i in items_b]
+    )
+
     try:
         chat = ChatWorkClient(room_id=room_id, dry_run=dry_run)
         result = chat.post_message(body)
     except ChatWorkError as e:
         return {
             "rule_ids": rule_ids,
+            "displayed_rule_ids": displayed_rule_ids,
             "result": {"error": str(e)},
             "error":  str(e),
             "body_length": len(body),
-            "items_priority_a_count": len(items_a_top),
-            "items_priority_b_count": len(items_b),
+            "items_priority_a_detailed_count": len(items_a_detailed),
+            "items_priority_a_summary_count":  len(items_a_summary),
+            "items_priority_b_count":          len(items_b),
         }
 
     return {
-        "rule_ids": rule_ids,
-        "result":   result,
-        "body_length": len(body),
-        "items_priority_a_count": len(items_a_top),
-        "items_priority_b_count": len(items_b),
+        "rule_ids":           rule_ids,
+        "displayed_rule_ids": displayed_rule_ids,
+        "result":             result,
+        "body_length":        len(body),
+        "items_priority_a_detailed_count": len(items_a_detailed),
+        "items_priority_a_summary_count":  len(items_a_summary),
+        "items_priority_b_count":          len(items_b),
     }
 
 

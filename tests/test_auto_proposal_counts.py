@@ -74,9 +74,9 @@ class TestAutoProposalDryRun:
         def fake_bundle(selected, state, client_cfg, today_str, dry_run=False):
             return {
                 "rule_ids": [r["id"] for r in selected],
+                "displayed_rule_ids": [r["id"] for r in selected],
                 "result": {"dry_run": True, "idempotency_key": "fake"},
                 "body_length": 100,
-                "items_priority_a_count": len(selected), "items_priority_b_count": 0,
             }
 
         with mock.patch("engine.auto_proposal_engine._render_and_post_bundle", side_effect=fake_bundle):
@@ -105,9 +105,9 @@ class TestAutoProposalSkipped:
         def fake_bundle(selected, state, client_cfg, today_str, dry_run=False):
             return {
                 "rule_ids": [r["id"] for r in selected],
+                "displayed_rule_ids": [r["id"] for r in selected],
                 "result": {"skipped": True, "idempotency_key": "existing"},
                 "body_length": 100,
-                "items_priority_a_count": len(selected), "items_priority_b_count": 0,
             }
 
         with mock.patch("engine.auto_proposal_engine._render_and_post_bundle", side_effect=fake_bundle):
@@ -138,9 +138,9 @@ class TestAutoProposalSent:
         def fake_bundle(selected, state, client_cfg, today_str, dry_run=False):
             return {
                 "rule_ids": [r["id"] for r in selected],
+                "displayed_rule_ids": [r["id"] for r in selected],
                 "result": {"message_id": "12345"},
                 "body_length": 1500,
-                "items_priority_a_count": len(selected), "items_priority_b_count": 0,
             }
 
         with mock.patch("engine.auto_proposal_engine._render_and_post_bundle", side_effect=fake_bundle):
@@ -174,10 +174,10 @@ class TestAutoProposalFailed:
         def fake_bundle(selected, state, client_cfg, today_str, dry_run=False):
             return {
                 "rule_ids": [r["id"] for r in selected],
+                "displayed_rule_ids": [r["id"] for r in selected],
                 "result": {"error": "ChatWork API down"},
                 "error":  "ChatWork API down",
                 "body_length": 0,
-                "items_priority_a_count": 0, "items_priority_b_count": 0,
             }
 
         with mock.patch("engine.auto_proposal_engine._render_and_post_bundle", side_effect=fake_bundle):
@@ -204,9 +204,9 @@ class TestCapBugFix:
         def fake_bundle(selected, state, client_cfg, today_str, dry_run=False):
             return {
                 "rule_ids": [r["id"] for r in selected],
+                "displayed_rule_ids": [r["id"] for r in selected],
                 "result": {"message_id": "msg-{}".format(len(selected))},
                 "body_length": 1000,
-                "items_priority_a_count": len(selected), "items_priority_b_count": 0,
             }
 
         with mock.patch("engine.auto_proposal_engine._render_and_post_bundle", side_effect=fake_bundle):
@@ -301,3 +301,128 @@ class TestRecommendationsContent:
         assert "薬機法" not in head_200
         assert "措置命令" not in body
         assert "課徴金" not in body
+        # Markdown 強調 ** が含まれない (ChatWork でそのまま表示されるため、5/8 Codex 修正)
+        assert "**" not in body, "Markdown ** 強調が残っている"
+
+
+# ============================================================
+# Case 7: 優先度 A 4 件以上で全件本文表示 + history 更新整合 (5/8 Codex 修正)
+# ============================================================
+
+class TestPriorityAOverflow:
+    """優先度 A が DAILY_RECOMMENDATIONS_PRIORITY_A_TOP (=3) を超える場合、
+    4 件目以降が「非表示扱い」ではなく要約表示され、selected 全件が本文に出ること。
+    history 更新対象も本文表示対象と一致すること。
+    """
+
+    def _setup_5_priority_a_rules(self, monkeypatch):
+        """rule_messaging.yaml で priority A になる 5 件を用意 (上位 3 = 詳細、残 2 = 要約)"""
+        # F-AH-04 / F-DG-01 / F-DG-02 / V-EC-01 / P-EF-01 が rule_messaging で priority A
+        rules = [
+            {"id": "F-AH-04", "applies_to": {}, "trigger": {"condition": "True"},
+             "data_source": [], "template": "_client_request_generic.md.j2",
+             "rationale": "test", "severity": "high", "daily_cap_group": "default"},
+            {"id": "F-DG-01", "applies_to": {}, "trigger": {"condition": "True"},
+             "data_source": [], "template": "_client_request_generic.md.j2",
+             "rationale": "test", "severity": "high", "daily_cap_group": "default"},
+            {"id": "F-DG-02", "applies_to": {}, "trigger": {"condition": "True"},
+             "data_source": [], "template": "_client_request_generic.md.j2",
+             "rationale": "test", "severity": "high", "daily_cap_group": "default"},
+            {"id": "V-EC-01", "applies_to": {}, "trigger": {"condition": "True"},
+             "data_source": [], "template": "_client_request_generic.md.j2",
+             "rationale": "test", "severity": "critical", "daily_cap_group": "adr_013_legal"},
+            {"id": "P-EF-01", "applies_to": {}, "trigger": {"condition": "True"},
+             "data_source": [], "template": "_client_request_generic.md.j2",
+             "rationale": "test", "severity": "high", "daily_cap_group": "adr_013_legal"},
+        ]
+        monkeypatch.setattr("engine.auto_proposal_engine._load_all_layers", lambda layer_filter=None: rules)
+        monkeypatch.setattr("engine.auto_proposal_engine._filter_by_environment", lambda r, c: r)
+        monkeypatch.setattr("engine.auto_proposal_engine._resolve_data_sources",
+                            lambda r, c, s: {"client_state": {}, "ad_platform_data": {}, "rule_evaluation": {}})
+        monkeypatch.setattr("engine.auto_proposal_engine._evaluate_trigger", lambda r, d, t: True)
+        monkeypatch.setattr("engine.auto_proposal_engine._evaluate_skip_if", lambda r, d, t: False)
+        monkeypatch.setattr("engine.auto_proposal_engine._check_prerequisite_chain", lambda r, h, s: True)
+        monkeypatch.setattr("engine.auto_proposal_engine._check_cooldown", lambda r, h, t: True)
+        monkeypatch.setattr("engine.auto_proposal_engine._apply_severity_priority", lambda rs: rs)
+        monkeypatch.setattr("engine.auto_proposal_engine._load_client_cfg", lambda cid: {
+            "company": {"name": "test_client", "honorific": "御中"},
+            "chatwork_rooms": {"main": "111"},
+        })
+        monkeypatch.setattr("engine.auto_proposal_engine.load_client_state", lambda cid: {})
+        return rules
+
+    def test_priority_a_overflow_all_appear_in_body(
+        self, isolated_history_dir, isolated_client_state_dir, monkeypatch,
+    ):
+        """priority A 5 件: 上位 3 件詳細 + 残 2 件要約、全 5 件が本文に登場する"""
+        from engine.auto_proposal_engine import run_auto_proposal
+
+        self._setup_5_priority_a_rules(monkeypatch)
+
+        captured = {}
+        from notifiers.chatwork_notifier import ChatWorkClient
+
+        def hooked(self, body, **kw):
+            captured["body"] = body
+            return {"message_id": "stub"}
+        monkeypatch.setattr(ChatWorkClient, "post_message", hooked)
+
+        r = run_auto_proposal("test_client", dry_run=False)
+        body = captured.get("body", "")
+
+        # selected 全件 (5 件) のタイトルが title に出る
+        assert "（5件）" in body, f"title 件数が selected 件数と不一致 (body title 部: {body[:200]})"
+
+        # selected 全 rule_id が本文に登場
+        for rid in ["F-AH-04", "F-DG-01", "F-DG-02", "V-EC-01", "P-EF-01"]:
+            assert rid in body, f"{rid} が本文に登場していない (非表示扱いになっている)"
+
+        # 詳細表示は上位 3 件、要約は 2 件 (priority A の 4-5 件目)
+        # 「優先度A：今日確認したい N 件、要約」セクションが存在
+        assert "優先度A" in body
+        assert "要約" in body, "priority A 4 件目以降の要約セクションが無い"
+
+        # cap グループは default 3 + adr_013_legal 2 で 5 件全部 selected されたか
+        # → 旧バグで 4 件目以降が捨てられていない
+        assert r["attempted_count"] == 5, f"5 件 selected されていない (attempted={r['attempted_count']})"
+        assert r["sent_count"] == 5
+
+        # history 更新対象 = 本文表示対象 = selected 全件
+        history_path = isolated_history_dir / "test_client.yaml"
+        assert history_path.exists()
+        history = yaml.safe_load(history_path.read_text(encoding="utf-8")) or {}
+        assert set(history.keys()) == {"F-AH-04", "F-DG-01", "F-DG-02", "V-EC-01", "P-EF-01"}, \
+            f"history 更新対象が本文表示対象と一致しない: {sorted(history.keys())}"
+
+    def test_history_only_updated_for_displayed_rules(
+        self, isolated_history_dir, isolated_client_state_dir, monkeypatch,
+    ):
+        """displayed_rule_ids にない rule は history 更新されない (将来 truncate が
+        入った場合の安全装置)"""
+        from engine.auto_proposal_engine import run_auto_proposal
+
+        self._setup_5_priority_a_rules(monkeypatch)
+
+        # _render_and_post_bundle を mock して displayed_rule_ids を一部に絞る
+        def fake_bundle(selected, state, client_cfg, today_str, dry_run=False):
+            # 5 件のうち最初の 2 件だけ "displayed" として返す (残 3 件は本文非表示扱い)
+            return {
+                "rule_ids": [r["id"] for r in selected],
+                "displayed_rule_ids": [r["id"] for r in selected[:2]],
+                "result": {"message_id": "stub"},
+                "body_length": 1000,
+                "items_priority_a_detailed_count": 2,
+                "items_priority_a_summary_count": 0,
+                "items_priority_b_count": 0,
+            }
+
+        with mock.patch("engine.auto_proposal_engine._render_and_post_bundle", side_effect=fake_bundle):
+            r = run_auto_proposal("test_client", dry_run=False)
+
+        history_path = isolated_history_dir / "test_client.yaml"
+        history = yaml.safe_load(history_path.read_text(encoding="utf-8")) or {}
+
+        # history は 2 件のみ (displayed_rule_ids と一致)
+        assert len(history) == 2, \
+            f"history が displayed_rule_ids と一致しない: {sorted(history.keys())}"
+        assert set(history.keys()) == {"F-AH-04", "F-DG-01"}
