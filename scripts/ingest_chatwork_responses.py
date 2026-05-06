@@ -22,11 +22,12 @@ ingestion フロー:
 
 副作用ゼロ原則 (本ファイル):
     - --dry-run なら yaml に書き込まない
-    - ChatWork に「投稿」はしない (取得のみ、READ 系 API)
+    - --dry-run なら ChatWork に ACK 投稿しない
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import logging
 import os
 import sys
@@ -49,6 +50,10 @@ from engine.daily_todo_builder import load_messaging
 from engine.chatwork_response_parser import parse_messages_bulk
 from engine.chatwork_response_store import save_response
 from engine.chatwork_reply_context_store import load_latest_context
+from engine.chatwork_response_ack_store import (
+    load_acked_message_ids,
+    mark_acked_message_ids,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("ingest")
@@ -65,6 +70,9 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
             "saved_responses":  int,
             "skipped_by_since_id": int,
             "errors": [...],
+            "ack_sent": int,
+            "ack_skipped": int,
+            "ack_errors": [...],
             "answers_summary": [...]    # rule_id + status のサマリ
         }
     """
@@ -76,6 +84,9 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
         "saved_responses":  0,
         "skipped_by_since_id": 0,
         "errors": [],
+        "ack_sent": 0,
+        "ack_skipped": 0,
+        "ack_errors": [],
         "answers_summary": [],
     }
 
@@ -157,6 +168,7 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
     summary["parsed_answers"] = len(parsed)
 
     # 5. 永続化 (dry-run なら skip)
+    saved_records = []
     for ans in parsed:
         record = ans.to_dict()
         summary["answers_summary"].append({
@@ -170,17 +182,100 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
             try:
                 save_response(client_id, record)
                 summary["saved_responses"] += 1
+                saved_records.append(record)
             except Exception as e:
                 err = f"save_response failed for {ans.rule_id}: {e}"
                 log.error(err)
                 summary["errors"].append(err)
 
+    # 6. 受領 ACK 投稿 (非 dry-run のみ)。保存済み回答だけを対象にし、
+    #    message_id 単位で ACK 済み管理することで二重返信を防ぐ。
+    if not dry_run and saved_records:
+        ack_result = _post_ack_for_new_responses(
+            client_id=client_id,
+            client=client,
+            responses=saved_records,
+            rule_messaging=rule_messaging,
+        )
+        summary["ack_sent"] = ack_result["sent"]
+        summary["ack_skipped"] = ack_result["skipped"]
+        summary["ack_errors"].extend(ack_result["errors"])
+
     log.info(
         f"[{client_id}] ingestion 完了: fetched={summary['fetched_messages']} "
         f"parsed={summary['parsed_answers']} saved={summary['saved_responses']} "
-        f"errors={len(summary['errors'])}"
+        f"ack_sent={summary['ack_sent']} ack_skipped={summary['ack_skipped']} "
+        f"errors={len(summary['errors'])} ack_errors={len(summary['ack_errors'])}"
     )
     return summary
+
+
+def _post_ack_for_new_responses(
+    client_id: str, client: ChatWorkClient, responses: list[dict], rule_messaging: dict,
+) -> dict:
+    """未 ACK の顧客メッセージに対して受領返信を 1 通投稿する。"""
+    result = {"sent": 0, "skipped": 0, "errors": []}
+    acked_ids = load_acked_message_ids(client_id)
+
+    new_responses = [
+        r for r in responses
+        if r.get("chatwork_message_id") and str(r.get("chatwork_message_id")) not in acked_ids
+    ]
+    skipped_ids = {
+        str(r.get("chatwork_message_id")) for r in responses
+        if r.get("chatwork_message_id") and str(r.get("chatwork_message_id")) in acked_ids
+    }
+    result["skipped"] = len(skipped_ids)
+    if not new_responses:
+        return result
+
+    source_ids = sorted(
+        {str(r["chatwork_message_id"]) for r in new_responses},
+        key=_message_sort_key,
+    )
+    body = _render_ack_body(new_responses, rule_messaging)
+    body_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()[:12]
+    idempotency_key = f"chatwork_response_ack:{client_id}:{','.join(source_ids)}:{body_hash}"
+
+    try:
+        post_result = client.post_message(body, idempotency_key=idempotency_key)
+        mark_acked_message_ids(client_id, source_ids)
+        result["sent"] = 0 if post_result.get("skipped") else 1
+        if post_result.get("skipped"):
+            result["skipped"] += len(source_ids)
+    except Exception as e:
+        msg = f"post_ack failed: {e.__class__.__name__}: {e}"
+        log.warning(msg)
+        result["errors"].append(msg)
+    return result
+
+
+def _render_ack_body(responses: list[dict], rule_messaging: dict) -> str:
+    """顧客向け受領返信本文を生成する。"""
+    rules = rule_messaging.get("rules") or {}
+    lines = [
+        "[info][title]ご回答ありがとうございます[/title]",
+        "以下の内容で受け取りました。",
+        "",
+    ]
+    for rec in responses:
+        rid = rec.get("rule_id", "")
+        title = (rules.get(rid) or {}).get("customer_title") or rid
+        label = rec.get("answer_label") or rec.get("answer_code") or "回答あり"
+        lines.append(f"・{title} → {label}")
+    lines.extend([
+        "",
+        "次回のTODO通知に反映します。確認が必要な項目は、Zynect側で手順を整理してご案内します。",
+        "[/info]",
+    ])
+    return "\n".join(lines)
+
+
+def _message_sort_key(v: str) -> tuple[int, str]:
+    try:
+        return (int(v), v)
+    except (TypeError, ValueError):
+        return (0, str(v))
 
 
 def main() -> int:

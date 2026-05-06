@@ -941,6 +941,101 @@ class TestDailyCheckIngestsBeforeNotify:
 
 
 # ============================================================
+# 5/7 P4: 顧客回答取り込み後の ACK 自動返信
+# ============================================================
+
+class TestChatWorkResponseAck:
+    """ingest が保存済み顧客回答に受領返信を返す"""
+
+    def _setup_ack_test(self, monkeypatch, tmp_path, sample_messaging, messages):
+        from scripts import ingest_chatwork_responses
+        from notifiers.chatwork_notifier import ChatWorkClient
+        import engine.chatwork_response_store as response_store
+        import engine.chatwork_response_ack_store as ack_store
+
+        monkeypatch.setattr(response_store, "RESPONSES_DIR", tmp_path / "responses")
+        monkeypatch.setattr(ack_store, "ACK_DIR", tmp_path / "acks")
+        monkeypatch.setattr(ingest_chatwork_responses, "load_messaging", lambda: sample_messaging)
+        monkeypatch.setattr(ingest_chatwork_responses, "load_latest_context", lambda client_id: {
+            "message_id": "1000",
+            "displayed_rule_ids": ["F-AH-04", "F-DG-01", "X-PI1"],
+        })
+
+        def fake_fetch(self, room_id=None, force=1):
+            return messages
+
+        posted = []
+
+        def fake_post(self, body, room_id=None, idempotency_key=None, self_unread=0):
+            posted.append({"body": body, "idempotency_key": idempotency_key})
+            return {"message_id": "ack-1"}
+
+        monkeypatch.setattr(ChatWorkClient, "fetch_messages", fake_fetch)
+        monkeypatch.setattr(ChatWorkClient, "post_message", fake_post)
+        return ingest_chatwork_responses, posted, ack_store
+
+    def test_ingest_posts_ack_for_one_letter_reply(self, monkeypatch, tmp_path, sample_messaging):
+        """`C、B、C` を保存したら、同じ内容の ACK を 1 通返す"""
+        messages = [
+            {"message_id": "2000", "send_time": 1715000000, "body": "C、B、C",
+             "account": {"account_id": 99999999}},
+        ]
+        ingest_mod, posted, ack_store = self._setup_ack_test(
+            monkeypatch, tmp_path, sample_messaging, messages,
+        )
+
+        summary = ingest_mod.ingest("pilotton", dry_run=False)
+
+        assert summary["parsed_answers"] == 3
+        assert summary["saved_responses"] == 3
+        assert summary["ack_sent"] == 1
+        assert len(posted) == 1
+        body = posted[0]["body"]
+        assert "ご回答ありがとうございます" in body
+        assert "ドメイン認証 → 状況不明、確認したい" in body
+        assert "1st Party Data → 未活用、検討したい" in body
+        assert "Pixel 実装 → Pixel 不在の可能性あり" in body
+        assert "2000" in posted[0]["idempotency_key"]
+        assert ack_store.load_acked_message_ids("pilotton") == {"2000"}
+
+    def test_ingest_dry_run_does_not_post_ack(self, monkeypatch, tmp_path, sample_messaging):
+        """dry-run は保存も ACK 投稿も ACK 済み記録もしない"""
+        messages = [
+            {"message_id": "2001", "send_time": 1715000000, "body": "F-AH-04 C",
+             "account": {"account_id": 99999999}},
+        ]
+        ingest_mod, posted, ack_store = self._setup_ack_test(
+            monkeypatch, tmp_path, sample_messaging, messages,
+        )
+
+        summary = ingest_mod.ingest("pilotton", dry_run=True)
+
+        assert summary["parsed_answers"] == 1
+        assert summary["saved_responses"] == 0
+        assert summary["ack_sent"] == 0
+        assert posted == []
+        assert ack_store.load_acked_message_ids("pilotton") == set()
+
+    def test_already_acked_message_is_not_posted_again(self, monkeypatch, tmp_path, sample_messaging):
+        """同じ ChatWork message_id は再 ingest しても ACK を返さない"""
+        messages = [
+            {"message_id": "2002", "send_time": 1715000000, "body": "F-AH-04 C",
+             "account": {"account_id": 99999999}},
+        ]
+        ingest_mod, posted, ack_store = self._setup_ack_test(
+            monkeypatch, tmp_path, sample_messaging, messages,
+        )
+        ack_store.mark_acked_message_ids("pilotton", ["2002"])
+
+        summary = ingest_mod.ingest("pilotton", dry_run=False)
+
+        assert summary["parsed_answers"] == 1
+        assert summary["ack_sent"] == 0
+        assert summary["ack_skipped"] == 1
+        assert posted == []
+
+
+# ============================================================
 # 5/7 P3 P2: ingest / audit 失敗時に ChatWork 自己監視通知が飛ぶ
 # ============================================================
 
