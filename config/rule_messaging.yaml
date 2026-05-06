@@ -1,0 +1,230 @@
+# ChatWork 通知メッセージング マッピング (5/8 通知 UX 改修)
+#
+# 目的: 各ルールについて、ChatWork 通知の冒頭に出すメッセージを
+#       「法律名」ではなく「広告成果改善アクション」の文脈に変換する。
+#
+# 設計指針 (リサーチ参照):
+#   - Google Ads Recommendations: 改善提案 + 優先度 + 期待インパクト
+#   - Atlassian alert fatigue: 1 日連投せず、優先度 + 次アクションを明示
+#   - 法律・規制は "legal_note" として下部補足、冒頭の認知は広告成果価値で
+#
+# performance_category (改善カテゴリ):
+#   - measurement_quality:    計測精度改善 (Pixel/CAPI/AEM/ドメイン認証)
+#   - learning_stability:     配信学習安定化 (CV シグナル / 学習フェーズ)
+#   - first_party_data:       1st party data 活用 (Customer File / dedup_key)
+#   - review_risk:            広告審査・LP リスク (景表法 / 薬機法 / 特商法 / 個人情報 / 著作権)
+#   - conversion_rate:        LP/CVR 改善 (オファー / 見せ方)
+#   - operational_foundation: 運用基盤整備 (アカウント健全性 / 二段階認証 / 連絡導線)
+#
+# priority:
+#   A: 今日確認したい (CV 計測欠損 / 配信学習に直結)
+#   B: 今週中に確認 (リスク予防 / 質改善)
+#   C: 月次で確認  (基盤整備、長期改善)
+
+
+version: "1.0"
+last_updated: "2026-05-08"
+
+
+rules:
+  # ===== Foundation - measurement_foundation / account_health =====
+  F-AH-04:
+    customer_title: "Meta ドメイン認証の状態確認"
+    performance_category: [measurement_quality, learning_stability]
+    priority: A
+    expected_effect:
+      - "AEM (集計イベント測定) / iOS 配信最適化の土台整備"
+      - "CV 計測と配信学習の安定化"
+    next_action_question: "Meta Business Manager で対象ドメインが「認証済み」になっていますか?"
+    action_options:
+      A: "認証済み"
+      B: "未対応"
+      C: "状況不明、確認したい"
+    legal_note: null
+
+  F-MF-01:
+    customer_title: "Pixel/タグの重複発火による CV 二重計上の解消"
+    performance_category: [measurement_quality, learning_stability]
+    priority: A
+    expected_effect:
+      - "CV 二重計上の解消 (CPA 過小算出による予算誤配分の防止)"
+      - "Meta 学習データ品質の改善"
+    next_action_question: "1 ページに同じイベントを 2 つ以上の Pixel で発火させていませんか?"
+    action_options:
+      A: "重複なし"
+      B: "重複している可能性あり"
+      C: "確認したい"
+    legal_note: null
+
+  # ===== Foundation - data_governance =====
+  F-DG-01:
+    customer_title: "1st Party Data の広告活用方針の確認"
+    performance_category: [first_party_data]
+    priority: A
+    expected_effect:
+      - "Cookie 制限後 (iOS / Privacy Sandbox) の広告配信安定化"
+      - "既存顧客データを使った類似配信 / 除外配信の精度改善"
+    next_action_question: "購入者 / 会員 / メルマガ等の顧客データを広告運用に使う方針はありますか?"
+    action_options:
+      A: "既に活用中"
+      B: "未活用、検討したい"
+      C: "活用予定なし"
+    legal_note: null
+
+  F-DG-02:
+    customer_title: "顧客データ連携時の SHA256 ハッシュ化確認"
+    performance_category: [first_party_data, measurement_quality]
+    priority: A
+    expected_effect:
+      - "Customer Audience のマッチ率改善 (= 配信精度向上)"
+      - "CV 計測データの品質向上"
+      - "類似配信 / リターゲティング精度の改善"
+    next_action_question: "Customer File / CAPI 連携時に、メール・電話番号を SHA256 でハッシュ化していますか?"
+    action_options:
+      A: "ハッシュ化済"
+      B: "平文送信中"
+      C: "確認したい"
+    legal_note: "平文の個人情報送信は個人情報保護上のリスクもあります (補足)。"
+
+  F-DG-07:
+    customer_title: "外部送信規律の表記確認"
+    performance_category: [review_risk]
+    priority: B
+    expected_effect:
+      - "外部送信規律 (2023/6 改正) 準拠による配信停止リスクの低減"
+    next_action_question: "プライバシーポリシーに広告タグ (Meta/Google/etc.) の送信先と目的が明記されていますか?"
+    action_options:
+      A: "明記済"
+      B: "未対応"
+      C: "確認したい"
+    legal_note: "電気通信事業法の外部送信規律。違反は配信プラットフォームの審査リスクに繋がります。"
+
+  # ===== Foundation - legal_compliance (review_risk として表現) =====
+  F-LC-01:
+    customer_title: "広告表現に「優良誤認」となるリスクがないかの確認"
+    performance_category: [review_risk]
+    priority: B
+    expected_effect:
+      - "広告審査落ち / 配信停止リスクの低減"
+      - "LP 改修による配信遅延の予防"
+    next_action_question: "LP 内の「No.1」「最高」「必ず」など強い表現に客観的根拠 (調査機関 / データ) はありますか?"
+    action_options:
+      A: "全て根拠あり"
+      B: "一部根拠不足"
+      C: "確認したい"
+    legal_note: "景品表示法 第5条第1号 (優良誤認表示) — Meta / Google の広告審査でも頻出の落とし穴。"
+
+  F-LC-04:
+    customer_title: "EC サイトの特商法表記の確認"
+    performance_category: [review_risk]
+    priority: B
+    expected_effect:
+      - "ECフォース系 LP の審査通過率向上"
+      - "顧客信頼性 (返品ポリシー透明化) による CVR 改善余地"
+    next_action_question: "LP/EC サイトに会社名・住所・電話番号・返品条件・送料・支払方法が表示されていますか?"
+    action_options:
+      A: "全項目表示済"
+      B: "一部不足"
+      C: "確認したい"
+    legal_note: "特定商取引法 (通信販売の法定表記)。Meta は審査時に厳格に確認します。"
+
+  F-LC-06:
+    customer_title: "個人情報取得時の同意取得フローの確認"
+    performance_category: [review_risk, first_party_data]
+    priority: B
+    expected_effect:
+      - "Customer File / CAPI 連携時のリスク低減"
+      - "外部送信規律と整合した運用基盤"
+    next_action_question: "LP の入力フォームで「個人情報の利用目的」と「第三者提供の同意」を取得していますか?"
+    action_options:
+      A: "取得済"
+      B: "一部のみ"
+      C: "確認したい"
+    legal_note: "個人情報保護法 第18条 (取得時の利用目的通知)。"
+
+  F-LC-08:
+    customer_title: "クリエイティブの著作権・商標権の確認"
+    performance_category: [review_risk]
+    priority: B
+    expected_effect:
+      - "Meta / Google の権利侵害申し立てによる配信停止リスクの予防"
+      - "ブランドセーフティの維持"
+    next_action_question: "クリエイティブ内の画像 / フォント / 音源 / 第三者商品名の利用権利を確認していますか?"
+    action_options:
+      A: "全て確認済"
+      B: "一部未確認"
+      C: "確認したい"
+    legal_note: "著作権法 / 商標法。配信プラットフォーム側で第三者から申し立てがあると即停止のリスクがあります。"
+
+  # ===== Foundation - 薬機法系 (cosmetics_health 客先) =====
+  V-EC-01:
+    customer_title: "化粧品広告の効能表現の確認 (薬機法 56 効能の範囲)"
+    performance_category: [review_risk]
+    priority: A
+    expected_effect:
+      - "薬機法措置命令 / 広告停止リスクの即時低減"
+      - "Meta 審査落ちの予防 (化粧品 D2C 系の審査は厳格)"
+    next_action_question: "クリエイティブとLPの効能表現は「化粧品の56効能」の範囲内ですか?"
+    action_options:
+      A: "範囲内のみ"
+      B: "確認したい"
+      C: "一部範囲外の可能性あり"
+    legal_note: "薬機法 第66条 (誇大広告等の禁止) — 化粧品広告は厚労省告示の56効能の範囲のみ。"
+
+  # ===== EC Platform - ECフォース =====
+  P-EF-01:
+    customer_title: "ECフォース 注文 API 連携の確認"
+    performance_category: [measurement_quality, first_party_data]
+    priority: A
+    expected_effect:
+      - "受注データ自動取得による AOV / LTV 算出の自動化"
+      - "顧客リスト同期の精度向上"
+    next_action_question: "ECフォース 管理画面で注文データの API アクセスは有効になっていますか?"
+    action_options:
+      A: "有効"
+      B: "未設定"
+      C: "確認したい"
+    legal_note: null
+
+  P-EF-02:
+    customer_title: "ECフォース から Meta CAPI への CV 連携の確認"
+    performance_category: [measurement_quality, learning_stability]
+    priority: A
+    expected_effect:
+      - "ブラウザ計測欠損の補完 (iOS / 広告ブロッカー対策)"
+      - "Meta 学習シグナル品質の向上、CPA 改善余地"
+    next_action_question: "ECフォース → 外部連携アカウント管理 → 「FB CV API」タブで Meta との CAPI 連携は設定済みですか?"
+    action_options:
+      A: "設定済"
+      B: "未設定"
+      C: "確認したい"
+    legal_note: null
+
+
+# ============================================================
+# performance_category ラベル (人間向け表示文字列)
+# ============================================================
+category_labels:
+  measurement_quality:    "計測精度改善"
+  learning_stability:     "配信学習安定化"
+  first_party_data:       "1st Party Data 活用"
+  review_risk:            "広告審査 / LP リスク低減"
+  conversion_rate:        "LP / CVR 改善"
+  operational_foundation: "運用基盤整備"
+
+
+# ============================================================
+# 既定値 (rule_messaging.yaml に未登録のルール用フォールバック)
+# ============================================================
+default:
+  customer_title: "運用改善アクション ({rule_id})"
+  performance_category: [operational_foundation]
+  priority: B
+  expected_effect:
+    - "運用基盤の整備"
+  next_action_question: "本項目について、現状の対応状況を教えてください。"
+  action_options:
+    A: "対応済"
+    B: "未対応"
+    C: "確認したい"
+  legal_note: null
