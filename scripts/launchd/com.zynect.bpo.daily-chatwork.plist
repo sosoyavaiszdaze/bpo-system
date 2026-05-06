@@ -5,8 +5,8 @@
 
   実行: 毎日 09:00 / 09:15 / 09:30 JST の 3 連射 (Option C)
   内容: scripts/daily_chatwork_check.py --client pilotton
-  本番投稿 (5/8 09:00〜): [テスト] プレフィクス無し、顧客向け正式投稿
-  内部 Phase A レビュー期間中の prefix 付き投稿は 5/7 で完了。
+  本番投稿モード (5/8 09:00〜): クライアントに直接届く正式投稿
+  内部レビュー期間中の試験投稿モードは 5/7 で完了。
 
   3 連射の根拠 (Option C):
     - chatwork_sent.json の sha256(room_id|body) 冪等性により、
