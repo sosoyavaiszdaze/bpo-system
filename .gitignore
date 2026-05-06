@@ -35,6 +35,39 @@ data/*_previous.json
 outputs/*.pdf
 outputs/*.html
 
+# === Runtime state (R1: 5/7 split — git 管理外、launchd 実行のたびに更新) ===
+# ChatWork idempotency / 投稿履歴
+state/chatwork_sent.json
+state/chatwork_sent.json.tmp
+state/chatwork_sent.json.preview-bk-*
+
+# 指摘の状態遷移ストア (engine.indication_state.save() 経由で書込)
+outputs/chatwork_state/*.json
+outputs/chatwork_state/*.json.tmp
+
+# 自動提案履歴 (engine.auto_proposal_engine._save_history 経由)
+outputs/auto_proposal_history/*.yaml
+outputs/auto_proposal_history/*.yaml.tmp
+
+# AdTruth ブロック履歴 / CV 保全モニタ
+outputs/*/block_events.yaml
+outputs/*/block_events.yaml.tmp
+
+# tech_stack 検証履歴 (validators.client_tech_stack_validator._persist_history)
+outputs/*/tech_stack_verification.yaml
+outputs/*/tech_stack_verification.yaml.tmp
+
+# 長期効果予測スナップショット (engine.longterm_projector)
+outputs/*/effective_impact_*.json
+
+# conflict_detector の解決オーバーライド記録 (毎日変動)
+config/context-overrides.yaml
+config/context-overrides.yaml.tmp
+
+# 既存配列 (既に上の outputs/*.pdf / *.html でカバー済だが念のため明示)
+outputs/yamamoto_demo/
+outputs/proposals/*.pdf
+
 # OS
 .DS_Store
 Thumbs.db
