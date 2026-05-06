@@ -277,26 +277,62 @@ def build_daily_todo(
     messaging = load_messaging()
     layer_a_rule_defs = layer_a_rule_defs or {}
 
+    # === 0. ChatWork 回答ストアから suppression / wants_help / not_done 状態を取得 (5/8 v3) ===
+    # confirmed_done / not_applicable な rule_id は本文から除外、
+    # wants_help は customer_title に "[詳細案内]" プレフィクス、
+    # not_done は最近 reminder したばかりなら抑制 (cooldown は不要、status が短期 expires)
+    response_status_map: dict = {}
+    suppressed_by_response: set = set()
+    try:
+        from engine.chatwork_response_store import get_status_map, is_suppressed
+        response_status_map = get_status_map(client_id)
+        suppressed_by_response = {
+            rid for rid in response_status_map
+            if is_suppressed(client_id, rid)
+        }
+        if suppressed_by_response:
+            log.info(
+                f"[{client_id}] response-suppressed rules ({len(suppressed_by_response)}): "
+                f"{', '.join(sorted(suppressed_by_response))}"
+            )
+    except Exception as e:
+        log.debug(f"[{client_id}] response store load failed (no-op): {e}")
+
     # === 1. Layer A indications を items に変換 ===
     layer_a_items: list[dict] = []
     unmapped: list[str] = []
+    suppressed_count = 0
     for rid in layer_a_rule_ids:
+        if rid in suppressed_by_response:
+            suppressed_count += 1
+            continue
         msg_def = (messaging.get("rules") or {}).get(rid)
         if not msg_def:
             unmapped.append(rid)
             continue
         rule_def = layer_a_rule_defs.get(rid) or {"id": rid}
-        layer_a_items.append(build_recommendation_item(rid, rule_def, msg_def, messaging))
+        item = build_recommendation_item(rid, rule_def, msg_def, messaging)
+        item["response_status"] = response_status_map.get(rid)
+        if item["response_status"] == "wants_help":
+            item["customer_title"] = f"[詳細案内] {item['customer_title']}"
+        layer_a_items.append(item)
 
     # === 2. auto_proposal eligible rules を items に変換 ===
     auto_items: list[dict] = []
     for r in eligible_rules:
         rid = r.get("id", "")
+        if rid in suppressed_by_response:
+            suppressed_count += 1
+            continue
         msg_def = (messaging.get("rules") or {}).get(rid)
         if not msg_def:
             unmapped.append(rid)
             continue
-        auto_items.append(build_recommendation_item(rid, r, msg_def, messaging))
+        item = build_recommendation_item(rid, r, msg_def, messaging)
+        item["response_status"] = response_status_map.get(rid)
+        if item["response_status"] == "wants_help":
+            item["customer_title"] = f"[詳細案内] {item['customer_title']}"
+        auto_items.append(item)
 
     # === 3. 統合 + 多軸スコア順ソート (5/8 v3 順序ロジック明文化) ===
     all_items = layer_a_items + auto_items
@@ -366,7 +402,10 @@ def build_daily_todo(
         "displayed_rule_ids":  [i["rule_id"] for i in items_today + items_this_week + items_legal_note],
         "internal_unmapped_rules": sorted(set(unmapped)),
         "anomaly_summary":     anomaly_summary or {},
-        "already_notified_ids": sorted(already_notified_ids),  # 5/8 v3 fix: preview で見える化
+        "already_notified_ids": sorted(already_notified_ids),
+        # 5/8 v3 ingestion: response store による除外件数 / status map (preview 用)
+        "suppressed_by_response_count": suppressed_count,
+        "response_status_map":          response_status_map,
     }
 
 

@@ -13,6 +13,13 @@
 #   4. first_party_data:     1st party data 整備
 #   5. legal_review:         法務・プライバシー (広告審査・配信停止に直結するもの)
 #
+# answer_source_preference (5/8 v3 ingestion): 各 rule の「答えをどこから取るか」優先順位
+#   - api:           媒体公式 API で自動取得可 (例: ドメイン認証 status, Pixel last_fired)
+#   - validator:     validators.client_tech_stack_validator で LP probe で確認可
+#   - chatwork_reply: 顧客に質問 (上記で取れない場合のみ)
+# evaluator は配列順に試行し、上位で取得できたら ChatWork 質問は送らない (質問ノイズ削減)。
+# 現状は宣言のみ (Phase A)。実 API 連携は Phase B Week 2-3 で順次接続予定。
+#
 # 設計指針:
 #   - Google Ads Recommendations: 改善提案 + 優先度 + 期待インパクト
 #   - Atlassian alert fatigue: 1 日連投せず、優先度 + 次アクションを明示
@@ -43,6 +50,7 @@ rules:
     performance_category: [measurement_quality]
     priority: A
     goal_stage: measurement_recovery
+    answer_source_preference: [api, validator, chatwork_reply]   # Meta API: pixel.last_fired_time
     expected_effect:
       - "CV 計測欠損の即時解消"
       - "Meta 学習データの正常化、CPA 悪化要因の切り分け"
@@ -94,6 +102,8 @@ rules:
     performance_category: [measurement_quality, learning_stability]
     priority: A
     goal_stage: measurement_recovery
+    # Meta Business Manager API でドメイン認証 status を直接取得可 (Phase B 接続)
+    answer_source_preference: [api, validator, chatwork_reply]
     expected_effect:
       - "AEM (集計イベント測定) / iOS 配信最適化の土台整備"
       - "CV 計測と配信学習の安定化"
@@ -126,6 +136,8 @@ rules:
     performance_category: [measurement_quality]
     priority: A
     goal_stage: measurement_recovery
+    # Meta Pixel API で event_match_quality / 直近 event count を確認可
+    answer_source_preference: [api, chatwork_reply]
     expected_effect:
       - "CV 計測の正常動作確認、計測欠損の早期発見"
       - "Meta 学習シグナルの品質保証"
@@ -161,6 +173,8 @@ rules:
     performance_category: [first_party_data]
     priority: B
     goal_stage: first_party_data
+    # 運用方針なので顧客回答必須 (validator / API では判別不可)
+    answer_source_preference: [chatwork_reply]
     expected_effect:
       - "Cookie 制限後 (iOS / Privacy Sandbox) の広告配信安定化"
       - "既存顧客データを使った類似配信 / 除外配信の精度改善"
@@ -246,6 +260,8 @@ rules:
     performance_category: [review_risk]
     priority: B
     goal_stage: legal_review
+    # LP 文言確認は validator で部分自動化可 (Claude API による誇大表現チェック想定)
+    answer_source_preference: [validator, chatwork_reply]
     expected_effect:
       - "広告審査落ち / 配信停止リスクの低減"
       - "LP 改修による配信遅延の予防"
