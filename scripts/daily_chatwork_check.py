@@ -238,32 +238,44 @@ def _run_daily_check_impl(
             log.error(f"完了通知投稿失敗: {e}")
             errors.append(f"completion_post: {e}")
 
-    # 6. 新規指摘通知 (filter 適用)
+    # 6. 統合 TODO 通知 (5/8 v2: 旧 daily_indication 個別投稿 + auto_proposal 個別投稿を
+    #    1 通の「本日の広告成果改善TODO」に集約)
     notify_targets = filter_indications(upserted, state, today=today_str)
     if notify_targets:
-        log.info(f"新規指摘通知対象: {len(notify_targets)} 件 (filter 後)")
-        indication_items = [_to_indication_render_item(r) for r in notify_targets]
-        try:
-            body = render("daily_indication.md.j2", {
-                "client_display_name": client_display,
-                "date": today_str,
-                "greeting": None,
-                "indications": indication_items,
-                "footer_note": None,
-            })
-            result = chat.post_message(body)
-            # 5/8 修正: 本番投稿成功時のみ state を進める。
-            if result.get("dry_run"):
-                log.info(f"指摘通知 [dry_run]: state を進めません key={result.get('idempotency_key', '')[:12]}")
-            elif result.get("skipped"):
-                log.info(f"指摘通知スキップ (idempotency hit): key={result.get('idempotency_key', '')[:12]}")
-            else:
-                posted_indications = len(notify_targets)
-                for r in notify_targets:
-                    state.mark_indication_notified(r["indication_id"], today=today_str)
-        except (ChatWorkError, Exception) as e:
-            log.error(f"指摘通知投稿失敗: {e}")
-            errors.append(f"indication_post: {e}")
+        log.info(f"Layer A indication candidates: {len(notify_targets)} 件 (filter 後、統合 TODO へ流入)")
+
+    todo_summary = {
+        "posted_indications": 0,
+        "auto_proposal_attempted": 0,
+        "auto_proposal_sent": 0,
+        "auto_proposal_skipped": 0,
+        "auto_proposal_dry_run": 0,
+        "auto_proposal_failed": 0,
+        "internal_unmapped_rules": [],
+        "total_count": 0,
+        "errors": [],
+    }
+    try:
+        from engine.daily_todo_builder import post_daily_todo
+        todo_summary = post_daily_todo(
+            client_id=client_id,
+            layer_a_notify_records=notify_targets,
+            audit_results=audit,
+            state=state,
+            today_str=today_str,
+            dry_run=dry_run,
+        )
+        posted_indications = todo_summary["posted_indications"]
+        log.info(
+            f"daily_todo: total={todo_summary.get('total_count', 0)} "
+            f"layer_a_sent={todo_summary['posted_indications']} "
+            f"auto_proposal_sent={todo_summary.get('auto_proposal_sent', 0)} "
+            f"unmapped={len(todo_summary.get('internal_unmapped_rules', []))}"
+        )
+        errors.extend(todo_summary.get("errors", []))
+    except Exception as e:
+        log.error(f"daily_todo 投稿失敗: {e}")
+        errors.append(f"daily_todo: {e}")
 
     # 7. state 保存 — 5/8 修正: dry_run 時は永続化しない (副作用ゼロ原則)
     if not dry_run:
@@ -271,34 +283,16 @@ def _run_daily_check_impl(
     else:
         log.info("[dry_run] state.save() スキップ — indication_state は永続化されません")
 
-    # 8. ADR-013 多層ルール (Layer 0/1/2/3 = 248 ルール) の自動提案サイクル
-    #    既存フロー (Layer A 277 ルール) と独立して走らせる。テンプレ未整備のルールは
-    #    templates.chatwork.render() の generic フォールバックで通知される。
+    # 後方互換用 summary フィールド (旧 caller が auto_proposal_summary を期待)
     auto_proposal_summary = {
-        "posted_count": 0, "eligible_count": 0, "loaded_rules_count": 0,
-        "attempted_count": 0, "sent_count": 0, "skipped_count": 0,
-        "dry_run_count": 0, "failed_count": 0,
+        "loaded_rules_count": 0, "eligible_count": 0,
+        "attempted_count": todo_summary.get("auto_proposal_attempted", 0),
+        "sent_count":      todo_summary.get("auto_proposal_sent", 0),
+        "skipped_count":   todo_summary.get("auto_proposal_skipped", 0),
+        "dry_run_count":   todo_summary.get("auto_proposal_dry_run", 0),
+        "failed_count":    todo_summary.get("auto_proposal_failed", 0),
+        "posted_count":    todo_summary.get("auto_proposal_sent", 0),
     }
-    try:
-        from engine.auto_proposal_engine import run_auto_proposal
-        auto_proposal_summary = run_auto_proposal(
-            client_id=client_id,
-            dry_run=dry_run,
-            today=today_str,
-        )
-        # 5/8 改修: 「実送信」と「試行」を区別したログ出力
-        log.info(
-            f"auto_proposal: loaded={auto_proposal_summary.get('loaded_rules_count', 0)} "
-            f"eligible={auto_proposal_summary.get('eligible_count', 0)} "
-            f"attempted={auto_proposal_summary.get('attempted_count', 0)} "
-            f"sent={auto_proposal_summary.get('sent_count', 0)} "
-            f"skipped={auto_proposal_summary.get('skipped_count', 0)} "
-            f"dry_run={auto_proposal_summary.get('dry_run_count', 0)} "
-            f"failed={auto_proposal_summary.get('failed_count', 0)}"
-        )
-    except Exception as e:
-        log.error(f"auto_proposal 失敗 (既存フローには影響なし): {e}")
-        errors.append(f"auto_proposal: {e}")
 
     # 9. AdTruth 日次チェック (ADR-006/009/014)
     #    fraud_score を campaign 粒度で算出 → gray/black 検出時のみ ChatWork に判断要請

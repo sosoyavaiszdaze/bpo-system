@@ -287,12 +287,12 @@ class TestRecommendationsContent:
         run_auto_proposal("test_client", dry_run=False)
 
         body = captured.get("body", "")
-        # 冒頭に「広告成果改善アクション」(法律名ではない)
-        assert "広告成果改善アクション" in body[:120], "冒頭に広告成果文脈が無い"
-        # 期待効果が含まれる
-        assert "期待効果" in body
-        # 確認質問が含まれる
-        assert "確認してほしいこと" in body
+        # 冒頭に「広告成果改善TODO」(法律名ではない、5/8 v2 統合通知)
+        assert "広告成果改善TODO" in body[:120], "冒頭に広告成果改善 TODO タイトルが無い"
+        # 広告成果への影響セクション
+        assert "広告成果への影響" in body
+        # 確認アクション
+        assert "今日の確認アクション" in body
         # 期待効果カテゴリラベルが出る
         assert "計測精度改善" in body or "1st Party Data 活用" in body
         # 法律名 / 強い文言は冒頭 200 文字に出ない
@@ -301,7 +301,7 @@ class TestRecommendationsContent:
         assert "薬機法" not in head_200
         assert "措置命令" not in body
         assert "課徴金" not in body
-        # Markdown 強調 ** が含まれない (ChatWork でそのまま表示されるため、5/8 Codex 修正)
+        # Markdown 強調 ** が含まれない
         assert "**" not in body, "Markdown ** 強調が残っている"
 
 
@@ -377,13 +377,14 @@ class TestPriorityAOverflow:
         for rid in ["F-AH-04", "F-DG-01", "F-DG-02", "V-EC-01", "P-EF-01"]:
             assert rid in body, f"{rid} が本文に登場していない (非表示扱いになっている)"
 
-        # 詳細表示は上位 3 件、要約は 2 件 (priority A の 4-5 件目)
-        # 「優先度A：今日確認したい N 件、要約」セクションが存在
-        assert "優先度A" in body
-        assert "要約" in body, "priority A 4 件目以降の要約セクションが無い"
+        # 統合通知 v2 のセクション構成: 今日確認 / 今週中 / 補足
+        # priority A は F-AH-04 / V-EC-01 / P-EF-01 の 3 件、上位 3 件詳細
+        # priority B は F-DG-01 / F-DG-02 → items_this_week 要約
+        assert "今日確認してほしいこと" in body, "「今日確認してほしいこと」セクションが無い"
+        assert "今週中に確認したいこと" in body or "補足" in body, \
+            "「今週中」または「補足」セクションが無い"
 
-        # cap グループは default 3 + adr_013_legal 2 で 5 件全部 selected されたか
-        # → 旧バグで 4 件目以降が捨てられていない
+        # cap グループは default 3 + adr_013_legal 2 で 5 件全部 selected
         assert r["attempted_count"] == 5, f"5 件 selected されていない (attempted={r['attempted_count']})"
         assert r["sent_count"] == 5
 

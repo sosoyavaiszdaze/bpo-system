@@ -42,6 +42,88 @@ CLIENT_STATE_DIR = ROOT / "outputs" / "client_state"
 HISTORY_DIR = ROOT / "outputs" / "auto_proposal_history"
 RULE_MESSAGING_PATH = CONFIG_DIR / "rule_messaging.yaml"
 
+
+# ========== 5/8 v2: collect_eligible_rules (投稿せず eligible のみ返す) ==========
+
+def collect_eligible_rules(
+    client_id: str,
+    today: Optional[str] = None,
+    layer_filter: Optional[list[str]] = None,
+) -> dict:
+    """auto_proposal の評価フェーズだけを実行、投稿せず eligible_rules を返す。
+
+    daily_todo_builder が Layer A indications と統合する目的で使う。
+    cap / sort も適用済みの「selected」 (= 投稿候補) を返す。
+
+    Returns:
+        {
+            "client_id": str,
+            "loaded_rules_count": int,
+            "environment_matched_count": int,
+            "eligible_count": int,
+            "selected": [<rule full dict>, ...],   # cap / sort 適用済み
+            "history": dict,                        # _enforce_caps が使った history snapshot
+        }
+    """
+    today_str = today or datetime.now().strftime("%Y-%m-%d")
+    state = load_client_state(client_id)
+    client_cfg = _load_client_cfg(client_id)
+    history = _load_history(client_id)
+
+    rules = _load_all_layers(layer_filter)
+    matched = _filter_by_environment(rules, client_cfg)
+
+    eligible = []
+    for rule in matched:
+        data = _resolve_data_sources(rule, client_cfg, state)
+        if not _evaluate_trigger(rule, data, today_str):
+            continue
+        if not _check_prerequisite_chain(rule, history, state):
+            continue
+        if _evaluate_skip_if(rule, data, today_str):
+            continue
+        if not _check_cooldown(rule, history, today_str):
+            continue
+        eligible.append(rule)
+
+    sorted_rules = _apply_severity_priority(eligible)
+    rules_index = {r.get("id"): r for r in rules}
+    selected = _enforce_caps(sorted_rules, history, today_str, all_rules_index=rules_index)
+
+    return {
+        "client_id": client_id,
+        "loaded_rules_count": len(rules),
+        "environment_matched_count": len(matched),
+        "eligible_count": len(eligible),
+        "selected": selected,
+        "history": history,
+        "client_cfg": client_cfg,
+    }
+
+
+def update_history_for_displayed(
+    client_id: str, displayed_rule_ids: list, all_rules_index: dict, today_str: str,
+) -> int:
+    """統合通知が成功した後、displayed_rule_ids 全件の history を更新
+
+    daily_todo_builder.post_daily_todo() から呼ばれる。
+    Returns: 更新した件数
+    """
+    count = 0
+    for rid in displayed_rule_ids:
+        rule = all_rules_index.get(rid)
+        if not rule:
+            continue
+        # auto_proposal 由来の rule のみ history 更新 (Layer A は indication_state 側で管理)
+        if "daily_cap_group" not in rule:
+            continue
+        _update_history(
+            client_id, rid, {"result": {"message_id": "unified_todo"}}, today_str,
+            daily_cap_group=rule.get("daily_cap_group", "default"),
+        )
+        count += 1
+    return count
+
 # 1 日 1 まとめ投稿: 優先度 A の表示上限 (Atlassian alert fatigue best practice)
 DAILY_RECOMMENDATIONS_PRIORITY_A_TOP = 3
 
@@ -683,42 +765,28 @@ def _render_and_post_bundle(
 
     from notifiers.chatwork_notifier import ChatWorkClient, ChatWorkError
     from templates.chatwork import render
+    # 5/8 v2: 統合通知テンプレに合わせて daily_todo_builder.build_daily_todo を使用
+    from engine.daily_todo_builder import build_daily_todo
 
-    messaging = _load_rule_messaging()
+    # auto_proposal の selected_rules のみで context を構築 (Layer A indication なし)
+    context = build_daily_todo(
+        client_id=client_cfg.get("client_id") or "unknown",
+        client_cfg=client_cfg,
+        layer_a_rule_ids=[],
+        eligible_rules=selected_rules,
+        today_str=today_str,
+        anomaly_summary=None,
+    )
 
-    items = [_build_recommendation_item(r, messaging) for r in selected_rules]
-    items_a = [i for i in items if i["priority"] == "A"]
-    items_b = [i for i in items if i["priority"] != "A"]
-
-    # priority A 上位 N 件: 詳細表示
-    # priority A 4 件目以降: 要約表示 (priority B と同じ表現)
-    # priority B: 要約表示
-    items_a_detailed = items_a[:DAILY_RECOMMENDATIONS_PRIORITY_A_TOP]
-    items_a_summary  = items_a[DAILY_RECOMMENDATIONS_PRIORITY_A_TOP:]
-
-    company = client_cfg.get("company") or {}
     chatwork_rooms = client_cfg.get("chatwork_rooms") or {}
     room_id = chatwork_rooms.get("main")
 
-    context = {
-        "client_name": company.get("name") or client_cfg.get("client_id", "クライアント"),
-        "honorific":   company.get("honorific", "御中"),
-        "today":       today_str,
-        "total_selected_count": len(selected_rules),
-        "items_priority_a_detailed": items_a_detailed,
-        "items_priority_a_summary":  items_a_summary,
-        "items_priority_b":          items_b,
-    }
-
     body = render("_daily_recommendations.md.j2", context)
-
-    # selected 全件 = 本文に表示 (詳細 + 要約)。displayed_rule_ids が history 更新対象
     rule_ids = [r.get("id") for r in selected_rules]
-    displayed_rule_ids = (
-        [i["rule_id"] for i in items_a_detailed]
-        + [i["rule_id"] for i in items_a_summary]
-        + [i["rule_id"] for i in items_b]
-    )
+    displayed_rule_ids = context.get("displayed_rule_ids") or []
+    items_a_detailed = context.get("items_today") or []
+    items_a_summary = []      # 統合 schema では items_today / items_this_week / items_legal_note の 3 区分
+    items_b = (context.get("items_this_week") or []) + (context.get("items_legal_note") or [])
 
     try:
         chat = ChatWorkClient(room_id=room_id, dry_run=dry_run)
