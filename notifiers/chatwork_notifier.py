@@ -476,6 +476,41 @@ class ChatWorkClient:
             ) from e
 
 
+    # ---------- 5/8 v3: メッセージ取得 (ingestion 用) ----------
+
+    def fetch_messages(
+        self,
+        room_id: Optional[str] = None,
+        force: int = 1,
+    ) -> list:
+        """指定 room の最新メッセージを取得
+
+        ChatWork API: GET /rooms/{room_id}/messages
+
+        Args:
+            room_id: 取得対象ルーム ID (省略時は self._room_id)
+            force: 1 ならキャッシュを無視して最新取得 (default 1、ingestion 用途)
+
+        Returns:
+            messages 配列 (ChatWork API の戻り値そのまま、最大 100 件)
+            各要素: {"message_id", "account", "body", "send_time", "update_time", ...}
+            未送信時は空 list、エラー時も空 list (例外は raise しない、上位で扱う)
+        """
+        rid = self._resolve_room_id(room_id)
+        path = f"/rooms/{rid}/messages?force={int(force)}"
+        try:
+            result = self._request("GET", path)
+        except ChatWorkError as e:
+            log.warning(f"ChatWork fetch_messages failed: {e}")
+            return []
+        # ChatWork API は messages を直接 list で返すか、{"messages": [...]} の形
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict):
+            return result.get("messages", []) or result.get("raw", [])
+        return []
+
+
 # ---------- module-level helpers ----------
 
 def send_chatwork_message(
