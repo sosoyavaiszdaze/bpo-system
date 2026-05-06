@@ -147,7 +147,7 @@ def _run_monthly_crm_report():
     log.info("=== 月次CRMレポート生成 ===")
     try:
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         from pipeline import load_config
         from datetime import datetime
         crm = TwentyCRM()

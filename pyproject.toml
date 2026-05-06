@@ -2,7 +2,9 @@
 name = "bpo-system"
 version = "3.0.0"
 description = "BPO System — 広告監査・不正検知・レポート自動生成"
-requires-python = ">=3.9"
+# ADR-016 §2.5: Python 3.12 統一 (5/7 R3 宣言)。
+# venv 自体の再構築は別作業 (現状 3.9.6)。tool.ruff.target-version と整合。
+requires-python = ">=3.12"
 
 [tool.ruff]
 line-length = 120

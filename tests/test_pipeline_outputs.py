@@ -30,7 +30,7 @@ def test_output_results_marks_slack_not_ready_as_skipped(monkeypatch, tmp_path):
 
 def test_output_results_marks_slack_send_failure(monkeypatch, tmp_path):
     import pipeline
-    from outputs import slack_notify
+    from notifiers import slack_notify
 
     monkeypatch.setattr(pipeline, "REPORTS_DIR", str(tmp_path))
     monkeypatch.setattr(slack_notify, "send_notification", lambda *_args: False)
@@ -63,7 +63,7 @@ def test_output_results_marks_lark_not_ready_as_skipped(monkeypatch, tmp_path):
 
 def test_output_results_marks_lark_send_failure(monkeypatch, tmp_path):
     import pipeline
-    from outputs import lark_notify
+    from notifiers import lark_notify
 
     monkeypatch.setattr(pipeline, "REPORTS_DIR", str(tmp_path))
     monkeypatch.setattr(lark_notify, "send_lark_notification", lambda *_args: False)
@@ -83,7 +83,7 @@ def test_output_results_marks_lark_send_failure(monkeypatch, tmp_path):
 
 def test_output_results_marks_crm_phase_b_as_skipped(monkeypatch, tmp_path):
     import pipeline
-    from outputs import crm_twenty
+    from notifiers import crm_twenty
 
     class DummyCRM:
         api_url = ""
@@ -104,7 +104,7 @@ def test_output_results_marks_crm_phase_b_as_skipped(monkeypatch, tmp_path):
 
 def test_output_results_marks_crm_save_failure(monkeypatch, tmp_path):
     import pipeline
-    from outputs import crm_twenty
+    from notifiers import crm_twenty
 
     class DummyCRM:
         api_url = "https://crm.example.test"

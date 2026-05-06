@@ -10,13 +10,13 @@ class TestTwentyCRM:
 
     def test_init_without_env(self):
         """環境変数未設定でも初期化できる"""
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         crm = TwentyCRM()
         assert crm.api_url == "" or crm.api_url is not None
 
     def test_save_action_log_no_api(self):
         """API未設定時はNoneを返す（エラーにならない）"""
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         crm = TwentyCRM(api_url="", api_key="")
         result = crm.save_action_log(
             "test_client", "fraud_block", "google", "テストブロック",
@@ -26,7 +26,7 @@ class TestTwentyCRM:
 
     def test_save_health_snapshot_no_api(self):
         """ヘルススナップショット保存（API未設定）"""
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         crm = TwentyCRM(api_url="", api_key="")
         result = crm.save_health_snapshot("test_client", {
             "ads_audit": {"score": 75, "grade": "B", "total_campaigns": 5,
@@ -39,7 +39,7 @@ class TestTwentyCRM:
 
     def test_save_fraud_judgment_no_api(self):
         """Fraud判断保存（API未設定）"""
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         crm = TwentyCRM(api_url="", api_key="")
         result = crm.save_fraud_judgment({
             "judgment_id": "cvj_test_001",
@@ -55,7 +55,7 @@ class TestTwentyCRM:
 
     def test_save_rule_change_no_api(self):
         """ルール変更保存（API未設定）"""
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         crm = TwentyCRM(api_url="", api_key="")
         result = crm.save_rule_change({
             "metric": "ctr", "old_threshold": 0.10,
@@ -66,7 +66,7 @@ class TestTwentyCRM:
 
     def test_save_advisory_comment_no_api(self):
         """アドバイザリーコメント保存（API未設定）"""
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         crm = TwentyCRM(api_url="", api_key="")
         result = crm.save_advisory_comment(
             "action_001", "yamamoto", "閾値を下げるべき",
@@ -76,7 +76,7 @@ class TestTwentyCRM:
 
     def test_generate_monthly_report(self):
         """月次レポート生成（クエリ未実装でもクラッシュしない）"""
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         crm = TwentyCRM(api_url="", api_key="")
         report = crm.generate_monthly_report("test_client", "2026-04")
         assert report["client_id"] == "test_client"
@@ -84,7 +84,7 @@ class TestTwentyCRM:
 
     def test_query_methods_return_empty(self):
         """クエリメソッドが空リスト/Noneを返す"""
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         crm = TwentyCRM(api_url="", api_key="")
         assert crm.get_client_actions("test") == []
         assert crm.get_client_health_history("test") == []

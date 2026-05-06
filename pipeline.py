@@ -1,5 +1,25 @@
 #!/usr/bin/env python3
-"""BPO System - Main Pipeline Orchestrator"""
+"""BPO System — 手動運用 / 単発レポート生成エントリポイント (ADR-016)
+
+役割:
+    手動でクライアント別の深い監査 + PDF レポート (v3) + Slack/Lark 通知 +
+    CRM 同期を一気通貫で行う。月次提案資料、kickoff、要望対応に使う。
+
+Phase A の launchd 自動運用には scripts/daily_chatwork_check.py を使うこと
+(本ファイルは launchd から直接呼ばれない、ADR-016 §2.1)。
+
+主要コマンド:
+    python3 pipeline.py run all              # 全クライアント (v2 デフォルト)
+    python3 pipeline.py run pilotton         # 特定クライアント
+    python3 pipeline.py run pilotton --report-version v3   # v3 PDF
+    python3 pipeline.py run pilotton --report-version both # v2+v3 並行
+    python3 pipeline.py test                 # 設定チェック
+
+共有モジュール:
+    fetch_data / run_ads_audit / run_anomaly_detection / run_fraud_audit /
+    run_seo_audit / run_waste_detection は scripts/daily_chatwork_check.py
+    からも import される (ADR-016 §2.1 の共有規約)。
+"""
 import os
 import sys
 import json
@@ -54,7 +74,7 @@ def load_client_config(client_id):
     # 1. CRM接続を試行
     if os.environ.get("TWENTY_API_URL") and os.environ.get("TWENTY_API_KEY"):
         try:
-            from outputs.crm_twenty import TwentyCRM
+            from notifiers.crm_twenty import TwentyCRM
             crm = TwentyCRM()
             client = crm.get_client(client_id)
             if client:
@@ -259,7 +279,7 @@ def output_results(client_id, client_cfg, results, report_version="v2"):
             step_status["slack"] = "skipped"
         else:
             try:
-                from outputs.lark_notify import send_lark_notification
+                from notifiers.lark_notify import send_lark_notification
                 ok = send_lark_notification(client_id, results, lark_cfg)
                 if ok is True:
                     step_status["lark"] = "ok"
@@ -273,7 +293,7 @@ def output_results(client_id, client_cfg, results, report_version="v2"):
             step_status["slack"] = "skipped"
     elif slack_cfg.get("webhook_env") or slack_cfg.get("webhook_url"):
         try:
-            from outputs.slack_notify import send_notification
+            from notifiers.slack_notify import send_notification
             ok = send_notification(client_id, results, slack_cfg)
             if ok is True:
                 step_status["slack"] = "ok"
@@ -293,7 +313,7 @@ def output_results(client_id, client_cfg, results, report_version="v2"):
     crm_cfg = client_cfg.get("crm", {}).get("twenty", {})
     if crm_cfg.get("enabled"):
         try:
-            from outputs.crm_twenty import TwentyCRM
+            from notifiers.crm_twenty import TwentyCRM
             crm = TwentyCRM()
             if not crm.api_url or not crm.api_key:
                 log.info(f"[{client_id}] CRM未設定（PhaseB以降のためスキップ）")
@@ -314,7 +334,7 @@ def output_results(client_id, client_cfg, results, report_version="v2"):
     # PDF/HTML生成 — report_version に応じて v2 / v3 / 両方を生成
     if report_version in ("v2", "both"):
         try:
-            from outputs.pdf_report import generate_pdf
+            from engine.pdf_report import generate_pdf
             pdf_path = os.path.join(report_dir, f"{client_id}_report.pdf")
             generate_pdf(client_id, results, pdf_path)
             step_status["pdf_v2"] = "ok"
@@ -324,7 +344,7 @@ def output_results(client_id, client_cfg, results, report_version="v2"):
 
     if report_version in ("v3", "both"):
         try:
-            from outputs.pdf_report_v3 import generate_pdf_v3
+            from engine.pdf_report_v3 import generate_pdf_v3
             pdf_path_v3 = os.path.join(report_dir, f"{client_id}_report_v3.pdf")
             ok = generate_pdf_v3(client_id, client_cfg, results, pdf_path_v3)
             step_status["pdf_v3"] = "ok" if ok else "error"

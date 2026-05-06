@@ -112,17 +112,17 @@ class TestTwentyCRMClientMethods:
     """TwentyCRM client管理メソッドのテスト（API未接続）"""
 
     def test_list_clients_no_api(self):
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         crm = TwentyCRM(api_url="", api_key="")
         assert crm.list_clients() == []
 
     def test_get_client_no_api(self):
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         crm = TwentyCRM(api_url="", api_key="")
         assert crm.get_client("test") is None
 
     def test_upsert_client_no_api(self):
-        from outputs.crm_twenty import TwentyCRM
+        from notifiers.crm_twenty import TwentyCRM
         from engine.models import ClientConfig
         crm = TwentyCRM(api_url="", api_key="")
         config = ClientConfig(client_id="test", name="Test")
