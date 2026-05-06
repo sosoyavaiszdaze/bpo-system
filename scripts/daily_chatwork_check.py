@@ -181,6 +181,40 @@ def _run_daily_check_impl(
 
     log.info(f"日次 ChatWork チェック開始: client={client_id} dry_run={dry_run} prefix='{test_prefix}' run_id={run_id}")
 
+    # 0. ChatWork 顧客回答の取り込み (5/7 P3: 通知前に必ず実行)
+    #
+    # ここで顧客の前日/当日朝までの返信を outputs/chatwork_responses/{client}.yaml に
+    # 反映する。これがあって初めて、本日の TODO 生成 (build_daily_todo) で
+    # confirmed_done な rule を本文から外し、wants_help な rule を [詳細案内]
+    # プレフィクスに切り替える、という応答ループが成立する。
+    #
+    # ingest 失敗 (ChatWork API 障害 / 認証エラー) のときは、誤った前提
+    # (= 古い回答状態) で通知を飛ばすのを避けるため、後段の通知に進まず errors を
+    # 積んで早期 return する。launchd は次回 9:15 / 9:30 で再試行する設計。
+    # dry_run 時は ingest も dry-run で実行し、yaml への保存も行わない (副作用ゼロ原則)。
+    try:
+        from scripts.ingest_chatwork_responses import ingest as _ingest_responses
+        ingest_summary = _ingest_responses(client_id, dry_run=dry_run)
+        log.info(
+            f"ingest: fetched={ingest_summary.get('fetched_messages', 0)} "
+            f"parsed={ingest_summary.get('parsed_answers', 0)} "
+            f"saved={ingest_summary.get('saved_responses', 0)} "
+            f"errors={len(ingest_summary.get('errors', []))}"
+        )
+        if not ingest_summary.get("ok"):
+            log.error(f"ingest 失敗: {ingest_summary.get('errors')} — 通知に進まない")
+            return {
+                "errors": [f"ingest_failed: {ingest_summary.get('fetch_error', '')}"]
+                          + ingest_summary.get("errors", []),
+                "posted_indications": 0, "posted_completions": 0,
+            }
+    except Exception as e:
+        log.error(f"ingest 実行例外: {e}\n{traceback.format_exc()}")
+        return {
+            "errors": [f"ingest_exception: {e}"],
+            "posted_indications": 0, "posted_completions": 0,
+        }
+
     # 1. analyzer 結果取得
     try:
         audit = fetch_audit_results(client_id)

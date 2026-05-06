@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -88,6 +89,23 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
         summary["errors"].append(msg)
         return summary
 
+    # 5/7 P3: Bot 自身の自動通知本文を回答として誤取り込みしないため、Bot account_id を解決。
+    # 優先順位: clients.yaml の bot_account_ids > .env の CHATWORK_BOT_ACCOUNT_ID > なし。
+    # account_id が無くても parser 側の本文 marker (BOT_BODY_MARKERS) で 2 段防御している。
+    bot_account_ids: set = set()
+    cfg_ids = client_cfg.get("chatwork_bot_account_ids") or []
+    for v in cfg_ids:
+        try:
+            bot_account_ids.add(int(v))
+        except (TypeError, ValueError):
+            pass
+    env_id = os.environ.get("CHATWORK_BOT_ACCOUNT_ID")
+    if env_id:
+        try:
+            bot_account_ids.add(int(env_id))
+        except ValueError:
+            log.warning(f"CHATWORK_BOT_ACCOUNT_ID は数値である必要があります: {env_id!r}")
+
     # 2. メッセージ取得 — 5/8 P1-A: ChatWork API エラーは「成功 0 件」扱いせず、
     # ok=False / error 詳細を summary に記録して呼出元で exit code 非ゼロにできるようにする
     client = ChatWorkClient(room_id=str(room_id), dry_run=False)
@@ -125,9 +143,9 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
         except (ValueError, TypeError):
             log.warning(f"--since-id 不正形式: {since_id}、無視して全件処理")
 
-    # 3-4. パース
+    # 3-4. パース (Bot 自動通知を本文 marker / account_id で除外してから regex 抽出)
     rule_messaging = load_messaging()
-    parsed = parse_messages_bulk(messages, rule_messaging)
+    parsed = parse_messages_bulk(messages, rule_messaging, bot_account_ids=bot_account_ids or None)
     summary["parsed_answers"] = len(parsed)
 
     # 5. 永続化 (dry-run なら skip)
