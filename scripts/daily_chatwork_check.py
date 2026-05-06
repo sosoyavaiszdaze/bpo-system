@@ -274,7 +274,11 @@ def _run_daily_check_impl(
     # 8. ADR-013 多層ルール (Layer 0/1/2/3 = 248 ルール) の自動提案サイクル
     #    既存フロー (Layer A 277 ルール) と独立して走らせる。テンプレ未整備のルールは
     #    templates.chatwork.render() の generic フォールバックで通知される。
-    auto_proposal_summary = {"posted_count": 0, "eligible_count": 0, "loaded_rules_count": 0}
+    auto_proposal_summary = {
+        "posted_count": 0, "eligible_count": 0, "loaded_rules_count": 0,
+        "attempted_count": 0, "sent_count": 0, "skipped_count": 0,
+        "dry_run_count": 0, "failed_count": 0,
+    }
     try:
         from engine.auto_proposal_engine import run_auto_proposal
         auto_proposal_summary = run_auto_proposal(
@@ -282,10 +286,15 @@ def _run_daily_check_impl(
             dry_run=dry_run,
             today=today_str,
         )
+        # 5/8 改修: 「実送信」と「試行」を区別したログ出力
         log.info(
-            f"auto_proposal: loaded={auto_proposal_summary['loaded_rules_count']} "
-            f"eligible={auto_proposal_summary['eligible_count']} "
-            f"posted={auto_proposal_summary['posted_count']}"
+            f"auto_proposal: loaded={auto_proposal_summary.get('loaded_rules_count', 0)} "
+            f"eligible={auto_proposal_summary.get('eligible_count', 0)} "
+            f"attempted={auto_proposal_summary.get('attempted_count', 0)} "
+            f"sent={auto_proposal_summary.get('sent_count', 0)} "
+            f"skipped={auto_proposal_summary.get('skipped_count', 0)} "
+            f"dry_run={auto_proposal_summary.get('dry_run_count', 0)} "
+            f"failed={auto_proposal_summary.get('failed_count', 0)}"
         )
     except Exception as e:
         log.error(f"auto_proposal 失敗 (既存フローには影響なし): {e}")
@@ -309,9 +318,16 @@ def _run_daily_check_impl(
     summary = {
         "posted_indications": posted_indications,
         "posted_completions": posted_completions,
-        "auto_proposal_loaded": auto_proposal_summary.get("loaded_rules_count", 0),
-        "auto_proposal_eligible": auto_proposal_summary.get("eligible_count", 0),
-        "auto_proposal_posted": auto_proposal_summary.get("posted_count", 0),
+        "auto_proposal_loaded":    auto_proposal_summary.get("loaded_rules_count", 0),
+        "auto_proposal_eligible":  auto_proposal_summary.get("eligible_count", 0),
+        # 5/8 改修: 結果カウントを sent / skipped / dry_run / failed で分離
+        "auto_proposal_attempted": auto_proposal_summary.get("attempted_count", 0),
+        "auto_proposal_sent":      auto_proposal_summary.get("sent_count", 0),
+        "auto_proposal_skipped":   auto_proposal_summary.get("skipped_count", 0),
+        "auto_proposal_dry_run":   auto_proposal_summary.get("dry_run_count", 0),
+        "auto_proposal_failed":    auto_proposal_summary.get("failed_count", 0),
+        # 後方互換: posted_count は sent_count と同値
+        "auto_proposal_posted":    auto_proposal_summary.get("posted_count", 0),
         "adtruth_samples": adtruth_summary.get("samples_count", 0),
         "adtruth_gray":   adtruth_summary.get("gray_count", 0),
         "adtruth_black":  adtruth_summary.get("black_count", 0),

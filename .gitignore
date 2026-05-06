@@ -17,6 +17,9 @@ venv/
 *.bak.*
 *.bak
 
+# dry-run cleanup backups (5/8 cleanup_dryrun_state.py が生成、git 管理外)
+*.dryrun-cleanup-bak.*
+
 # IDE
 .vscode/
 .idea/

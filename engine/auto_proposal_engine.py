@@ -105,21 +105,43 @@ def run_auto_proposal(
     selected = _enforce_caps(sorted_rules, history, today_str)
     log.info(f"[{client_id}] selected after caps: {len(selected)} rules")
 
-    # 6. 投稿
-    posted = []
+    # 6. 投稿 (5/8 改修: 結果カウントを sent / skipped / dry_run / failed で分離)
+    posted: list[dict] = []           # 試行した全 result (旧仕様の "posted" を保持、後方互換)
+    attempted_count = 0
+    sent_count = 0
+    skipped_count = 0
+    dry_run_count = 0
+    failed_count = 0
+
     for rule in selected:
+        attempted_count += 1
         try:
             result = _render_and_post(rule, state, client_cfg, dry_run=dry_run)
             posted.append(result)
-            # 5/8 修正: history を進めるのは「本番モード」かつ「実投稿成功」だけ
-            # - dry_run=True: 副作用ゼロ原則で history 更新しない
-            # - dry_run=False でも skipped (idempotency hit) なら実送信されていない
-            #   → history に記録すると次回 cap で誤って counter され、本来送れる指摘を抑止する
+
+            # _render_and_post の戻り値は {"rule_id", "result": <chat.post_message 戻り値>, ...}
+            # chat.post_message 戻り値:
+            #   - 実送信成功: {"message_id": "..."}
+            #   - skipped (idempotency): {"skipped": True, "idempotency_key": ...}
+            #   - dry_run:               {"dry_run": True, "idempotency_key": ...}
             chatwork_result = (result or {}).get("result") or {}
-            is_skipped = bool(chatwork_result.get("skipped")) or bool(chatwork_result.get("dry_run"))
-            if not dry_run and not is_skipped:
+            is_dry_run = bool(chatwork_result.get("dry_run"))
+            is_skipped = bool(chatwork_result.get("skipped"))
+
+            if is_dry_run:
+                dry_run_count += 1
+            elif is_skipped:
+                skipped_count += 1
+            else:
+                sent_count += 1
+
+            # history 更新は「本番モードかつ実送信成功」だけ。
+            # dry_run / skipped (idempotency hit) では _update_history を呼ばない
+            # (5/8 dry-run 副作用ゼロ修正と整合)
+            if not dry_run and not is_skipped and not is_dry_run:
                 _update_history(client_id, rule["id"], result, today_str)
         except Exception as e:
+            failed_count += 1
             log.error(f"[{client_id}] rule {rule['id']} post failed: {e}")
 
     return {
@@ -127,9 +149,15 @@ def run_auto_proposal(
         "loaded_rules_count": len(rules),
         "environment_matched_count": len(matched),
         "eligible_count": len(eligible),
-        "posted_count": len(posted),
-        "skipped_count": len(eligible) - len(posted),
-        "posted": posted,
+        # 新カウント (5/8 改修): 「実送信」と「試行」を区別
+        "attempted_count": attempted_count,
+        "sent_count":      sent_count,
+        "skipped_count":   skipped_count,
+        "dry_run_count":   dry_run_count,
+        "failed_count":    failed_count,
+        # 後方互換: posted_count は sent_count と同値 (旧 callers が見ているのは「実送信数」)
+        "posted_count":    sent_count,
+        "posted":          posted,    # 試行した全 result (旧仕様維持)
     }
 
 
