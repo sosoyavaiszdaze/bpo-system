@@ -1,0 +1,170 @@
+# Pilotton 自動提案エンジン用 client_state (ADR-013 多層ルール trigger 評価入力)
+#
+# 目的: trigger.condition で client_state.* を評価できるようにする。
+# 値の方針:
+#   - True/False  : kickoff 段階で確定済の事実
+#   - null         : 未確認 (= eval 時に AttributeError 防止のため _DotDict が None を返す)
+#   - 数値          : 5/3 ChatWork で確認済の現状値
+#
+# 5/7 Pilotton 提案までの一次データ:
+#   - ec_d2c × ecforce × cosmetics_health の組合せから発火するルールを優先
+#   - ChatWork 経由で 5/3 にユーザ確認した「ECフォース利用、薬機法対象、CAPI 未実装」事実
+#
+# 更新ルール: kickoff インタビュー後に毎週 1 回 Zynect 担当が実値で更新
+client_id: pilotton
+phase: A
+last_updated: "2026-05-06"
+
+# === 基本属性 (clients.yaml と整合) ===
+country: JP
+vertical: ec_d2c
+ec_platform: ecforce
+business_model: b2c
+category_subtype: cosmetics_health
+has_mobile_app: false
+
+# === Foundation Layer (Layer 0) - 計測基盤 ===
+# Pixel/CAPI/タグ周り (5/3 ヒアリング: CAPI 未実装、ECフォース 経由連携を検討中)
+duplicate_pixel_count: 0           # F-MF-01 trigger 入力 (ad_platform_data 経由でも参照)
+pixel_dormant_days: 0
+domain_verification_status: "unverified"   # F-MF-02 系
+gtm_debug_mode_active: false       # F-MF-03 (本番環境で debug が ON だと CV 計上が壊れる)
+event_naming_convention_followed: false   # F-MF-04 (kickoff 後に整備)
+cv_dedupe_key_implemented: false           # F-MF-05 (CAPI と Pixel の dedup_key)
+event_timezone_audit_done: false           # F-MF-06
+timezone_unified_jst: true
+test_events_last_run_days: null            # 直近テスト経過日数
+attribution_window_unified: false          # F-MF-07
+cross_domain_tracking_validated: false
+server_side_gtm_implemented: false
+cross_device_tracking_enabled: false
+measurement_dashboard_setup: false
+measurement_change_log_maintained: false
+tag_loading_order_optimized: false
+tag_health_monitoring: false
+tag_static_audit_days: 90
+pixel_event_timing_optimized: false
+
+# Account Health (F-AH-*)
+budget_alert_thresholds_set: false
+operations_runbook_exists: false
+account_recovery_runbook_exists: false
+escalation_flow_documented: false
+weekly_review_cadence_set: false
+monthly_review_meeting_set: false
+account_warning_received: false
+out_of_stock_pause_automation: false
+
+# Ad Fraud Screening (F-AF-*)
+adtruth_evaluation_done: false
+outlier_detection_configured: false
+
+# Data Governance (F-DG-*)
+data_ownership_documented: false
+data_retention_policy_documented: false
+audit_log_retention_complete: false
+change_log_maintained: false
+agency_ownership_documented: false
+third_party_risk_assessment_done: false
+
+# Privacy Protection (F-PP-*)
+cmp_implemented: false
+external_transmission_disclosure_done: false
+privacy_policy_updated: false
+consent_management_implemented: false
+consent_audit_log_retention_months: 0
+gdpr_consent_implemented: false
+ccpa_compliant: false
+dpia_completed: false
+pii_hashing_implemented: false
+dnt_signal_respected: false
+privacy_sandbox_evaluation_done: false
+first_party_cookie_strategy_documented: false
+first_party_cookie_lifetime_managed: false
+
+# Legal Compliance (F-LC-*)
+shokuhin_hyoji_compliant: false
+tokushoho_required_fields_complete: false
+past_violations_disclosed: false
+legal_review_completed: false
+legal_team_assigned: false
+pr_disclosure_implemented: false
+tax_shipping_disclosure_compliant: false
+cancellation_flow_compliant: false
+
+# Security Continuity (F-SC-*)
+mfa_placement_share: 0
+last_token_rotation_days: 365              # 過去 365 日でローテ無し → 危険
+least_privilege_audit_done: false
+tag_admin_audit_done: false
+brand_protection_registered: false
+bcp_documented: false
+
+# Operations Quality (F-OQ-*)
+creative_assets_rights_verified: false
+
+# === Vertical Layer (Layer 1) - EC/D2C ===
+# 薬機法/景表法/特商法
+# (rule_evaluation 由来: has_yakkihou_violation_keywords は別の layer の出力なので null)
+review_collection_method: "unverified"
+json_ld_product_schema: false
+mall_listings_exist: false
+mall_attribution_split: false
+product_feed_quality_score: null
+out_of_stock_pause_automation: false
+exclusion_audience_configured: false
+customer_audience_last_updated_days: null
+lookalike_audience_created: false
+ltv_tracking_implemented: false
+ltv_cac_tracked: false
+churn_signal_used_in_optimization: false
+cross_sell_tracking: false
+subscription_offered: false
+trial_conversion_tracked: false
+per_plan_ltv_tracked: false
+payback_period_tracked: false
+
+# === EC Platform Layer (Layer 2) - ECフォース ===
+# 5/3 ヒアリングで確認済: ECフォース 利用中、API 連携・FB CV API 未設定
+ecforce_api_integrated: false              # P-EF-01 trigger
+ecforce_fb_cv_api_configured: false        # P-EF-02 trigger (CAPI 未実装の根拠)
+ecforce_csv_export_tested: false
+ecforce_customer_master_synced: false
+ecforce_product_feed_synced: false
+ecforce_cart_abandonment_tracking: false
+ecforce_coupon_tracking: false
+ecforce_subscription_tracking: false
+
+# === Precision Category (Layer 3) - 一部のみ ===
+# 詳細は Phase B で実装。現状は最低限のフィールドのみ。
+attribution_audit_done: false
+cv_data_reconciliation_done: false
+cv_definition_documented: false
+cv_window_optimized: false
+heavy_cv_priority_set: false
+offline_cv_import_implemented: false
+funnel_tracking_complete: false
+audience_insights_reviewed_days: null
+audience_retention_days_optimized: false
+account_based_targeting: false
+geo_targeting_radius_optimized: false
+advantage_plus_audience_used: false
+first_party_data_strategy_documented: false
+first_third_party_data_integrated: false
+crm_cdp_integration_status: "not_integrated"
+marketing_automation_integrated: false
+lead_scoring_implemented: false
+influencer_marketing_used: false
+mmp_implemented: false
+skan_implemented: false
+skan_version: null
+ios_traffic_share: 0
+enhanced_conversions_enabled: false
+data_sharing_configured: false
+dpa_configured: false
+dedup_key_alignment_verified: false
+utm_naming_convention_documented: false
+uses_multiple_domains: false
+third_party_cookie_dependency_score: null
+consent_mode_v: 0
+payment_method_count: 0

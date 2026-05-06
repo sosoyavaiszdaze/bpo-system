@@ -232,9 +232,32 @@ def run_daily_check(
     # 7. state 保存
     state.save()
 
+    # 8. ADR-013 多層ルール (Layer 0/1/2/3 = 248 ルール) の自動提案サイクル
+    #    既存フロー (Layer A 277 ルール) と独立して走らせる。テンプレ未整備のルールは
+    #    templates.chatwork.render() の generic フォールバックで通知される。
+    auto_proposal_summary = {"posted_count": 0, "eligible_count": 0, "loaded_rules_count": 0}
+    try:
+        from engine.auto_proposal_engine import run_auto_proposal
+        auto_proposal_summary = run_auto_proposal(
+            client_id=client_id,
+            dry_run=dry_run,
+            today=today_str,
+        )
+        log.info(
+            f"auto_proposal: loaded={auto_proposal_summary['loaded_rules_count']} "
+            f"eligible={auto_proposal_summary['eligible_count']} "
+            f"posted={auto_proposal_summary['posted_count']}"
+        )
+    except Exception as e:
+        log.error(f"auto_proposal 失敗 (既存フローには影響なし): {e}")
+        errors.append(f"auto_proposal: {e}")
+
     summary = {
         "posted_indications": posted_indications,
         "posted_completions": posted_completions,
+        "auto_proposal_loaded": auto_proposal_summary.get("loaded_rules_count", 0),
+        "auto_proposal_eligible": auto_proposal_summary.get("eligible_count", 0),
+        "auto_proposal_posted": auto_proposal_summary.get("posted_count", 0),
         "errors": errors,
     }
     log.info(f"日次チェック完了: {summary}")

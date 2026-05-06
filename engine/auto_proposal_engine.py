@@ -358,9 +358,9 @@ def _apply_severity_priority(rules: list[dict]) -> list[dict]:
 # ========== Daily Cap (ADR-013 D-8) ==========
 
 DEFAULT_CAPS = {
-    "default": 1,           # ADR-012 と同じ
+    "default": 3,           # 5/7 提案前: 1→3 (Phase A 内部レビュー期間中の見える化優先)
     "adr_005": 3,           # 既存 ChatWork 指摘 cap
-    "adr_013_legal": 1,     # 法令系専用枠 (ADR-013 D-6)
+    "adr_013_legal": 2,     # 法令系専用枠 (ADR-013 D-6) 1→2 (景表法/薬機法/特商法を分岐)
 }
 
 

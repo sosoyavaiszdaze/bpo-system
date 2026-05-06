@@ -34,7 +34,7 @@
 {%- elif rid in ("FIRST-PARTY-DATA-MISSING", "M04") -%}
 {{ _first_party_data_steps(caps) }}
 {%- else -%}
-{{ _fallback_steps(rule_id) }}
+{{ _fallback_steps(rule_id, caps) }}
 {%- endif -%}
 {% endmacro %}
 
@@ -258,8 +258,36 @@
 {% endmacro %}
 
 
-{# ===== フォールバック ===== #}
-{% macro _fallback_steps(rule_id) %}
-　本指摘 ({{ rule_id }}) の改善手順は別途ご相談ください。
-　弊社 (Zynect Media) 担当より個別に手順をご案内します。
+{# ===== フォールバック =====
+   rule_id 別の専用手順が未整備の場合に使用。
+   payload に recommended_action / fact / impact が入っていれば、
+   それを「目的」「現状」「次の一歩」に分解した汎用手順を生成する。
+#}
+{% macro _fallback_steps(rule_id, caps) %}
+{%- set action = (caps or {}).get("recommended_action") -%}
+{%- set fact   = (caps or {}).get("fact") -%}
+{%- set impact = (caps or {}).get("impact") -%}
+　【目的】 本指摘 ({{ rule_id }}) の根本要因を解消し、計測・配信・コンプライアンスのいずれかの
+　　　　   品質課題を運用ラインに戻すこと。
+{% if action %}
+　【次の一歩】 {{ action }}
+{% else %}
+　【次の一歩】 弊社 (Zynect Media) 担当より個別に手順をご案内します。
+{% endif %}
+{% if fact %}
+　【現状の根拠】 {{ fact }}
+{% endif %}
+
+　【判断と確認】
+　　1. 上記アクションが既に実施済の場合 → 実装状況のスクリーンショットをご共有ください。
+　　   翌日以降の自動チェックで「解消」判定後、解消通知をお送りします。
+　　2. 未実施の場合 → 実装難易度・所要時間に応じて以下の優先順で対応をご検討ください:
+　　   a. 設定変更のみで完結 (例: フラグ ON/OFF) → 当日中に実施
+　　   b. 開発工数が必要 (例: API 連携) → 2 週間以内の対応 plan を共有
+　　   c. 法務確認等 第三者調整必要 → 30 日以内に確認状況をご共有
+
+　【ご相談・確認導線】
+　　・本指摘の妥当性に疑問がある場合は ChatWork で「{{ rule_id }} 詳細」とご返信ください。
+　　・運用憲章 (operating_charter) に基づき本指摘を恒久対応外と判断したい場合は、
+　　   理由とともにお伝えください。次月以降の自動評価から除外します。
 {% endmacro %}
