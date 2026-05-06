@@ -1,11 +1,11 @@
-"""ChatWork 統合通知の本文プレビュー (5/8 v2)
+"""ChatWork 統合通知の本文プレビュー (5/7 本番通知 v2)
 
 state の cap / cooldown / 既送履歴に邪魔されず、現状で出るはずの本文を確認できる。
 本番 ChatWork には一切送信せず、stdout に本文を出力する。
 
 使い方:
     venv/bin/python3 scripts/preview_chatwork_message.py --client pilotton
-    venv/bin/python3 scripts/preview_chatwork_message.py --client pilotton --today 2026-05-08
+    venv/bin/python3 scripts/preview_chatwork_message.py --client pilotton --today 2026-05-07
     venv/bin/python3 scripts/preview_chatwork_message.py --client pilotton --bypass-cap
 
 オプション:
