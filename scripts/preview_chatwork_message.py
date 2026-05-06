@@ -121,12 +121,14 @@ def preview(
         selected_rules = _enforce_caps(sorted_rules, empty_history, today_str, all_rules_index=rules_index)
         log.warning(f"--bypass-cap: history を空にして再収集 (selected: {len(selected_rules)} 件)")
 
-    # 4. anomaly_summary を audit_results から抽出
+    # 4. anomaly_summary / actual_monthly_spend を audit_results から抽出
+    from engine.daily_todo_builder import _extract_actual_monthly_spend
     if no_anomaly:
         anomaly_summary = None
     else:
         from engine.daily_todo_builder import _extract_anomaly_summary
         anomaly_summary = _extract_anomaly_summary(audit_results) or {}
+    actual_monthly_spend = _extract_actual_monthly_spend(audit_results)
 
     # 5. context 構築 + render
     client_cfg = auto_summary["client_cfg"]
@@ -138,6 +140,7 @@ def preview(
         layer_a_rule_defs=layer_a_rule_defs,
         anomaly_summary=anomaly_summary,
         today_str=today_str,
+        actual_monthly_spend=actual_monthly_spend,
     )
 
     # 6. metadata を stderr に、本文を stdout に
@@ -152,7 +155,9 @@ def preview(
         f"items_this_week:  {len(context['items_this_week'])}\n"
         f"items_legal_note: {len(context['items_legal_note'])}\n"
         f"unmapped:         {len(context['internal_unmapped_rules'])}\n"
-        f"anomaly_summary:  {context.get('anomaly_summary')}\n",
+        f"anomaly_summary:  {context.get('anomaly_summary')}\n"
+        f"actual_monthly_spend: {actual_monthly_spend!r}  "
+        f"({'動的算出' if actual_monthly_spend else 'fallback (固定値)'})\n",
         file=sys.stderr,
     )
     if context["internal_unmapped_rules"]:

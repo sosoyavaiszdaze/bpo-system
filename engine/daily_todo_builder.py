@@ -107,15 +107,24 @@ def resolve_rule_message(rule_id: str) -> Optional[dict]:
     return (msg.get("rules") or {}).get(rule_id)
 
 
-def build_recommendation_item(rule_id: str, rule_def: dict, msg_def: dict, messaging: dict) -> dict:
-    """rule_messaging 定義を 1 件分の表示用 dict に整形"""
+def build_recommendation_item(
+    rule_id: str, rule_def: dict, msg_def: dict, messaging: dict,
+    actual_monthly_spend: Optional[float] = None,
+) -> dict:
+    """rule_messaging 定義を 1 件分の表示用 dict に整形
+
+    5/7 P1 fix: actual_monthly_spend を渡せば lift_rate ベースで動的算出。
+    """
     labels = messaging.get("category_labels") or {}
     perf_keys = msg_def.get("performance_category") or []
     perf_labels = [labels.get(k, k) for k in perf_keys]
     # severity は rule_def (Layer A indication record / Layer 0-3 rule yaml) から拾う
     severity = (rule_def.get("severity") or msg_def.get("severity") or "medium").lower()
-    # 5/8 v3 ADR-001: 3 層効果 (minimum / realistic / upper)
-    impact_three_layer = _build_impact_three_layer(msg_def.get("impact_estimate"), perf_labels)
+    # 5/8 v3 ADR-001 + 5/7 P1: 3 層効果 (lift_rate × 実績 spend or 固定値フォールバック)
+    impact_three_layer = _build_impact_three_layer(
+        msg_def.get("impact_estimate"), perf_labels,
+        actual_monthly_spend=actual_monthly_spend,
+    )
     return {
         "rule_id":             rule_id,
         "customer_title":      msg_def.get("customer_title") or rule_def.get("name", rule_id),
@@ -133,13 +142,31 @@ def build_recommendation_item(rule_id: str, rule_def: dict, msg_def: dict, messa
     }
 
 
-def _build_impact_three_layer(impact_estimate: Optional[dict], perf_labels: list) -> dict:
-    """ADR-001 三層効果の表示用 dict を構築
+def _build_impact_three_layer(
+    impact_estimate: Optional[dict], perf_labels: list,
+    actual_monthly_spend: Optional[float] = None,
+) -> dict:
+    """ADR-001 三層効果の表示用 dict を構築 (5/7 P1 fix: 実績連動の動的算出)
 
     Args:
-        impact_estimate: rule_messaging.yaml の impact_estimate (minimum/realistic/upper)
-                         None なら calculable=False
+        impact_estimate: rule_messaging.yaml の impact_estimate
+                         lift_rate ベース (推奨) or 固定値 (旧 schema、フォールバック)
         perf_labels: 算定不可時の効果区分表示に使う
+        actual_monthly_spend: 実績月額広告費 (JPY)。None or 0 なら固定値フォールバック使用。
+
+    impact_estimate スキーマ (新 5/7):
+        lift_rate:                # 月額広告費に対する改善率 (主軸)
+          minimum:   0.019
+          realistic: 0.050
+          upper:     0.125
+        source_basis: "Meta 公式..."          # 根拠 (preview / 詳細表示用)
+        measurement_window:                  # P2: 効果が出るまでの期間
+          signal:  "1-2 週"
+          verdict: "4 週"
+        assumed_monthly_spend: 1600000        # フォールバック用、固定値の前提額
+        minimum_fallback:   30000             # actual_monthly_spend 取れない時
+        realistic_fallback: 80000
+        upper_fallback:     200000
 
     Returns:
         {
@@ -147,37 +174,77 @@ def _build_impact_three_layer(impact_estimate: Optional[dict], perf_labels: list
             "minimum":   int (yen) or None,
             "realistic": int (yen) or None,
             "upper":     int (yen) or None,
+            "calc_basis":         "actual_spend" | "fixed_fallback" | "fixed_legacy",
+            "monthly_spend_used": int or None,
+            "source_basis":       str or None,
+            "measurement_window": {"signal", "verdict"} or None,
+            "lift_rate":          {minimum, realistic, upper} or None,
             "display": {
                 "minimum":   "+¥30,000",
-                "realistic": "+¥80,000",
-                "upper":     "+¥200,000",
-                "category_label": "計測精度改善 / 配信学習安定化",   # 算定不可時のみ
+                ...
+                "category_label": "計測精度改善 / 配信学習安定化",
+                "spend_basis":    "月額広告費 ¥1,409,403 連動算出",  # or "固定値 (¥160万 spend 想定)"
             }
         }
     """
     if not impact_estimate or not isinstance(impact_estimate, dict):
         return {
             "calculable": False,
-            "minimum":   None,
-            "realistic": None,
-            "upper":     None,
+            "minimum":   None, "realistic": None, "upper": None,
+            "calc_basis": None, "monthly_spend_used": None,
+            "source_basis": None, "measurement_window": None, "lift_rate": None,
             "display": {
                 "category_label": " / ".join(perf_labels) if perf_labels else "—",
             },
         }
-    minimum   = impact_estimate.get("minimum")
-    realistic = impact_estimate.get("realistic")
-    upper     = impact_estimate.get("upper") or impact_estimate.get("independent")
+
+    lift_rate = impact_estimate.get("lift_rate")
+    source_basis = impact_estimate.get("source_basis")
+    measurement_window = impact_estimate.get("measurement_window")
+
+    # 1. lift_rate + actual_monthly_spend → 動的算出 (推奨経路)
+    if lift_rate and isinstance(lift_rate, dict) and actual_monthly_spend and actual_monthly_spend > 0:
+        minimum   = int(actual_monthly_spend * float(lift_rate.get("minimum", 0)))
+        realistic = int(actual_monthly_spend * float(lift_rate.get("realistic", 0)))
+        upper     = int(actual_monthly_spend * float(lift_rate.get("upper", 0)))
+        calc_basis = "actual_spend"
+        spend_basis_label = f"月額広告費 ¥{int(actual_monthly_spend):,} 連動算出"
+
+    # 2. lift_rate あるが actual_monthly_spend 未取得 → assumed_monthly_spend で計算 (固定値)
+    elif lift_rate and isinstance(lift_rate, dict):
+        assumed = float(impact_estimate.get("assumed_monthly_spend", 1600000))
+        minimum   = impact_estimate.get("minimum_fallback")   or int(assumed * float(lift_rate.get("minimum", 0)))
+        realistic = impact_estimate.get("realistic_fallback") or int(assumed * float(lift_rate.get("realistic", 0)))
+        upper     = impact_estimate.get("upper_fallback")     or int(assumed * float(lift_rate.get("upper", 0)))
+        calc_basis = "fixed_fallback"
+        spend_basis_label = f"固定値 (月額広告費 ¥{int(assumed):,} 想定)"
+
+    # 3. 旧 schema (lift_rate なし、固定値のみ)
+    else:
+        minimum   = impact_estimate.get("minimum")
+        realistic = impact_estimate.get("realistic")
+        upper     = impact_estimate.get("upper") or impact_estimate.get("independent")
+        calc_basis = "fixed_legacy"
+        spend_basis_label = "固定値 (前提条件未明記)"
+
     return {
         "calculable": True,
         "minimum":   minimum,
         "realistic": realistic,
         "upper":     upper,
+        "calc_basis":         calc_basis,
+        "monthly_spend_used": int(actual_monthly_spend) if actual_monthly_spend else None,
+        "source_basis":       source_basis,
+        "measurement_window": measurement_window,
+        "lift_rate":          lift_rate,
         "display": {
-            "minimum":   _format_yen(minimum),
-            "realistic": _format_yen(realistic),
-            "upper":     _format_yen(upper),
+            "minimum":      _format_yen(minimum),
+            "realistic":    _format_yen(realistic),
+            "upper":        _format_yen(upper),
             "category_label": " / ".join(perf_labels) if perf_labels else "—",
+            "spend_basis":    spend_basis_label,
+            "window_signal":  (measurement_window or {}).get("signal", ""),
+            "window_verdict": (measurement_window or {}).get("verdict", ""),
         },
     }
 
@@ -308,6 +375,7 @@ def build_daily_todo(
     anomaly_summary: Optional[dict] = None,
     today_str: Optional[str] = None,
     already_notified_ids: Optional[set] = None,
+    actual_monthly_spend: Optional[float] = None,   # 5/7 P1: 実績月額広告費連動の動的算出
 ) -> dict:
     """統合 TODO の context を構築 (テンプレ render 直前まで)
 
@@ -403,7 +471,10 @@ def build_daily_todo(
             unmapped.append(rid)
             continue
         rule_def = layer_a_rule_defs.get(rid) or {"id": rid}
-        item = build_recommendation_item(rid, rule_def, msg_def, messaging)
+        item = build_recommendation_item(
+            rid, rule_def, msg_def, messaging,
+            actual_monthly_spend=actual_monthly_spend,
+        )
         item["response_status"] = response_status_map.get(rid)
         if item["response_status"] == "wants_help":
             item["customer_title"] = f"[詳細案内] {item['customer_title']}"
@@ -420,7 +491,10 @@ def build_daily_todo(
         if not msg_def:
             unmapped.append(rid)
             continue
-        item = build_recommendation_item(rid, r, msg_def, messaging)
+        item = build_recommendation_item(
+            rid, r, msg_def, messaging,
+            actual_monthly_spend=actual_monthly_spend,
+        )
         item["response_status"] = response_status_map.get(rid)
         if item["response_status"] == "wants_help":
             item["customer_title"] = f"[詳細案内] {item['customer_title']}"
@@ -546,6 +620,9 @@ def post_daily_todo(
     # 3. anomaly summary (audit_results から CPA/IMP/CV 変動を取り出し)
     anomaly_summary = _extract_anomaly_summary(audit_results)
 
+    # 5/7 P1: 効果額の動的算出用に actual_monthly_spend を抽出
+    actual_monthly_spend = _extract_actual_monthly_spend(audit_results)
+
     # 4. 統合 context 構築
     context = build_daily_todo(
         client_id=client_id,
@@ -555,6 +632,7 @@ def post_daily_todo(
         layer_a_rule_defs=layer_a_rule_defs,
         anomaly_summary=anomaly_summary,
         today_str=today_str,
+        actual_monthly_spend=actual_monthly_spend,
     )
 
     summary = {
@@ -622,6 +700,28 @@ def post_daily_todo(
         f"auto_proposal={summary['auto_proposal_sent']}"
     )
     return summary
+
+
+def _extract_actual_monthly_spend(audit_results: Optional[dict]) -> Optional[float]:
+    """audit_results から「月額相当の actual 広告費」を取り出す (5/7 P1)
+
+    pilotton の lookback_days=30 を前提とし、ads_audit.total_cost をそのまま返す。
+    将来 lookback が異なるクライアントに広げる場合はここで日数正規化する。
+
+    Returns: 月額換算 spend (JPY)、取得不能なら None。None なら lift_rate 経路は
+             固定値 fallback (assumed_monthly_spend ベース) に切替。
+    """
+    if not audit_results or not audit_results.get("data_available"):
+        return None
+    ads = audit_results.get("ads_audit") or {}
+    cost = ads.get("total_cost")
+    try:
+        cost = float(cost or 0)
+    except (TypeError, ValueError):
+        return None
+    if cost <= 0:
+        return None
+    return cost
 
 
 def _extract_anomaly_summary(audit_results: dict) -> dict:
