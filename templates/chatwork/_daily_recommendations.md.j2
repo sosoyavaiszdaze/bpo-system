@@ -1,44 +1,47 @@
-{# 1 日 1 まとめ投稿テンプレート (5/8 通知 UX 改修 + Codex 指摘修正)
+{# 統合通知「本日の広告成果改善TODO」(5/8 v2 緊急修正)
 
    設計指針:
-     - 冒頭は広告成果改善の文脈 (「法律違反」ではない)
-     - 優先度 A 上位 N 件 (詳細) + 優先度 A 4 件目以降 (要約) + 優先度 B (要約) の 3 セクション
-     - selected 全件が本文に必ず登場する (history 更新と本文表示が一致)
-     - Markdown の ** 強調は使わない (ChatWork でそのまま表示されるため)
+     - 1 日 1 通の統合通知
+     - 冒頭に「今日の結論」(headline) を 1〜2 行
+     - セクション 1: 今日確認してほしいこと (items_today、最大 3 件、詳細)
+     - セクション 2: 今週中に確認したいこと (items_this_week、要約)
+     - セクション 3: 補足 (items_legal_note、法令/プライバシー、要約)
+     - rule_messaging.yaml 未定義 rule は本文に出さない (内部ログのみ)
+     - Markdown ** 強調は使わない (ChatWork でそのまま表示されるため)
 
-   想定 context:
-     client_name (str), honorific (str)
-     today (str: YYYY-MM-DD)
-     total_selected_count (int): selected 全件数 (タイトル件数表示用)
-     items_priority_a_detailed (list of items): 優先度 A 上位 3 件、詳細表示
-     items_priority_a_summary  (list of items): 優先度 A 4 件目以降、要約表示
-     items_priority_b          (list of items): 優先度 B、要約表示
+   想定 context (engine/daily_todo_builder.build_daily_todo の戻り値):
+     client_name, honorific, today
+     headline (str)
+     items_today          (list of items)
+     items_this_week      (list of items)
+     items_legal_note     (list of items)
+     total_count (int)
+     internal_unmapped_rules (list, 本文には出さない)
 
      各 item: {rule_id, customer_title, performance_category_labels[],
-              priority, expected_effect[], next_action_question,
-              action_options{A,B,C,...}, legal_note}
+              priority, goal_stage, expected_effect[], today_action,
+              yes_no_question, action_options{A,B,C,...}, legal_note}
 #}
-[info][title]【{{ client_name }}{{ honorific }}】広告成果改善アクション {{ today }}（{{ total_selected_count }}件）[/title]
-本日は、Meta 広告の 計測精度・配信学習・審査安定化 に関わる確認が
-{{ total_selected_count }} 件あります。
-優先度順に、まずは上位 {{ items_priority_a_detailed|length }} 件だけ確認いただければ大丈夫です。
-{% if items_priority_a_detailed %}
+[info][title]【{{ client_name }}{{ honorific }}】本日の広告成果改善TODO {{ today }}（{{ total_count }}件）[/title]
+{{ headline }}
+{% if items_today %}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 優先度A：今日確認したい {{ items_priority_a_detailed|length }} 件
+🔴 今日確認してほしいこと（{{ items_today|length }} 件）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{% for item in items_priority_a_detailed %}
+{% for item in items_today %}
 　【{{ loop.index }}】{{ item.customer_title }}
 
-　▼ 期待効果（{{ item.performance_category_labels|join(" / ") }}）
+　▼ 広告成果への影響（{{ item.performance_category_labels|join(" / ") }}）
 {% for eff in item.expected_effect %}
 　　・{{ eff }}
 {% endfor %}
 
-　▼ 確認してほしいこと
-　　{{ item.next_action_question }}
+　▼ 今日の確認アクション
+　　{{ item.today_action }}
 
-　▼ 選択肢（本スレッドへの返信で 1 文字でご回答ください）
+　▼ ご回答（本スレッドへの返信で 1 文字でご回答ください）
+　　{{ item.yes_no_question }}
 {% for code, label in item.action_options.items() %}
 　　[{{ code }}] {{ label }}
 {% endfor %}
@@ -51,36 +54,35 @@
 
 {% endif %}
 {% endfor %}
+{% else %}
+
+緊急対応はありません。
 {% endif %}
-{% if items_priority_a_summary %}
+{% if items_this_week %}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 優先度A：今日確認したい項目（{{ items_priority_a_summary|length }} 件、要約）
+🟡 今週中に確認したいこと（{{ items_this_week|length }} 件、要約）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{% for item in items_priority_a_summary %}
+{% for item in items_this_week %}
 　・{{ item.customer_title }}
 　　└ 期待効果: {{ item.performance_category_labels|join(" / ") }}
-　　└ 確認質問: {{ item.next_action_question }}
+　　└ 確認質問: {{ item.yes_no_question }}
 　　└ ルール ID: {{ item.rule_id }}
 {% endfor %}
 {% endif %}
-{% if items_priority_b %}
+{% if items_legal_note %}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟡 優先度B：今週中に確認したい項目（{{ items_priority_b|length }} 件、要約）
+ℹ️ 補足（法令・プライバシー、{{ items_legal_note|length }} 件）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{% for item in items_priority_b %}
+広告審査・配信停止・LP 改修遅延の予防のための確認項目です。
+{% for item in items_legal_note %}
 　・{{ item.customer_title }}
-　　└ 期待効果: {{ item.performance_category_labels|join(" / ") }}
-　　└ 確認質問: {{ item.next_action_question }}
+　　└ 確認質問: {{ item.yes_no_question }}
 　　└ ルール ID: {{ item.rule_id }}
 {% endfor %}
-
-※ 各項目について詳細を確認したい場合は、ChatWork で「{{ items_priority_b[0].rule_id }} 詳細」のように
-　 ルール ID をご返信ください。次回投稿で詳細をお送りします。
 {% endif %}
 
 ──────────────────────────────────────
 本通知は Zynect Auto-Reporter による自動診断結果です（{{ current_year }}/{{ "%02d"|format(current_month) }} 時点の運用ガイド準拠）。
-法令・規制に関わる項目は、配信停止 / 広告審査落ち / LP 改修遅延を防ぐ目的で確認しています。
 [/info]
