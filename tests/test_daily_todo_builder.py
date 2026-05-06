@@ -220,3 +220,107 @@ class TestRepeatExecution:
         )
         # 同入力 → 同出力 (deterministic)
         assert ctx1["displayed_rule_ids"] == ctx2["displayed_rule_ids"]
+
+
+# ============================================================
+# 5/8 v2 finalize: today_action / yes_no_question が本文に正しく出る
+# 旧 fallback「本項目 (RULE_ID) について現状をご共有ください。」が出ない
+# ============================================================
+
+class TestTodayActionAndYesNoInBody:
+    def test_today_action_appears_in_body(self):
+        """rule_messaging.yaml の today_action が本文の「今日の確認アクション」に出る"""
+        from engine.daily_todo_builder import build_daily_todo
+        from templates.chatwork import render
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=["X-PI1"],   # rule_messaging で today_action 定義済
+            eligible_rules=[],
+            today_str="2026-05-08",
+        )
+        body = render("_daily_recommendations.md.j2", ctx)
+
+        # X-PI1 の today_action が本文に出る
+        assert "Meta Events Manager で Pixel が「アクティブ」状態かを確認" in body, \
+            "X-PI1 の today_action が本文に出ていない"
+
+    def test_yes_no_question_appears_in_body(self):
+        """rule_messaging.yaml の yes_no_question が本文の「ご回答」セクションに出る"""
+        from engine.daily_todo_builder import build_daily_todo
+        from templates.chatwork import render
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=["X-PI1"],
+            eligible_rules=[],
+            today_str="2026-05-08",
+        )
+        body = render("_daily_recommendations.md.j2", ctx)
+
+        # X-PI1 の yes_no_question が本文に出る
+        assert "Pixel のアクティブ受信は確認できましたか?" in body, \
+            "X-PI1 の yes_no_question が本文に出ていない"
+
+    def test_no_legacy_fallback_phrase(self):
+        """禁止文言「本項目 (RULE_ID) について現状をご共有ください。」が本文に出ない"""
+        from engine.daily_todo_builder import build_daily_todo
+        from templates.chatwork import render
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=["X-PI1", "ANO_CPA_SPIKE", "ANO_IMPRESSION_DROP"],
+            eligible_rules=[
+                {"id": "F-AH-04", "daily_cap_group": "default"},
+                {"id": "F-DG-01", "daily_cap_group": "default"},
+                {"id": "F-LC-01", "daily_cap_group": "adr_013_legal"},
+            ],
+            today_str="2026-05-08",
+        )
+        body = render("_daily_recommendations.md.j2", ctx)
+
+        assert "本項目 (" not in body, "旧 fallback「本項目 (RULE_ID)」が本文に残っている"
+        assert "について現状をご共有ください" not in body, "旧 fallback フレーズが残っている"
+
+
+# ============================================================
+# 5/8 v2 finalize: preview スクリプトが ChatWork に投稿しない
+# ============================================================
+
+class TestPreviewScriptNoSideEffect:
+    def test_preview_does_not_call_chatwork(self, monkeypatch):
+        """preview 関数は ChatWorkClient.post_message を呼ばない"""
+        from notifiers.chatwork_notifier import ChatWorkClient
+
+        called = {"post": False}
+
+        def hook(self, body, **kw):
+            called["post"] = True
+            return {"message_id": "stub"}
+
+        monkeypatch.setattr(ChatWorkClient, "post_message", hook)
+
+        # preview スクリプトの本体を import
+        from scripts import preview_chatwork_message
+        # _collect_layer_a_rule_ids は audit を呼ぶので mock
+        monkeypatch.setattr(preview_chatwork_message, "_collect_layer_a_rule_ids",
+                            lambda c, t, e: (["X-PI1"], {"X-PI1": {}}, {}))
+
+        # collect_eligible_rules も mock (テスト隔離)
+        from engine import auto_proposal_engine
+        monkeypatch.setattr(auto_proposal_engine, "collect_eligible_rules",
+                            lambda client_id, today=None: {
+                                "client_id": client_id, "loaded_rules_count": 0,
+                                "environment_matched_count": 0, "eligible_count": 0,
+                                "selected": [], "history": {}, "client_cfg": {"company": {"name": client_id}},
+                            })
+
+        body = preview_chatwork_message.preview(
+            client_id="test_client", today_str="2026-05-08",
+            bypass_cap=False, no_anomaly=True, exclude_layer_a=False,
+        )
+
+        # ChatWork 投稿は呼ばれていない
+        assert called["post"] is False, "preview が ChatWork に投稿してしまっている"
+        # 本文に X-PI1 関連の文言が出る
+        assert "X-PI1" in body or "Pixel" in body

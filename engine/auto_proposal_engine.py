@@ -710,26 +710,13 @@ def _load_rule_messaging() -> dict:
     return _RULE_MESSAGING_CACHE
 
 
-def _build_recommendation_item(rule: dict, messaging: dict) -> dict:
-    """rule + rule_messaging.yaml から 1 件分の表示用 dict を構築"""
-    rule_id = rule.get("id", "")
-    msg = (messaging.get("rules") or {}).get(rule_id) or messaging.get("default") or {}
-    labels = messaging.get("category_labels") or {}
-
-    perf_keys = msg.get("performance_category") or ["operational_foundation"]
-    perf_labels = [labels.get(k, k) for k in perf_keys]
-
-    return {
-        "rule_id":          rule_id,
-        "customer_title":   (msg.get("customer_title") or rule.get("name", rule_id)).format(rule_id=rule_id),
-        "performance_category_keys":   perf_keys,
-        "performance_category_labels": perf_labels,
-        "priority":             msg.get("priority", "B"),
-        "expected_effect":      msg.get("expected_effect") or ["運用基盤の整備"],
-        "next_action_question": msg.get("next_action_question") or f"本項目 ({rule_id}) について現状をご共有ください。",
-        "action_options":       msg.get("action_options") or {"A": "対応済", "B": "未対応", "C": "確認したい"},
-        "legal_note":           msg.get("legal_note"),
-    }
+# 5/8 v2 緊急修正: 旧 _build_recommendation_item を削除。
+# next_action_question fallback "本項目 ({rule_id}) について現状をご共有ください。" は
+# 顧客向け文言として禁止 (rule_messaging.yaml 未登録 rule は internal_unmapped_rule で
+# 本文から除外される設計に統一)。
+# rule_messaging からの item 生成は engine/daily_todo_builder.build_recommendation_item に
+# 一元化された。本ファイル内では _render_and_post_bundle のレガシー path のために
+# 直接 build_recommendation_item を呼ぶ。
 
 
 def _render_and_post_bundle(
