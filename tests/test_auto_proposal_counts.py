@@ -289,8 +289,8 @@ class TestRecommendationsContent:
         body = captured.get("body", "")
         # 冒頭に「広告成果改善TODO」(法律名ではない、5/8 v2 統合通知)
         assert "広告成果改善TODO" in body[:120], "冒頭に広告成果改善 TODO タイトルが無い"
-        # 広告成果への影響セクション
-        assert "広告成果への影響" in body
+        # 期待効果セクション (5/8 v3: ADR-001 3 層効果表示)
+        assert "期待効果" in body
         # 確認アクション
         assert "今日の確認アクション" in body
         # 期待効果カテゴリラベルが出る

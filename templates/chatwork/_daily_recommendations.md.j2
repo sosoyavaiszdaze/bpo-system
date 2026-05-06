@@ -32,10 +32,28 @@
 {% for item in items_today %}
 　【{{ loop.index }}】{{ item.customer_title }}
 
-　▼ 広告成果への影響（{{ item.performance_category_labels|join(" / ") }}）
+　▼ 期待効果（{{ item.performance_category_labels|join(" / ") }}）
+{% if item.impact_three_layer.calculable %}
+　　確実: 月 {{ item.impact_three_layer.display.minimum }} 改善余地
+　　現実: 月 {{ item.impact_three_layer.display.realistic }} 改善余地
+　　上限: 月 {{ item.impact_three_layer.display.upper }} 改善余地
+　　※重複施策を考慮し、判断には「確実」値を優先します。
+{% if item.expected_effect %}
+　　補足:
 {% for eff in item.expected_effect %}
-　　・{{ eff }}
+　　　・{{ eff }}
 {% endfor %}
+{% endif %}
+{% else %}
+　　効果区分: {{ item.impact_three_layer.display.category_label }}
+　　効果額: 算定対象外
+{% if item.expected_effect %}
+　　補足:
+{% for eff in item.expected_effect %}
+　　　・{{ eff }}
+{% endfor %}
+{% endif %}
+{% endif %}
 
 　▼ 今日の確認アクション
 　　{{ item.today_action }}
