@@ -362,6 +362,65 @@ class TestSortScoreLogic:
         item_high = ctx_high["items_today"][0]
         assert item_high["sort_breakdown"]["perf_impact"] == -50
 
+    def test_already_notified_adds_penalty_to_score(self):
+        """既通知 rule_id (set に含まれるもの) は score に +200 が乗り、下位に押される"""
+        from engine.daily_todo_builder import build_daily_todo
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=["F-AH-04", "F-DG-01"],   # 両方 priority A 想定
+            eligible_rules=[],
+            layer_a_rule_defs={
+                "F-AH-04": {"id": "F-AH-04", "severity": "high"},
+                "F-DG-01": {"id": "F-DG-01", "severity": "medium"},
+            },
+            today_str="2026-05-08",
+            already_notified_ids={"F-AH-04"},   # F-AH-04 は既通知 → +200 ペナルティ
+        )
+
+        # F-AH-04 は本来 priority A + measurement_recovery で上位だが、
+        # +200 ペナルティで F-DG-01 (priority B、no penalty) より下に来る
+        f_ah = next(i for i in ctx["items_today"] + ctx["items_this_week"] if i["rule_id"] == "F-AH-04")
+        f_dg = next(i for i in ctx["items_today"] + ctx["items_this_week"] if i["rule_id"] == "F-DG-01")
+
+        assert f_ah["sort_breakdown"]["already_notified"] == 200, \
+            f"F-AH-04 に already_notified +200 が乗っていない: {f_ah['sort_breakdown']}"
+        assert f_dg["sort_breakdown"]["already_notified"] == 0, \
+            f"F-DG-01 に余計な already_notified が乗っている: {f_dg['sort_breakdown']}"
+
+        # +200 ペナルティで F-AH-04 のスコアが F-DG-01 より大きくなる (下位)
+        assert f_ah["sort_score"] > f_dg["sort_score"], \
+            f"already_notified の penalty が逆順を引き起こしていない: " \
+            f"F-AH-04={f_ah['sort_score']} F-DG-01={f_dg['sort_score']}"
+
+    def test_already_notified_collected_from_history(self, tmp_path, monkeypatch):
+        """auto_proposal_history に当日 sent された rule_id が already_notified に集まる"""
+        from engine import auto_proposal_engine
+        from engine.daily_todo_builder import collect_already_notified_rule_ids
+
+        # 隔離された history dir
+        monkeypatch.setattr(auto_proposal_engine, "HISTORY_DIR", tmp_path / "history")
+        (tmp_path / "history").mkdir()
+        history_path = tmp_path / "history" / "test_client.yaml"
+        history_path.write_text("""F-AH-04:
+  last_sent_date: '2026-05-08'
+  last_sent_at: '2026-05-08T09:00:00'
+  daily_cap_group: default
+  result:
+    message_id: 'msg-1'
+F-DG-01:
+  last_sent_date: '2026-05-07'
+  last_sent_at: '2026-05-07T09:00:00'
+  daily_cap_group: default
+  result:
+    message_id: 'msg-old'
+""", encoding="utf-8")
+
+        notified = collect_already_notified_rule_ids("test_client", "2026-05-08")
+        # F-AH-04 (今日) は集まる、F-DG-01 (昨日) は集まらない
+        assert "F-AH-04" in notified
+        assert "F-DG-01" not in notified
+
     def test_critical_severity_outranks_high_within_same_goal_stage(self):
         """同じ goal_stage 内で critical severity は high より上位"""
         from engine.daily_todo_builder import build_daily_todo

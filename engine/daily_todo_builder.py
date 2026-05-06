@@ -197,6 +197,46 @@ def compute_sort_score(
     return {"score": score, "breakdown": breakdown}
 
 
+def collect_already_notified_rule_ids(
+    client_id: str, today_str: str,
+) -> set:
+    """当日中に既通知の rule_id 集合を返す (auto_proposal_history + indication_state)
+
+    5/8 v3 fix: build_daily_todo で compute_sort_score の already_notified_p 軸を
+    実際に動作させるための集合。cooldown / cap で eligible 段階で弾かれるのが
+    第一防御だが、二重防御 + preview のデバッグ性向上のため、本文表示時にも
+    既通知 rule をスコアで下位に押し下げる。
+
+    Returns:
+        既通知 rule_id の set (空 set もあり得る)
+    """
+    out: set = set()
+
+    # 1. auto_proposal_history: today_str に sent された rule_id
+    try:
+        from engine.auto_proposal_engine import _load_history
+        history = _load_history(client_id) or {}
+        for rule_id, rec in history.items():
+            if (rec or {}).get("last_sent_date") == today_str:
+                out.add(rule_id)
+    except Exception as e:
+        log.debug(f"[{client_id}] _load_history 失敗 (already_notified 集計): {e}")
+
+    # 2. indication_state: notified_date が today_str の rule_id
+    try:
+        from engine.indication_state import IndicationState
+        state = IndicationState(client_id=client_id)
+        for rec in state.list_open_or_pending():
+            if rec.get("notified_date") == today_str:
+                rid = rec.get("rule_id")
+                if rid:
+                    out.add(rid)
+    except Exception as e:
+        log.debug(f"[{client_id}] indication_state 失敗 (already_notified 集計): {e}")
+
+    return out
+
+
 def build_daily_todo(
     client_id: str,
     client_cfg: dict,
@@ -205,6 +245,7 @@ def build_daily_todo(
     layer_a_rule_defs: Optional[dict] = None,   # rule_id → rule full dict (X-PI1 等の定義)
     anomaly_summary: Optional[dict] = None,
     today_str: Optional[str] = None,
+    already_notified_ids: Optional[set] = None,
 ) -> dict:
     """統合 TODO の context を構築 (テンプレ render 直前まで)
 
@@ -216,6 +257,9 @@ def build_daily_todo(
         layer_a_rule_defs: rule_id → 簡易 rule dict (name 取得用、無ければ {})
         anomaly_summary: {"cpa_change_pct": +75.6, "impression_change_pct": -68.0} 等
         today_str: 'YYYY-MM-DD'
+        already_notified_ids: 当日既通知済の rule_id 集合 (5/8 v3 fix: compute_sort_score
+            の already_notified_p 軸を実動作させる用)。None の場合 collect_already_notified_rule_ids
+            から取得 (テストや preview で空 set を渡せばこの軸を 0 にできる)
 
     Returns:
         dict: テンプレ render 用 context
@@ -258,9 +302,19 @@ def build_daily_todo(
     all_items = layer_a_items + auto_items
     goal_order = messaging.get("goal_stage_order") or {}
 
+    # 5/8 v3 fix: already_notified_ids が None なら collect_already_notified_rule_ids で取得
+    # テスト等で空 set を明示的に渡せばこの軸を 0 に固定できる
+    if already_notified_ids is None and today_str:
+        already_notified_ids = collect_already_notified_rule_ids(client_id, today_str)
+    elif already_notified_ids is None:
+        already_notified_ids = set()
+
     # 各 item に sort_score / sort_breakdown を付与
     for it in all_items:
-        scored = compute_sort_score(it, anomaly_summary, goal_order)
+        scored = compute_sort_score(
+            it, anomaly_summary, goal_order,
+            already_notified_ids=already_notified_ids,
+        )
         it["sort_score"]     = scored["score"]
         it["sort_breakdown"] = scored["breakdown"]
 
@@ -312,6 +366,7 @@ def build_daily_todo(
         "displayed_rule_ids":  [i["rule_id"] for i in items_today + items_this_week + items_legal_note],
         "internal_unmapped_rules": sorted(set(unmapped)),
         "anomaly_summary":     anomaly_summary or {},
+        "already_notified_ids": sorted(already_notified_ids),  # 5/8 v3 fix: preview で見える化
     }
 
 
