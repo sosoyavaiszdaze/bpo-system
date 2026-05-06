@@ -1,6 +1,7 @@
-"""ChatWork 回答パーサ (5/8 v3 ingestion)
+"""ChatWork 回答パーサ (5/8 v3 ingestion + 5/7 P3 Bot-filter)
 
 責務: ChatWork 返信メッセージから (rule_id, answer_code, answer_label, status) を抽出。
+      Bot 自身の自動通知本文は回答として取り込まない (誤回答保存防止)。
 
 対応フォーマット (柔軟):
     - "F-AH-04 A"
@@ -9,6 +10,8 @@
     - "A F-AH-04"
     - "F-AH-04 認証済み"     (label 直接)
     - "F-AH-04 → A"
+    - "F-LC-10 詳細"          (intent fallback → wants_help)
+    - "F-AH-04 相談したい"   (intent fallback → wants_help)
     - 複数回答 (1 メッセージ): "F-AH-04 A / F-DG-01 B"
     - 改行区切り複数回答
 
@@ -29,7 +32,18 @@ answer_code → status マッピング (各 rule の rule_messaging.action_optio
 
 主要 API:
     - parse_message(text, rule_messaging) -> list[ParsedAnswer]
-    - parse_messages_bulk(messages, rule_messaging) -> list[ParsedAnswer]
+    - parse_messages_bulk(messages, rule_messaging, bot_account_ids=None) -> list[ParsedAnswer]
+    - is_bot_message(msg, bot_account_ids=None) -> bool
+
+責務境界 (Phase 1 / Phase 2):
+    Phase 1 (本実装): 構造的回答 (regex) + 軽量 intent fallback
+        - "F-AH-04 A" / "F-AH-04 認証済み" → regex で確定
+        - "F-LC-10 詳細" / "相談したい" → INTENT_WANTS_HELP_KEYWORDS で wants_help
+    Phase 2 (将来): 自由記述の自然文を Claude API で分類
+        - "Pixel が見つからないんですが何これ？" 系の自然文
+        - Claude が rule_id / intent / status / reply_draft を返す
+        - 本 module は parse_message で None を返したケースを Claude に投げる
+          設計境界として残してある (parse_message の戻り値 [] が将来 Claude 経路へ)
 """
 from __future__ import annotations
 
@@ -70,6 +84,40 @@ SEPARATOR_PATTERN = re.compile(r"[\s:：→\-→]+")
 # Python 3.7+ では dict は挿入順を保持。判定は順次 LABEL_TO_STATUS_KEYWORDS の
 # キーを上から走査するため、wants_help を not_done より先に置くことで
 # 「未活用、検討したい」が wants_help に正しく分類される。
+# 5/7 P3: Bot 自身の自動通知本文を「回答」として誤取り込みしないための判定ワード。
+# どれか 1 つでも本文に含まれていれば、Zynect Auto-Reporter 自身の投稿とみなして
+# parse_messages_bulk から除外する。
+# 顧客返信に偶然これらを含めるケースを避けるため、自動通知のみが必ず使う特徴的な
+# 文字列だけに絞っている (顧客が引用するリスクの高い rule_id 単独は含めない)。
+BOT_BODY_MARKERS = (
+    "[info][title]",
+    "[/info]",
+    "本日の広告成果改善TODO",
+    "本通知は Zynect Auto-Reporter",
+    "▼ ご回答",
+    "─────────────────────",
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "🔴 今日確認してほしいこと",
+    "🟡 今週中に確認したいこと",
+)
+
+# 5/7 P3: 構造的回答が無い場合の intent fallback。
+# "F-LC-10 詳細" / "F-AH-04 相談したい" 等は wants_help として取り込む (Phase 1)。
+# Phase 2 では Claude API で自然文分類に置換予定。
+INTENT_WANTS_HELP_KEYWORDS = (
+    "詳細",       # "詳細"単独 / "詳細を" / "詳細案内"
+    "もっと知りたい",
+    "もっと詳しく",
+    "詳しく",
+    "相談",       # "相談したい" / "別途相談"
+    "教えて",     # "教えてください"
+    "わからない",
+    "わかりません",
+    "案内ほしい",
+    "案内してください",
+)
+
+
 LABEL_TO_STATUS_KEYWORDS = {
     "wants_help": [
         "確認したい", "検討したい", "状況不明", "現状未確認",
@@ -177,26 +225,67 @@ def parse_message(
     return out
 
 
+def is_bot_message(msg: dict, bot_account_ids: Optional[set] = None) -> bool:
+    """この ChatWork メッセージは Bot 自身の自動通知か?
+
+    Bot 判定は 2 軸の OR:
+      1. msg.account.account_id が bot_account_ids に含まれる (確定的)
+      2. body に BOT_BODY_MARKERS のいずれかを含む (本文ベース、保険)
+
+    どちらかでも該当すれば True (= 回答取り込み対象から除外)。
+
+    bot_account_ids が None の場合は 2 のみで判定 (config 未設定でも誤取り込み防止)。
+    """
+    if not msg:
+        return False
+
+    # 1. account_id 一致 (config 経路)
+    if bot_account_ids:
+        try:
+            acc = msg.get("account") or {}
+            acc_id = acc.get("account_id")
+            if acc_id is not None and int(acc_id) in {int(x) for x in bot_account_ids}:
+                return True
+        except (TypeError, ValueError):
+            pass
+
+    # 2. body に Bot 自動通知 marker を含む (保険、config 不在でも効く)
+    body = msg.get("body", "") or ""
+    for marker in BOT_BODY_MARKERS:
+        if marker in body:
+            return True
+
+    return False
+
+
 def parse_messages_bulk(
     messages: list[dict], rule_messaging: dict,
+    bot_account_ids: Optional[set] = None,
 ) -> list[ParsedAnswer]:
-    """複数の ChatWork メッセージをまとめてパース
+    """複数の ChatWork メッセージをまとめてパース (Bot 投稿は除外)
 
     Args:
         messages: ChatWork API の messages 配列
                   各要素: {"message_id", "body", "send_time", "account": {...}}
         rule_messaging: load_messaging() の戻り値
+        bot_account_ids: Bot 自身の account_id 集合 (None なら本文 marker のみで判定)
 
     Returns:
-        全 ParsedAnswer のリスト
+        全 ParsedAnswer のリスト (Bot 自動通知を含むメッセージは skip)
     """
     out: list[ParsedAnswer] = []
+    skipped_bot = 0
     for msg in messages or []:
+        if is_bot_message(msg, bot_account_ids=bot_account_ids):
+            skipped_bot += 1
+            continue
         body = msg.get("body", "") or ""
         msg_id = str(msg.get("message_id", ""))
         send_time = msg.get("send_time")
         answered_at = _send_time_to_iso(send_time)
         out.extend(parse_message(body, rule_messaging, chatwork_message_id=msg_id, answered_at=answered_at))
+    if skipped_bot:
+        log.info(f"chatwork_response_parser: Bot 自動通知 {skipped_bot} 件をスキップ")
     return out
 
 
@@ -254,6 +343,13 @@ def _extract_answer_for_rule(
         label = action_options.get(code, "")
         status = _map_label_to_status(label) if label else "wants_help"
         return (code, label, status)
+
+    # 3. (5/7 P3) intent fallback — 明示 code/label が無くても自由記述の wants_help
+    # 系キーワードを含めば「詳細案内希望」として取り込む。Phase 2 で Claude API
+    # 自然文分類に置換予定 (boundary: 構造的回答=regex, 自由記述=Claude)。
+    for kw in INTENT_WANTS_HELP_KEYWORDS:
+        if kw in segment:
+            return ("?", "詳細案内希望", "wants_help")
 
     return None
 

@@ -65,6 +65,19 @@ def sample_messaging():
                 "yes_no_question": "アクティブですか?",
                 "action_options": {"A": "アクティブ確認済み", "B": "未確認、これから確認する", "C": "Pixel 不在の可能性あり"},
             },
+            "F-LC-10": {
+                "customer_title": "ランディング法令表記",
+                "priority": "A",
+                "goal_stage": "legal_review",
+                "performance_category": ["legal_compliance"],
+                "today_action": "LP の特商法表記を確認。",
+                "yes_no_question": "全項目表示済ですか?",
+                "action_options": {
+                    "A": "全項目表示済",
+                    "B": "一部不足",
+                    "C": "状況不明、確認したい",
+                },
+            },
         },
         "category_labels": {"measurement_quality": "計測精度改善", "first_party_data": "1st Party Data 活用"},
         "goal_stage_order": {"measurement_recovery": 1, "first_party_data": 4},
@@ -373,10 +386,10 @@ class TestResponseStoreMonotonic:
             return messages_unsorted
 
         from engine.chatwork_response_parser import parse_messages_bulk as _orig_parse
-        def hooked_parse(messages, rule_messaging):
+        def hooked_parse(messages, rule_messaging, **kwargs):
             # ingest が渡してきた順序を記録
             sorted_received.extend([m["message_id"] for m in messages])
-            return _orig_parse(messages, rule_messaging)
+            return _orig_parse(messages, rule_messaging, **kwargs)
 
         monkeypatch.setattr(ChatWorkClient, "fetch_messages", fake_fetch)
         monkeypatch.setattr(
@@ -547,3 +560,312 @@ class TestAnswerSourcePreference:
             for src in pref:
                 assert src in ("api", "validator", "chatwork_reply"), \
                     f"{rid}: 不正な answer_source: {src}"
+
+
+# ============================================================
+# 5/7 P3: Bot 自身の自動通知本文を回答として誤取り込みしない
+# ============================================================
+
+# 実本番 Bot 通知本文の代表サンプル (テンプレ抜粋、改変なし)
+_BOT_AUTO_NOTIFICATION_BODY = """[info][title]【株式会社パイロットン御中】本日の広告成果改善TODO 2026-05-07（5件）[/title]
+CPAが+76.0%上昇、インプレッション-67.9%低下が観測されています。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔴 今日確認してほしいこと（3 件）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+　【1】Meta ドメイン認証の状態確認
+
+　▼ 期待効果（計測精度改善 / 配信学習安定化）
+　　確実: 月 +¥27,194 改善余地
+
+　▼ 今日の確認アクション
+　　Meta Business Manager で確認してください。
+
+　▼ ご回答（本スレッドへの返信で 1 文字でご回答ください）
+　　Meta Business Manager でドメインが「認証済み」になっていますか?
+　　[A] 認証済み
+　　[B] 未対応
+　　[C] 状況不明、確認したい
+　─────────────────────
+　ルール ID: F-AH-04（自動診断）
+[/info]"""
+
+
+class TestBotMessageFilter:
+    """parse_messages_bulk が Bot 自身の自動通知本文を取り込まない"""
+
+    def test_bot_notification_body_yields_zero_answers(self, sample_messaging):
+        """Bot 自動通知本文 (F-AH-04 / [A] 認証済み 等を含む) を渡しても 0 件"""
+        from engine.chatwork_response_parser import parse_messages_bulk
+
+        bot_msg = {
+            "message_id": "9999",
+            "send_time": 1715000000,
+            "body": _BOT_AUTO_NOTIFICATION_BODY,
+            "account": {"account_id": 12345678, "name": "Zynect Auto-Reporter"},
+        }
+        results = parse_messages_bulk([bot_msg], sample_messaging)
+        assert results == [], \
+            f"Bot 通知から回答が抽出されてしまった: {[(r.rule_id, r.answer_code) for r in results]}"
+
+    def test_bot_account_id_filter(self, sample_messaging):
+        """body に marker が無くても account_id 一致で Bot と判定されて 0 件"""
+        from engine.chatwork_response_parser import parse_messages_bulk
+
+        bot_msg = {
+            "message_id": "9999",
+            "body": "F-AH-04 A",   # 顧客返信そっくりの本文だが Bot 投稿
+            "account": {"account_id": 12345678},
+        }
+        results = parse_messages_bulk([bot_msg], sample_messaging, bot_account_ids={12345678})
+        assert results == [], "account_id 一致で Bot 判定されていない"
+
+    def test_customer_reply_still_parsed_after_bot_filter(self, sample_messaging):
+        """Bot 通知 + 顧客返信が混在 → 顧客返信のみ 1 件 parsed"""
+        from engine.chatwork_response_parser import parse_messages_bulk
+
+        bot_msg = {
+            "message_id": "9999",
+            "send_time": 1715000000,
+            "body": _BOT_AUTO_NOTIFICATION_BODY,
+            "account": {"account_id": 12345678},
+        }
+        customer_msg = {
+            "message_id": "10001",
+            "send_time": 1715100000,
+            "body": "F-AH-04 A",
+            "account": {"account_id": 99999999, "name": "顧客 山田"},
+        }
+        results = parse_messages_bulk(
+            [bot_msg, customer_msg], sample_messaging,
+            bot_account_ids={12345678},
+        )
+        assert len(results) == 1
+        assert results[0].rule_id == "F-AH-04"
+        assert results[0].answer_code == "A"
+        assert results[0].chatwork_message_id == "10001"
+
+    def test_is_bot_message_helper(self):
+        """is_bot_message が account_id / body marker のいずれでも True"""
+        from engine.chatwork_response_parser import is_bot_message
+
+        # account_id 一致
+        assert is_bot_message(
+            {"body": "noop", "account": {"account_id": 1}},
+            bot_account_ids={1, 2},
+        ) is True
+        # body marker (▼ ご回答)
+        assert is_bot_message(
+            {"body": "前略\n▼ ご回答\n[A] 認証済み", "account": {"account_id": 99}},
+        ) is True
+        # 純粋な顧客返信
+        assert is_bot_message(
+            {"body": "F-AH-04 A", "account": {"account_id": 99}},
+        ) is False
+
+    def test_bot_marker_ruleid_in_body(self, sample_messaging):
+        """Bot 通知の「ルール ID: F-AH-04」行から rule_id が誤検出されない"""
+        from engine.chatwork_response_parser import parse_messages_bulk
+
+        msg = {
+            "message_id": "1",
+            "body": "ルール ID: F-AH-04（自動診断）\n[A] 認証済み",
+            "account": {"account_id": 0},
+        }
+        # Body marker (▼ ご回答 が無いがそれでも引っかからないと駄目なので
+        # この場合は marker 単体のテスト用に「━━」を含める)
+        msg_with_marker = dict(msg)
+        msg_with_marker["body"] = (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" + msg["body"]
+        )
+        results = parse_messages_bulk([msg_with_marker], sample_messaging)
+        assert results == []
+
+
+# ============================================================
+# 5/7 P3: F-LC-10 詳細 / F-LC-10 C → wants_help
+# ============================================================
+
+class TestIntentFallbackWantsHelp:
+    """構造的回答が無くても自由記述の意図表現は wants_help に取り込む"""
+
+    def test_keyword_詳細_maps_to_wants_help(self, sample_messaging):
+        """`F-LC-10 詳細` → wants_help (intent fallback)"""
+        from engine.chatwork_response_parser import parse_message
+        results = parse_message("F-LC-10 詳細", sample_messaging)
+        assert len(results) == 1
+        assert results[0].rule_id == "F-LC-10"
+        assert results[0].status == "wants_help"
+
+    def test_explicit_C_with_action_option_label(self, sample_messaging):
+        """`F-LC-10 C` (action_options C = 「状況不明、確認したい」) → wants_help"""
+        from engine.chatwork_response_parser import parse_message
+        results = parse_message("F-LC-10 C", sample_messaging)
+        assert len(results) == 1
+        assert results[0].rule_id == "F-LC-10"
+        assert results[0].answer_code == "C"
+        assert results[0].status == "wants_help"
+
+    def test_keyword_相談したい_maps_to_wants_help(self, sample_messaging):
+        from engine.chatwork_response_parser import parse_message
+        results = parse_message("F-AH-04 相談したい", sample_messaging)
+        assert len(results) == 1
+        assert results[0].status == "wants_help"
+
+
+# ============================================================
+# 5/7 P3: store は .bak.* を読まない (load_responses は exact filename)
+# ============================================================
+
+class TestStoreIgnoresBakFiles:
+    def test_bak_file_not_loaded(self, tmp_path, monkeypatch):
+        """outputs/chatwork_responses/{client}.yaml.bak.* は load_responses の対象外"""
+        import engine.chatwork_response_store as store
+
+        responses_dir = tmp_path / "responses"
+        responses_dir.mkdir()
+        # bak ファイルだけ存在 (本ファイル は無い)
+        bak = responses_dir / "pilotton.yaml.bak.false-positive-20260506-1938"
+        bak.write_text(
+            "client_id: pilotton\nresponses:\n"
+            "  F-AH-04: {rule_id: F-AH-04, answer_code: A, status: confirmed_done}\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(store, "RESPONSES_DIR", responses_dir)
+
+        data = store.load_responses("pilotton")
+        # bak から復元されていない (空 responses)
+        assert data["responses"] == {}, \
+            f".bak ファイルから復元されてしまった: {data['responses']}"
+
+
+# ============================================================
+# 5/7 P3: daily_chatwork_check は通知前に ingest を呼ぶ
+# ============================================================
+
+class TestDailyCheckIngestsBeforeNotify:
+    """daily_chatwork_check.py が通知生成前に ingest_chatwork_responses.ingest を呼ぶ"""
+
+    def test_ingest_called_before_audit(self, monkeypatch, tmp_path):
+        """ingest が fetch_audit_results より先に呼ばれる"""
+        from scripts import daily_chatwork_check as daily
+
+        call_order: list[str] = []
+
+        def fake_ingest(client_id, dry_run=False, since_id=""):
+            call_order.append("ingest")
+            return {
+                "ok": True, "client_id": client_id,
+                "fetched_messages": 0, "parsed_answers": 0, "saved_responses": 0,
+                "skipped_by_since_id": 0, "errors": [], "answers_summary": [],
+            }
+
+        def fake_fetch(client_id):
+            call_order.append("fetch_audit")
+            # data_available=False で短絡 (以降の処理は走らないが ingest は先に呼ばれている)
+            return {"data_available": False}
+
+        # ingest と audit を mock
+        from scripts import ingest_chatwork_responses
+        monkeypatch.setattr(ingest_chatwork_responses, "ingest", fake_ingest)
+        monkeypatch.setattr(daily, "fetch_audit_results", fake_fetch)
+
+        # IndicationState を tmp_path で隔離
+        from engine import indication_state
+        monkeypatch.setattr(indication_state, "STATE_DIR", tmp_path / "state")
+
+        daily.run_daily_check(client_id="pilotton", dry_run=True, today="2026-05-07")
+
+        assert "ingest" in call_order, "ingest が呼ばれていない"
+        assert "fetch_audit" in call_order, "fetch_audit が呼ばれていない"
+        assert call_order.index("ingest") < call_order.index("fetch_audit"), \
+            f"ingest が fetch_audit の後に呼ばれている: {call_order}"
+
+    def test_ingest_failure_aborts_notification(self, monkeypatch, tmp_path):
+        """ingest が ok=False で返った場合、後段の通知に進まず errors を返す"""
+        from scripts import daily_chatwork_check as daily
+
+        post_called = {"v": False}
+
+        def fake_ingest(client_id, dry_run=False, since_id=""):
+            return {
+                "ok": False,
+                "client_id": client_id,
+                "fetched_messages": 0, "parsed_answers": 0, "saved_responses": 0,
+                "skipped_by_since_id": 0,
+                "errors": ["ChatWork API 401 Unauthorized"],
+                "fetch_error": "401 Unauthorized",
+                "answers_summary": [],
+            }
+
+        def fake_fetch(client_id):
+            post_called["v"] = True
+            return {"data_available": True, "ads_audit": {}, "anomalies": {}, "fraud_audit": {}}
+
+        from scripts import ingest_chatwork_responses
+        monkeypatch.setattr(ingest_chatwork_responses, "ingest", fake_ingest)
+        monkeypatch.setattr(daily, "fetch_audit_results", fake_fetch)
+
+        from engine import indication_state
+        monkeypatch.setattr(indication_state, "STATE_DIR", tmp_path / "state")
+
+        result = daily.run_daily_check(client_id="pilotton", dry_run=True, today="2026-05-07")
+
+        assert post_called["v"] is False, \
+            "ingest 失敗時に fetch_audit (通知前段の analyzer) に進んでしまっている"
+        assert result.get("errors"), "errors が空 (ingest 失敗が伝わっていない)"
+        assert any("ingest" in e for e in result["errors"]), \
+            f"errors に ingest 関連が無い: {result['errors']}"
+
+    def test_dry_run_passes_through_to_ingest(self, monkeypatch, tmp_path):
+        """daily_check の dry_run=True は ingest にも dry_run=True で伝わり、保存しない"""
+        from scripts import daily_chatwork_check as daily
+
+        captured_dry_run = {"v": None}
+
+        def fake_ingest(client_id, dry_run=False, since_id=""):
+            captured_dry_run["v"] = dry_run
+            return {
+                "ok": True, "client_id": client_id,
+                "fetched_messages": 0, "parsed_answers": 0, "saved_responses": 0,
+                "skipped_by_since_id": 0, "errors": [], "answers_summary": [],
+            }
+
+        def fake_fetch(client_id):
+            return {"data_available": False}
+
+        from scripts import ingest_chatwork_responses
+        monkeypatch.setattr(ingest_chatwork_responses, "ingest", fake_ingest)
+        monkeypatch.setattr(daily, "fetch_audit_results", fake_fetch)
+
+        from engine import indication_state
+        monkeypatch.setattr(indication_state, "STATE_DIR", tmp_path / "state")
+
+        daily.run_daily_check(client_id="pilotton", dry_run=True, today="2026-05-07")
+        assert captured_dry_run["v"] is True, \
+            f"daily_check の dry_run=True が ingest に伝わっていない: {captured_dry_run['v']}"
+
+    def test_ingest_dry_run_does_not_save(self, monkeypatch, tmp_path):
+        """ingest(dry_run=True) は parse できても save_response を呼ばない"""
+        from scripts import ingest_chatwork_responses
+        from notifiers.chatwork_notifier import ChatWorkClient
+        import engine.chatwork_response_store as store
+
+        responses_dir = tmp_path / "responses"
+        monkeypatch.setattr(store, "RESPONSES_DIR", responses_dir)
+
+        def fake_fetch(self, room_id=None, force=1):
+            return [
+                {"message_id": "1", "send_time": 1715000000, "body": "F-AH-04 A",
+                 "account": {"account_id": 99999999}},
+            ]
+
+        monkeypatch.setattr(ChatWorkClient, "fetch_messages", fake_fetch)
+
+        summary = ingest_chatwork_responses.ingest("pilotton", dry_run=True)
+        # 1 件 parse、0 件 save (dry_run のため)
+        assert summary["parsed_answers"] == 1
+        assert summary["saved_responses"] == 0
+        # yaml ファイル自体が作られていない
+        assert not (responses_dir / "pilotton.yaml").exists(), \
+            "dry_run なのに yaml に保存されてしまった"
