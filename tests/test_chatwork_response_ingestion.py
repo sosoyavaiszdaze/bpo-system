@@ -869,3 +869,87 @@ class TestDailyCheckIngestsBeforeNotify:
         # yaml ファイル自体が作られていない
         assert not (responses_dir / "pilotton.yaml").exists(), \
             "dry_run なのに yaml に保存されてしまった"
+
+
+# ============================================================
+# 5/7 P3 P2: ingest / audit 失敗時に ChatWork 自己監視通知が飛ぶ
+# ============================================================
+
+class TestSelfAlertOnErrors:
+    """main() の result.errors 分岐で post_self_alert が呼ばれるか"""
+
+    def _setup_main(self, monkeypatch, sys_argv, run_result):
+        """main() を呼ぶ準備: 環境変数 / argv / run_daily_check を mock"""
+        from scripts import daily_chatwork_check as daily
+
+        monkeypatch.setenv("CHATWORK_API_TOKEN", "dummy")
+        monkeypatch.setenv("CHATWORK_ROOM_ID_PILOTTON", "111")
+        monkeypatch.setattr("sys.argv", sys_argv)
+
+        called = {"alert": [], "alert_dry_run": []}
+
+        def fake_run(client_id, dry_run, test_prefix, today):
+            return run_result
+
+        def fake_self_alert(message, dry_run=False):
+            called["alert"].append(message)
+            called["alert_dry_run"].append(dry_run)
+
+        monkeypatch.setattr(daily, "run_daily_check", fake_run)
+        monkeypatch.setattr(daily, "post_self_alert", fake_self_alert)
+        return daily, called
+
+    def test_ingest_failure_triggers_self_alert(self, monkeypatch):
+        """非 dry-run + ingest_failed エラー → post_self_alert 呼ばれる"""
+        run_result = {
+            "errors": ["ingest_failed: 401 Unauthorized"],
+            "posted_indications": 0, "posted_completions": 0,
+        }
+        daily, called = self._setup_main(
+            monkeypatch,
+            sys_argv=["daily_chatwork_check.py", "--client", "pilotton"],
+            run_result=run_result,
+        )
+        rc = daily.main()
+
+        assert rc == 3, f"errors あり時 exit code は 3: {rc}"
+        assert len(called["alert"]) == 1, \
+            f"post_self_alert が呼ばれていない (呼ばれた: {len(called['alert'])} 回)"
+        assert "ingest_failed" in called["alert"][0], \
+            f"自己監視メッセージに ingest_failed が含まれない: {called['alert'][0]}"
+        assert called["alert_dry_run"][0] is False, \
+            "self_alert が dry_run=False で呼ばれていない (本番送信されない)"
+
+    def test_dry_run_does_not_self_alert(self, monkeypatch):
+        """dry_run + errors → post_self_alert は呼ばれない (副作用ゼロ)"""
+        run_result = {
+            "errors": ["ingest_failed: 401 Unauthorized"],
+            "posted_indications": 0, "posted_completions": 0,
+        }
+        daily, called = self._setup_main(
+            monkeypatch,
+            sys_argv=["daily_chatwork_check.py", "--client", "pilotton", "--dry-run"],
+            run_result=run_result,
+        )
+        rc = daily.main()
+
+        assert rc == 3
+        assert called["alert"] == [], \
+            f"dry_run なのに self_alert が呼ばれた: {called['alert']}"
+
+    def test_no_errors_does_not_self_alert(self, monkeypatch):
+        """errors 空 → post_self_alert は呼ばれない (正常系)"""
+        run_result = {
+            "errors": [],
+            "posted_indications": 1, "posted_completions": 0,
+        }
+        daily, called = self._setup_main(
+            monkeypatch,
+            sys_argv=["daily_chatwork_check.py", "--client", "pilotton"],
+            run_result=run_result,
+        )
+        rc = daily.main()
+
+        assert rc == 0
+        assert called["alert"] == [], \
+            f"errors 空なのに self_alert が呼ばれた: {called['alert']}"
