@@ -233,11 +233,17 @@ def _fetch_samples(client_id: str, media: str, period_days: int) -> list[dict]:
         # campaign 粒度: meta_adapter の lookback_days をそのまま尊重 (clients.yaml で 30d 等)
         meta_data = fetch_meta_ads(meta_cfg)
         campaigns = (meta_data or {}).get("campaigns", []) or []
+
+        # 学習保留: サンプル数 < 閾値 のとき compute_fraud_score を呼ばずに即 return。
+        # ad_platform_data の不足下で fraud_score を出すと信頼性のないシグナルが
+        # threshold_optimizer / adtruth_runner に流れ、デフォルト閾値で十分な状態を
+        # 「灰ゾーン候補」と誤分類するリスクがある。フェイルセーフで処理停止。
         if len(campaigns) < SAMPLE_MIN_FOR_OPTIMIZE:
             log.info(
                 f"[threshold_optimizer] {client_id}/{media}: campaign sample {len(campaigns)} "
-                f"< {SAMPLE_MIN_FOR_OPTIMIZE}, 学習保留 (デフォルト閾値継続)"
+                f"< {SAMPLE_MIN_FOR_OPTIMIZE}, 学習保留 (デフォルト閾値継続、fraud_score 算出スキップ)"
             )
+            return []
 
         industry = (client_cfg.get("company") or {}).get("industry", "default")
         base = get_industry_baseline(industry)

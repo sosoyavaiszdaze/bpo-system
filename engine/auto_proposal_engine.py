@@ -183,7 +183,6 @@ def _filter_by_environment(rules: list[dict], client_cfg: dict) -> list[dict]:
     company = client_cfg.get("company") or {}
     client_country = client_cfg.get("country", "JP")
     client_vertical = client_cfg.get("vertical") or company.get("industry")
-    client_ec_platform = client_cfg.get("ec_platform") or company.get("ec_platform")
     client_ad_platforms = client_cfg.get("ad_platforms") or [
         plat for plat in ["meta", "google", "tiktok"]
         if (client_cfg.get("ads") or {}).get(plat)
@@ -191,6 +190,14 @@ def _filter_by_environment(rules: list[dict], client_cfg: dict) -> list[dict]:
     client_bm = client_cfg.get("business_model", "b2c")
 
     tech_stack = client_cfg.get("tech_stack") or {}
+    # ADR-015 §2.4 H-4 (5/8): ec_platform は tech_stack を最優先、フォールバックで client_cfg / company。
+    # 他のスタックカテゴリと同列のフェイルセーフを適用する。
+    ec_from_stack = _stack_value(tech_stack, "ec_platform")
+    client_ec_platform = ec_from_stack or client_cfg.get("ec_platform") or company.get("ec_platform")
+    ec_confidence = _stack_confidence(tech_stack, "ec_platform") if ec_from_stack else "high"
+    # tech_stack 経由でない場合 (旧来 client_cfg.ec_platform) は high 扱い (5/7 互換)。
+    # tech_stack で宣言されている場合のみ confidence: low/unknown でスキップ。
+
     stack_resolved = {
         "tag_manager":  _stack_value(tech_stack, "tag_manager"),
         "analytics":    _stack_list_or_value(tech_stack, "analytics"),
@@ -209,7 +216,10 @@ def _filter_by_environment(rules: list[dict], client_cfg: dict) -> list[dict]:
             continue
         if not _match_list(applies_to.get("verticals", ["all"]), client_vertical):
             continue
-        if not _match_list(applies_to.get("ec_platforms", ["all"]), client_ec_platform):
+        # ec_platforms は他カテゴリ同様にフェイルセーフ統一 (H-4)
+        if not _match_stack_category(
+            applies_to.get("ec_platforms"), client_ec_platform, ec_confidence, rule,
+        ):
             continue
         if not _match_any(applies_to.get("ad_platforms", ["all"]), client_ad_platforms):
             continue

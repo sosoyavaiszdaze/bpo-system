@@ -35,11 +35,23 @@ freq_anom    = clamp((frequency  - 3.0) / 5.0)            # freq=3 で 0、freq=
 ctr_low      = clamp((0.5 - ctr_pct) / 0.5)               # ctr 0.5% 以上で 0
 ctr_high     = clamp((ctr_pct - 5.0) / 5.0)               # ctr 5% 未満で 0、10% で 1
 cvr_low      = clamp((1.0 - (cvr_pct / cvr_baseline)))    # baseline 比 100% で 0
-                                                           # ただし cost < 30000 円なら 0 (低消費は無視)
+                                                           # ただし cost < 30000 円なら 0 (低消費除外)
 cpa_high     = clamp((cpa - cpa_baseline * 1.5) / (cpa_baseline * 2))  # 1.5x で 0、3.5x で 1
                                                                        # cpa=0 (cv 0) は除外
+                                                                       # ただし cost < 30000 円なら 0 (低消費除外)
 mfa_share    = 0.0                                        # Phase A 固定、Phase B で置換
 ```
+
+**低消費除外の整合 (5/8 M-7 追記)**:
+`cvr_low` と `cpa_high` の両方で **`cost < LOW_COST_FLOOR_JPY (= 30000)` の campaign は 0 に抑える**。
+理由:
+- 低消費 campaign は統計的揺らぎが大きく、CPA が baseline の 1.5x を超えても
+  「学習開始直後の正常状態」「実験的な少額投下」など fraud 以外の説明が成立しがち
+- `cvr_low` のみ低消費除外して `cpa_high` を除外しないと、片側だけ過敏に反応する
+  非対称性が生じる (=ヒューリスティックの一貫性損失)
+- Phase A は誤検知を最小化することを最優先とし、保守側 (検知抑制) で揃える
+
+この除外条件は実装側の `_cpa_high_score()` / `_cvr_low_score()` の両方で `cost_jpy < LOW_COST_FLOOR_JPY` チェックを共通化する形で実現する。
 
 `cvr_baseline` / `cpa_baseline` はクライアントの直近 30 日中央値を別途算出。Phase A は `clients.yaml` の業界平均でフォールバック (beauty_d2c の場合 cvr_baseline=2.0%, cpa_baseline=¥6,000)。
 

@@ -10,6 +10,15 @@ Phase A の方針 (ADR-014 厳守):
     - ChatWork 通知は gray + black 検出時のみ。0 件なら ChatWork は静寂、ログだけ残す
     - block_events.yaml に Zynect 推奨候補として記録 (Phase B で実ブロック実行)
 
+媒体スコープ (Phase A):
+    - **Meta のみ対応**。pilotton 5/3 ヒアリングで Google 広告は not_applicable 確定
+    - clients.yaml の ad_platforms に google が含まれるクライアントが現れた場合でも、
+      Phase A の AdTruth ランナーは Meta データだけ取得 / 評価する
+    - Google / TikTok の fraud_score 算出は Phase B Week 2-3 (Google Ads API +
+      TikTok Business API での fraud_score 拡張、threshold_optimizer の media 切替対応)
+    - ChatWork 通知文面で「本レポートは Meta 配信のみ対象。Google/TikTok は通常監査のみ」と
+      明示する責務は呼び出し元 (daily_chatwork_check.py) ではなくテンプレ側で持つ
+
 主要関数:
     - run_adtruth_check(client_id, dry_run=False, today=None) -> dict
 """
