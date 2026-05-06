@@ -111,7 +111,13 @@ def run_auto_proposal(
         try:
             result = _render_and_post(rule, state, client_cfg, dry_run=dry_run)
             posted.append(result)
-            if not dry_run:
+            # 5/8 修正: history を進めるのは「本番モード」かつ「実投稿成功」だけ
+            # - dry_run=True: 副作用ゼロ原則で history 更新しない
+            # - dry_run=False でも skipped (idempotency hit) なら実送信されていない
+            #   → history に記録すると次回 cap で誤って counter され、本来送れる指摘を抑止する
+            chatwork_result = (result or {}).get("result") or {}
+            is_skipped = bool(chatwork_result.get("skipped")) or bool(chatwork_result.get("dry_run"))
+            if not dry_run and not is_skipped:
                 _update_history(client_id, rule["id"], result, today_str)
         except Exception as e:
             log.error(f"[{client_id}] rule {rule['id']} post failed: {e}")

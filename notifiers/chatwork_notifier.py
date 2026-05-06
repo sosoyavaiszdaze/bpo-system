@@ -366,10 +366,11 @@ class ChatWorkClient:
                     return {"skipped": True, "idempotency_key": key}
 
                 if self.dry_run:
+                    # 5/8 修正: dry-run は本番 idempotency ストアに記録しない (副作用ゼロ原則)。
+                    # 旧実装は dry_run=True のレコードを sent_log に残していたため、その後の
+                    # 本番実行で同 idempotency_key が "送信済み" と判定され ChatWork 送信が
+                    # 完全に塞がれる事故 (5/7 夜) を引き起こした。
                     log.info(f"ChatWork [dry_run] room={rid} len={len(body)} body[:60]={body[:60]!r}")
-                    store = self._load_sent()
-                    store[key] = {"room_id": rid, "dry_run": True, "ts": time.time()}
-                    self._save_sent(store)
                     return {"dry_run": True, "idempotency_key": key, "room_id": rid}
 
                 form = urllib.parse.urlencode({"body": body, "self_unread": str(self_unread)}).encode("utf-8")
@@ -424,10 +425,8 @@ class ChatWorkClient:
                     return {"skipped": True, "idempotency_key": key}
 
                 if self.dry_run:
+                    # 5/8 修正: dry-run は本番 idempotency ストアに記録しない (副作用ゼロ原則)
                     log.info(f"ChatWork [dry_run] upload room={rid} file={filename} size={size}B")
-                    store = self._load_sent()
-                    store[key] = {"room_id": rid, "file": filename, "dry_run": True, "ts": time.time()}
-                    self._save_sent(store)
                     return {"dry_run": True, "idempotency_key": key, "file": filename}
 
                 boundary = f"----BPOChatWorkBoundary{uuid.uuid4().hex}"

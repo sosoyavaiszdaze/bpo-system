@@ -224,13 +224,16 @@ def _run_daily_check_impl(
                 "completions": completion_items,
             })
             result = chat.post_message(body)
-            if not result.get("skipped"):
+            # 5/8 修正: 本番投稿成功時のみ state を進める。
+            # dry_run / skipped (idempotency hit) は通知済みマークしない (副作用ゼロ原則)
+            if result.get("dry_run"):
+                log.info(f"完了通知 [dry_run]: state を進めません key={result.get('idempotency_key', '')[:12]}")
+            elif result.get("skipped"):
+                log.info(f"完了通知スキップ (idempotency hit): key={result.get('idempotency_key', '')[:12]}")
+            else:
                 posted_completions = len(pending_completion)
-                # 通知済みマーク
                 for r in pending_completion:
                     state.mark_completion_notified(r["indication_id"], today=today_str)
-            else:
-                log.info(f"完了通知スキップ (idempotency hit): key={result.get('idempotency_key', '')[:12]}")
         except (ChatWorkError, Exception) as e:
             log.error(f"完了通知投稿失敗: {e}")
             errors.append(f"completion_post: {e}")
@@ -249,18 +252,24 @@ def _run_daily_check_impl(
                 "footer_note": None,
             })
             result = chat.post_message(body)
-            if not result.get("skipped"):
+            # 5/8 修正: 本番投稿成功時のみ state を進める。
+            if result.get("dry_run"):
+                log.info(f"指摘通知 [dry_run]: state を進めません key={result.get('idempotency_key', '')[:12]}")
+            elif result.get("skipped"):
+                log.info(f"指摘通知スキップ (idempotency hit): key={result.get('idempotency_key', '')[:12]}")
+            else:
                 posted_indications = len(notify_targets)
                 for r in notify_targets:
                     state.mark_indication_notified(r["indication_id"], today=today_str)
-            else:
-                log.info(f"指摘通知スキップ (idempotency hit): key={result.get('idempotency_key', '')[:12]}")
         except (ChatWorkError, Exception) as e:
             log.error(f"指摘通知投稿失敗: {e}")
             errors.append(f"indication_post: {e}")
 
-    # 7. state 保存
-    state.save()
+    # 7. state 保存 — 5/8 修正: dry_run 時は永続化しない (副作用ゼロ原則)
+    if not dry_run:
+        state.save()
+    else:
+        log.info("[dry_run] state.save() スキップ — indication_state は永続化されません")
 
     # 8. ADR-013 多層ルール (Layer 0/1/2/3 = 248 ルール) の自動提案サイクル
     #    既存フロー (Layer A 277 ルール) と独立して走らせる。テンプレ未整備のルールは

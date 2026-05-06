@@ -194,3 +194,82 @@ class TestChatWorkDryRun:
 
         assert result["dry_run"] is True
         m_open.assert_not_called()
+
+
+class TestDryRunNoSideEffect:
+    """5/8 修正: dry_run は本番 idempotency ストアに副作用ゼロ
+
+    旧実装は dry_run=True のレコードを sent_log に残していたため、その後の本番
+    実行で同 idempotency_key が "送信済み" 判定され ChatWork 投稿が完全に塞がれる
+    事故が発生 (5/7 夜)。本テスト群が再発を防ぐ。
+    """
+
+    def test_dry_run_post_message_does_not_write_sent_log(self, isolated_sent_log):
+        """dry_run の post_message は sent_log を作らない / 増やさない"""
+        from notifiers.chatwork_notifier import ChatWorkClient
+
+        client = ChatWorkClient(
+            api_token="DUMMY",
+            room_id="111",
+            sent_log_path=isolated_sent_log,
+            dry_run=True,
+        )
+        with mock.patch("urllib.request.urlopen") as m_open:
+            client.post_message("body 1")
+            client.post_message("body 2")
+            client.post_message("body 3")
+
+        m_open.assert_not_called()
+        # sent_log_path はファイル自体が作成されない (副作用ゼロ)
+        # mkdir はされるかもしれないが書込はないため、ロード時 0 件
+        assert client._load_sent() == {}
+
+    def test_dry_run_then_production_can_actually_send(
+        self, isolated_sent_log, fake_response_factory,
+    ):
+        """dry_run の後に本番実行すると、同 idempotency_key でもブロックされず送信される"""
+        from notifiers.chatwork_notifier import ChatWorkClient
+
+        body = "本番投稿テスト用 body"
+
+        # 1. 先に dry_run を実行
+        dry_client = ChatWorkClient(
+            api_token="DUMMY", room_id="111",
+            sent_log_path=isolated_sent_log, dry_run=True,
+        )
+        with mock.patch("urllib.request.urlopen") as m_open_dry:
+            dry_client.post_message(body)
+        m_open_dry.assert_not_called()
+
+        # sent_log は空のはず (=本番が塞がれない条件)
+        assert dry_client._load_sent() == {}
+
+        # 2. 続いて本番モードで同じ body を post → 実際に HTTP が走るはず
+        prod_client = ChatWorkClient(
+            api_token="DUMMY", room_id="111",
+            sent_log_path=isolated_sent_log, dry_run=False,
+        )
+        with mock.patch("urllib.request.urlopen") as m_open_prod:
+            m_open_prod.return_value = fake_response_factory({"message_id": 12345})
+            result = prod_client.post_message(body)
+
+        assert m_open_prod.called, "本番 post_message が dry_run 由来の汚染で塞がれている"
+        assert result.get("message_id") == 12345
+        assert result.get("skipped") is None or result.get("skipped") is False
+
+    def test_dry_run_upload_file_does_not_write_sent_log(self, isolated_sent_log, tmp_path):
+        """dry_run の upload_file も sent_log を増やさない"""
+        from notifiers.chatwork_notifier import ChatWorkClient
+
+        f = tmp_path / "test.pdf"
+        f.write_bytes(b"%PDF-1.4 dummy")
+
+        client = ChatWorkClient(
+            api_token="DUMMY", room_id="111",
+            sent_log_path=isolated_sent_log, dry_run=True,
+        )
+        with mock.patch("urllib.request.urlopen") as m_open:
+            client.upload_file(str(f), message="dry-run upload")
+
+        m_open.assert_not_called()
+        assert client._load_sent() == {}
