@@ -197,10 +197,62 @@ def suggest_threshold_update(client_id: str, current_thresholds: Optional[dict] 
 
 # ========== Private Helpers ==========
 
+SAMPLE_MIN_FOR_OPTIMIZE = 5  # サンプル不足判定 (campaign が 5 件未満なら学習保留)
+
+
 def _fetch_samples(client_id: str, media: str, period_days: int) -> list[dict]:
-    """adapters 経由でサンプルデータ取得 (Phase B Week 2-3 で実 API 接続)"""
-    log.info(f"[threshold_optimizer] {client_id}/{media}: fetching {period_days}d samples (mock for Phase A)")
-    return []  # Phase B で実装
+    """campaign 粒度で adapter から実データを取得し、fraud_score を算出して返す (ADR-014)
+
+    Phase A:
+      - meta のみ対応
+      - サンプル数 < SAMPLE_MIN_FOR_OPTIMIZE なら「学習保留」ログを残し空配列で返す
+        (= optimize_threshold は black サンプル無しと判定 → デフォルト保守値 0.85 を返す)
+
+    返却スキーマ:
+      classify_segments / optimize_threshold が参照する
+      {"fraud_score": float, "cv_rate": float} 互換 + 詳細フィールド (campaign 等)
+    """
+    if media != "meta":
+        log.info(f"[threshold_optimizer] {client_id}/{media}: only meta supported in Phase A")
+        return []
+
+    try:
+        import yaml as _yaml
+        from pathlib import Path as _Path
+        clients_yaml = _Path(__file__).resolve().parent.parent / "config" / "clients.yaml"
+        cfg = _yaml.safe_load(clients_yaml.read_text(encoding="utf-8")) or {}
+        client_cfg = cfg.get("clients", {}).get(client_id, {})
+        meta_cfg = (client_cfg.get("ads") or {}).get("meta") or client_cfg.get("meta") or {}
+        if not meta_cfg.get("account_id"):
+            log.warning(f"[threshold_optimizer] {client_id}: meta config missing")
+            return []
+
+        from adapters.meta_adapter import fetch_meta_ads
+        from analyzers.fraud_score import compute_fraud_score, get_industry_baseline
+
+        # campaign 粒度: meta_adapter の lookback_days をそのまま尊重 (clients.yaml で 30d 等)
+        meta_data = fetch_meta_ads(meta_cfg)
+        campaigns = (meta_data or {}).get("campaigns", []) or []
+        if len(campaigns) < SAMPLE_MIN_FOR_OPTIMIZE:
+            log.info(
+                f"[threshold_optimizer] {client_id}/{media}: campaign sample {len(campaigns)} "
+                f"< {SAMPLE_MIN_FOR_OPTIMIZE}, 学習保留 (デフォルト閾値継続)"
+            )
+
+        industry = (client_cfg.get("company") or {}).get("industry", "default")
+        base = get_industry_baseline(industry)
+
+        scored = compute_fraud_score(client_id, "meta", campaigns, baselines=base)
+        samples = scored["samples"]
+
+        # classify_segments 互換 (cv_rate キーを追加)
+        for s in samples:
+            s["cv_rate"] = s.get("cv_rate_pct", 0)
+        return samples
+
+    except Exception as e:
+        log.warning(f"[threshold_optimizer] sample fetch failed: {e}")
+        return []
 
 
 def _mean(values: list[float]) -> float:
