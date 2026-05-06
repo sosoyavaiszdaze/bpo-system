@@ -183,31 +183,58 @@ def generate_preservation_report(client_id: str, period: str = "monthly") -> dic
     cutoff = datetime.now() - timedelta(days=days)
     period_events = [e for e in events if _parse_iso(e.get("recorded_at")) >= cutoff]
 
+    # 検知履歴ゼロ時は嘘の 100% を出さず、明示的に N/A で返す (Phase A 原則)
+    if len(period_events) == 0:
+        return {
+            "period": _period_label(period),
+            "client_id": client_id,
+            "block_events_count": 0,
+            "total_blocked_count": 0,
+            "cv_drop_detected_count": 0,
+            "cv_preserved_pct": None,
+            "cv_preserved_label": "N/A (検知履歴なし)",
+            "auto_relax_suggestions": 0,
+            "blocked_ad_cost_savings_jpy": 0,
+            "generated_at": _now_iso(),
+        }
+
     cv_drops = 0
     auto_relax_count = 0
     total_blocked = 0
     estimated_savings = 0
 
-    for e in period_events:
+    # Phase A は executed=False の Zynect 推奨候補も「proposed」段階として件数だけ記録。
+    # 実 CV ドロップ検知 (post_monitor_result) は executed=True 後にしか発生しない。
+    proposed_count = sum(1 for e in period_events if e.get("stage") == "proposed")
+    executed_events = [e for e in period_events if e.get("executed") is True]
+
+    for e in executed_events:
         total_blocked += e.get("blocked_count", 0) or 0
         estimated_savings += e.get("estimated_savings_jpy", 0) or 0
-        # 各イベントの post 監視結果があれば集計
         post = e.get("post_monitor_result")
         if post and detect_cv_drop(post):
             cv_drops += 1
             auto_relax_count += 1
 
-    cv_preserved_pct = round(
-        (1 - cv_drops / max(len(period_events), 1)) * 100, 1
-    )
+    if len(executed_events) == 0:
+        cv_preserved_pct = None
+        cv_preserved_label = (
+            f"N/A (Phase A: 推奨候補 {proposed_count} 件、実ブロック未実行)"
+        )
+    else:
+        cv_preserved_pct = round((1 - cv_drops / len(executed_events)) * 100, 1)
+        cv_preserved_label = f"{cv_preserved_pct}%"
 
     return {
         "period": _period_label(period),
         "client_id": client_id,
         "block_events_count": len(period_events),
+        "proposed_count": proposed_count,
+        "executed_count": len(executed_events),
         "total_blocked_count": total_blocked,
         "cv_drop_detected_count": cv_drops,
         "cv_preserved_pct": cv_preserved_pct,
+        "cv_preserved_label": cv_preserved_label,
         "auto_relax_suggestions": auto_relax_count,
         "blocked_ad_cost_savings_jpy": estimated_savings,
         "generated_at": _now_iso(),

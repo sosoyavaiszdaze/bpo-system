@@ -252,12 +252,31 @@ def run_daily_check(
         log.error(f"auto_proposal 失敗 (既存フローには影響なし): {e}")
         errors.append(f"auto_proposal: {e}")
 
+    # 9. AdTruth 日次チェック (ADR-006/009/014)
+    #    fraud_score を campaign 粒度で算出 → gray/black 検出時のみ ChatWork に判断要請
+    #    0 件なら ChatWork は静寂、ログだけ残す (ノイズ防止)
+    adtruth_summary = {"samples_count": 0, "gray_count": 0, "black_count": 0, "posted_count": 0}
+    try:
+        from engine.adtruth_runner import run_adtruth_check
+        adtruth_summary = run_adtruth_check(
+            client_id=client_id,
+            dry_run=dry_run,
+            today=today_str,
+        )
+    except Exception as e:
+        log.error(f"adtruth_runner 失敗 (既存フローには影響なし): {e}")
+        errors.append(f"adtruth: {e}")
+
     summary = {
         "posted_indications": posted_indications,
         "posted_completions": posted_completions,
         "auto_proposal_loaded": auto_proposal_summary.get("loaded_rules_count", 0),
         "auto_proposal_eligible": auto_proposal_summary.get("eligible_count", 0),
         "auto_proposal_posted": auto_proposal_summary.get("posted_count", 0),
+        "adtruth_samples": adtruth_summary.get("samples_count", 0),
+        "adtruth_gray":   adtruth_summary.get("gray_count", 0),
+        "adtruth_black":  adtruth_summary.get("black_count", 0),
+        "adtruth_posted": adtruth_summary.get("posted_count", 0),
         "errors": errors,
     }
     log.info(f"日次チェック完了: {summary}")

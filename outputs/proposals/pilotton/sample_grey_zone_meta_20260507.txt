@@ -1,0 +1,62 @@
+========================================================================
+  Zynect AdTruth 日次レポート (Phase A) — pilotton
+  生成日時: 2026-05-06 13:06:34 JST
+  ADR-014 (campaign 粒度、閾値 fraud>=0.60 / cvr>=5.0%) 厳守
+========================================================================
+
+■ サマリ
+  分析対象: 3 キャンペーン (Meta、過去 30 日)
+  象限分布: black 0 / gray 0 / white 0 / unknown 3
+
+  → 灰ゾーン (gray) 候補:  0 件
+  → 黒ゾーン (black) 候補: 0 件
+
+  【判定】 ヘルシー — Phase A 自動診断で不正シグナル超過なし。
+           本日 ChatWork 判断要請は送信していません (ノイズ防止)。
+
+■ campaign 別 fraud_score (詳細)
+  ┌── 【CP】MYNAILPLEX_配信_新
+  │ quadrant:    unknown
+  │ fraud_score: 0.088  (閾値 0.60)
+  │ cv_rate:     1.21%  (閾値 5.0%)
+  │ ad_cost:     ¥1,117,106
+  │ cv_count:    115
+  │ ctr:         2.38%
+  │ frequency:   2.46
+  │ cpa:         ¥9,713
+  │ components:  {'freq_anom': 0.0, 'ctr_low': 0.0, 'ctr_high': 0.0, 'cvr_low': 0.3956, 'cpa_high': 0.0595, 'mfa_share': 0.0}
+  └─
+  ┌── 【CP】Advantage+_詳細ターゲ
+  │ quadrant:    unknown
+  │ fraud_score: 0.009  (閾値 0.60)
+  │ cv_rate:     1.91%  (閾値 5.0%)
+  │ ad_cost:     ¥258,037
+  │ cv_count:    30
+  │ ctr:         2.32%
+  │ frequency:   2.43
+  │ cpa:         ¥8,601
+  │ components:  {'freq_anom': 0.0, 'ctr_low': 0.0, 'ctr_high': 0.0, 'cvr_low': 0.0452, 'cpa_high': 0.0, 'mfa_share': 0.0}
+  └─
+  ┌── 【CP】Advantage+_顧客類似
+  │ quadrant:    unknown
+  │ fraud_score: 0.245  (閾値 0.60)
+  │ cv_rate:     1.05%  (閾値 5.0%)
+  │ ad_cost:     ¥47,696
+  │ cv_count:    2
+  │ ctr:         2.22%
+  │ frequency:   1.52
+  │ cpa:         ¥23,848
+  │ components:  {'freq_anom': 0.0, 'ctr_low': 0.0, 'ctr_high': 0.0, 'cvr_low': 0.4764, 'cpa_high': 1.0, 'mfa_share': 0.0}
+  └─
+
+■ CV 保全レポート (今月)
+  block_events_count: 0
+  cv_preserved_pct:   N/A (検知履歴なし)
+  → Phase A は推奨提示のみ (実ブロック実行は Phase B Week 2-3)
+
+■ Phase B 移行時の置換ポイント (ADR-014 §3)
+  - 媒体公式 KPI ヒューリスティック → papa-torb/adtruth fingerprint
+  - mfa_share = 0 固定 → Meta Placement Insights audit log
+  - 推奨候補 → 実ブロック実行 (Custom Audience exclusion / IP exclusion)
+
+========================================================================
