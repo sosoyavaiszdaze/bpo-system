@@ -104,14 +104,25 @@ rules:
     goal_stage: measurement_recovery
     # Meta Business Manager API でドメイン認証 status を直接取得可 (Phase B 接続)
     answer_source_preference: [api, validator, chatwork_reply]
-    # ADR-001 三層効果 (月額 JPY、月次広告費 ¥160万 想定):
-    #   minimum:   AEM/iOS 計測欠損の即時解消による配信学習のノイズ低減
-    #   realistic: CV 帰属の正確化による配信最適化精度向上
-    #   upper:     ドメイン認証連動の Advantage+ Audience 最適化が有効化
+    # 5/7 fix: 実績広告費連動の lift_rate ベース動的算出。
+    # 旧固定値は assumed_monthly_spend=¥160万 前提で算出されており、
+    # 実績がそれより小さい/大きいクライアントに過大/過小説明になっていた。
     impact_estimate:
-      minimum:   30000
-      realistic: 80000
-      upper:     200000
+      lift_rate:                # 実績月額広告費に対する改善率
+        minimum:   0.019        # 1.9%  AEM/iOS 計測欠損補完 (保守試算)
+        realistic: 0.050        # 5.0%  CV 帰属の正確化 + 配信学習の安定化
+        upper:     0.125        # 12.5% Advantage+ Audience 最適化フル効果
+      source_basis: |
+        Meta 公式ガイダンス: AEM 完了アカウントで CPA 改善 5-10% 平均、
+        計測欠損なしで Advantage+ 最適化が有効化されると最大 12-15% 改善傾向。
+      measurement_window:
+        signal:  "1-2 週"        # 兆候期間 (Pixel/CV 取得開始)
+        verdict: "4 週"          # 効果判定期間 (学習リセット完了)
+      # フォールバック (assumed_monthly_spend が取れない時の固定値、ADR-001 確実値)
+      assumed_monthly_spend: 1600000
+      minimum_fallback:   30000
+      realistic_fallback: 80000
+      upper_fallback:     200000
     expected_effect:
       - "AEM (集計イベント測定) / iOS 配信最適化の土台整備"
       - "CV 計測と配信学習の安定化"
@@ -147,9 +158,20 @@ rules:
     # Meta Pixel API で event_match_quality / 直近 event count を確認可
     answer_source_preference: [api, chatwork_reply]
     impact_estimate:
-      minimum:   40000
-      realistic: 120000
-      upper:     300000
+      lift_rate:
+        minimum:   0.025     # 2.5%  CV シグナル正常化の最低限
+        realistic: 0.075     # 7.5%  EMQ スコア改善 + 学習データ品質向上
+        upper:     0.190     # 19%   完全な計測復旧 + 学習加速
+      source_basis: |
+        Meta 公式: Pixel イベント停止状態の解消で平均 CPA 改善 7-15%。
+        EMQ 6.0 以上維持で iOS opt-out CV 補完による計測精度向上。
+      measurement_window:
+        signal:  "1 週"
+        verdict: "4-6 週"
+      assumed_monthly_spend: 1600000
+      minimum_fallback:   40000
+      realistic_fallback: 120000
+      upper_fallback:     300000
     expected_effect:
       - "CV 計測の正常動作確認、計測欠損の早期発見"
       - "Meta 学習シグナルの品質保証"
@@ -185,12 +207,22 @@ rules:
     performance_category: [first_party_data]
     priority: B
     goal_stage: first_party_data
-    # 運用方針なので顧客回答必須 (validator / API では判別不可)
     answer_source_preference: [chatwork_reply]
     impact_estimate:
-      minimum:   10000
-      realistic: 40000
-      upper:     150000
+      lift_rate:
+        minimum:   0.006     # 0.6%  リターゲ除外配信のロス低減
+        realistic: 0.025     # 2.5%  類似配信精度向上 (マッチ率 30%)
+        upper:     0.094     # 9.4%  Cookie 制限後の Lookalike 完全活用
+      source_basis: |
+        Cookie 制限後 (iOS / Privacy Sandbox) でも 1st party data ベースの
+        類似配信が機能する場合、CPA 改善 3-12% (Meta マッチ率次第)。
+      measurement_window:
+        signal:  "2-3 週"
+        verdict: "6-8 週"
+      assumed_monthly_spend: 1600000
+      minimum_fallback:   10000
+      realistic_fallback: 40000
+      upper_fallback:     150000
     expected_effect:
       - "Cookie 制限後 (iOS / Privacy Sandbox) の広告配信安定化"
       - "既存顧客データを使った類似配信 / 除外配信の精度改善"
@@ -208,9 +240,20 @@ rules:
     priority: B
     goal_stage: first_party_data
     impact_estimate:
-      minimum:   15000
-      realistic: 50000
-      upper:     180000
+      lift_rate:
+        minimum:   0.009     # 0.9%  Customer Audience マッチ率 30% 達成
+        realistic: 0.031     # 3.1%  マッチ率 50% で類似配信精度向上
+        upper:     0.113     # 11.3% マッチ率 70% フル効果
+      source_basis: |
+        SHA256 ハッシュ化済 Customer File はマッチ率 30-70% 達成可。
+        マッチ率向上は類似配信 / リターゲティング精度に直結。
+      measurement_window:
+        signal:  "1-2 週"
+        verdict: "4-6 週"
+      assumed_monthly_spend: 1600000
+      minimum_fallback:   15000
+      realistic_fallback: 50000
+      upper_fallback:     180000
     expected_effect:
       - "Customer Audience のマッチ率改善 (= 配信精度向上)"
       - "CV 計測データの品質向上"
@@ -399,12 +442,22 @@ rules:
     performance_category: [measurement_quality, learning_stability]
     priority: A
     goal_stage: measurement_recovery
-    # CAPI 実装サイトの CPA 改善傾向 (Meta 公式) は平均 17.8% 改善
-    # 月額 ¥160 万 → 17.8% 改善 ≒ ¥285k 上限。現実は学習期間後の半分程度
     impact_estimate:
-      minimum:   50000
-      realistic: 150000
-      upper:     285000
+      lift_rate:
+        minimum:   0.031     # 3.1%  ブラウザ計測欠損の半分補完
+        realistic: 0.094     # 9.4%  iOS / 広告ブロッカー対策フル効果
+        upper:     0.178     # 17.8% Meta 公式 CAPI 平均改善値
+      source_basis: |
+        Meta 公式: CAPI 実装サイトは未実装比で平均 CPA 改善 17.8%
+        (出典: Meta Business 2026 公式ガイドライン)。
+        ECフォース → FB CV API タブ経由実装は 1-2 週間で完了。
+      measurement_window:
+        signal:  "1-2 週"
+        verdict: "4-6 週"
+      assumed_monthly_spend: 1600000
+      minimum_fallback:   50000
+      realistic_fallback: 150000
+      upper_fallback:     285000
     expected_effect:
       - "ブラウザ計測欠損の補完 (iOS / 広告ブロッカー対策)"
       - "Meta 学習シグナル品質の向上、CPA 改善余地"

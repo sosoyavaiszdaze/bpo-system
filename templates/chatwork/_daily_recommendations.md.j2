@@ -38,6 +38,12 @@
 　　現実: 月 {{ item.impact_three_layer.display.realistic }} 改善余地
 　　上限: 月 {{ item.impact_three_layer.display.upper }} 改善余地
 　　※重複施策を考慮し、判断には「確実」値を優先します。
+{% if item.impact_three_layer.display.spend_basis %}
+　　算出根拠: {{ item.impact_three_layer.display.spend_basis }}
+{% endif %}
+{% if item.impact_three_layer.display.window_signal or item.impact_three_layer.display.window_verdict %}
+　　効果が出るまで: 兆候 {{ item.impact_three_layer.display.window_signal or "—" }} / 判定 {{ item.impact_three_layer.display.window_verdict or "—" }}
+{% endif %}
 {% if item.expected_effect %}
 　　補足:
 {% for eff in item.expected_effect %}

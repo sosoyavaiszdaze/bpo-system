@@ -586,3 +586,127 @@ class TestPreviewScriptNoSideEffect:
         assert called["post"] is False, "preview が ChatWork に投稿してしまっている"
         # 本文に X-PI1 関連の文言が出る
         assert "X-PI1" in body or "Pixel" in body
+
+
+# ============================================================
+# 5/7 P1 / P2 fix: lift_rate × actual_spend / measurement_window
+# ============================================================
+
+class TestImpactDynamicCalc:
+    """_build_impact_three_layer の動的算出 / fallback / window 表示"""
+
+    def _impact_lift_rate(self) -> dict:
+        return {
+            "lift_rate": {"minimum": 0.02, "realistic": 0.05, "upper": 0.10},
+            "source_basis": "テスト用 source_basis",
+            "measurement_window": {"signal": "1-2 週", "verdict": "4 週"},
+            "assumed_monthly_spend": 1600000,
+            "minimum_fallback":   30000,
+            "realistic_fallback": 80000,
+            "upper_fallback":     200000,
+        }
+
+    def test_actual_spend_dynamic_calc(self):
+        """actual_monthly_spend × lift_rate で動的算出される"""
+        from engine.daily_todo_builder import _build_impact_three_layer
+        impact = self._impact_lift_rate()
+
+        out = _build_impact_three_layer(impact, ["計測精度改善"], actual_monthly_spend=1_400_000)
+
+        assert out["calculable"] is True
+        assert out["calc_basis"] == "actual_spend"
+        assert out["monthly_spend_used"] == 1_400_000
+        assert out["minimum"]   == 28_000   # 1.4M × 0.02
+        assert out["realistic"] == 70_000   # 1.4M × 0.05
+        assert out["upper"]     == 140_000  # 1.4M × 0.10
+        assert out["measurement_window"] == {"signal": "1-2 週", "verdict": "4 週"}
+        assert "1,400,000" in out["display"]["spend_basis"]
+        assert "連動算出" in out["display"]["spend_basis"]
+        assert out["display"]["window_signal"] == "1-2 週"
+        assert out["display"]["window_verdict"] == "4 週"
+
+    def test_fallback_when_spend_missing(self):
+        """actual_monthly_spend が None のとき fallback 値が使われる"""
+        from engine.daily_todo_builder import _build_impact_three_layer
+        impact = self._impact_lift_rate()
+
+        out = _build_impact_three_layer(impact, ["計測精度改善"], actual_monthly_spend=None)
+
+        assert out["calculable"] is True
+        assert out["calc_basis"] == "fixed_fallback"
+        assert out["monthly_spend_used"] is None
+        assert out["minimum"]   == 30_000
+        assert out["realistic"] == 80_000
+        assert out["upper"]     == 200_000
+        assert "1,600,000" in out["display"]["spend_basis"]
+        assert "固定値" in out["display"]["spend_basis"]
+
+    def test_legacy_schema_fixed_only(self):
+        """lift_rate 未定義 (旧 schema) では固定値 minimum/realistic/upper を使う"""
+        from engine.daily_todo_builder import _build_impact_three_layer
+        legacy_impact = {"minimum": 10_000, "realistic": 30_000, "upper": 70_000}
+
+        out = _build_impact_three_layer(legacy_impact, ["計測精度改善"], actual_monthly_spend=1_400_000)
+
+        # actual_spend を渡しても lift_rate 未定義なので固定値経路
+        assert out["calc_basis"] == "fixed_legacy"
+        assert out["minimum"]   == 10_000
+        assert out["realistic"] == 30_000
+        assert out["upper"]     == 70_000
+        assert out["measurement_window"] is None
+
+    def test_zero_spend_falls_back(self):
+        """actual_monthly_spend=0 は fallback 経路へ"""
+        from engine.daily_todo_builder import _build_impact_three_layer
+        impact = self._impact_lift_rate()
+
+        out = _build_impact_three_layer(impact, ["計測精度改善"], actual_monthly_spend=0)
+
+        assert out["calc_basis"] == "fixed_fallback"
+        assert out["minimum"] == 30_000
+
+    def test_measurement_window_visible_in_body(self):
+        """measurement_window が本文 (テンプレ) に「兆候 / 判定」として出る"""
+        from engine.daily_todo_builder import build_daily_todo
+        from templates.chatwork import render
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=["F-AH-04"],
+            eligible_rules=[],
+            today_str="2026-05-08",
+            actual_monthly_spend=1_400_000,
+        )
+        body = render("_daily_recommendations.md.j2", ctx)
+
+        # F-AH-04 は rule_messaging.yaml で measurement_window 1-2 週 / 4 週 が定義済
+        assert "効果が出るまで" in body
+        assert "1-2 週" in body
+        assert "4 週" in body
+        # 動的算出ラベルも本文に出る
+        assert "1,400,000" in body
+        assert "連動算出" in body
+
+
+class TestExtractActualMonthlySpend:
+    def test_extracts_total_cost_from_ads_audit(self):
+        from engine.daily_todo_builder import _extract_actual_monthly_spend
+        audit = {
+            "data_available": True,
+            "ads_audit": {"total_cost": 1_409_403},
+        }
+        assert _extract_actual_monthly_spend(audit) == 1_409_403.0
+
+    def test_returns_none_when_data_unavailable(self):
+        from engine.daily_todo_builder import _extract_actual_monthly_spend
+        assert _extract_actual_monthly_spend({"data_available": False}) is None
+        assert _extract_actual_monthly_spend(None) is None
+        assert _extract_actual_monthly_spend({}) is None
+
+    def test_returns_none_for_zero_or_invalid(self):
+        from engine.daily_todo_builder import _extract_actual_monthly_spend
+        assert _extract_actual_monthly_spend({"data_available": True, "ads_audit": {"total_cost": 0}}) is None
+        assert _extract_actual_monthly_spend({"data_available": True, "ads_audit": {}}) is None
+        assert _extract_actual_monthly_spend(
+            {"data_available": True, "ads_audit": {"total_cost": "not-a-number"}}
+        ) is None
