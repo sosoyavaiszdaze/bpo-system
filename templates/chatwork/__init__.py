@@ -16,12 +16,16 @@ Jinja2 globals:
   current_year / current_month  — 投稿日の年月。免責文の YYYY/MM 表示用。
                                    render(context={"current_year": 2027}) で上書き可
 """
+import logging
 import os
 from datetime import datetime
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFound
+
+log = logging.getLogger("bpo")
 
 TEMPLATE_DIR = os.path.dirname(os.path.abspath(__file__))
+GENERIC_FALLBACK_TEMPLATE = "_client_request_generic.md.j2"
 
 
 def get_chatwork_env() -> Environment:
@@ -50,7 +54,20 @@ def render(template_name: str, context: dict) -> str:
         template_name: 'daily_indication.md.j2' 等
         context: テンプレートに渡す辞書
                  - "current_year" / "current_month" を渡せば globals を上書き
+
+    フォールバック:
+        指定テンプレートが存在しない場合は _client_request_generic.md.j2 を使用。
+        ADR-013 の 248 個の新規ルールが個別テンプレ未整備の段階でも
+        rule_name / rationale / legal_reference を埋めた汎用通知を生成する。
     """
     env = get_chatwork_env()
-    tmpl = env.get_template(template_name)
+    try:
+        tmpl = env.get_template(template_name)
+    except TemplateNotFound:
+        if template_name == GENERIC_FALLBACK_TEMPLATE:
+            raise
+        log.warning(
+            f"template '{template_name}' not found, falling back to {GENERIC_FALLBACK_TEMPLATE}"
+        )
+        tmpl = env.get_template(GENERIC_FALLBACK_TEMPLATE)
     return tmpl.render(**context)

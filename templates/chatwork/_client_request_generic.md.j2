@@ -1,0 +1,56 @@
+{# 自動提案エンジン汎用テンプレート (ADR-013 多層ルール用フォールバック)
+
+   このテンプレートは、各 rule の `template:` 指定が個別実装されていない場合に
+   render() がフォールバックとして使用する。
+
+   想定 context:
+     client_name, honorific, today, deadline, deadline_days,
+     rule_id, rule_name, rationale, priority_label, phase,
+     ec_platform (Optional), legal_reference (Optional),
+     evidence_fields (dict)
+#}
+[info][title]【{{ client_name }}{{ honorific }}】運用ご相談 {{ today }}（{{ rule_id }}）[/title]
+{{ rule_name }}（重要度: {{ priority_label }}）
+
+　▼ 事実
+　　ルール {{ rule_id }} のトリガー条件に該当する状態を検知しました。
+{% if evidence_fields %}{% for k, v in evidence_fields.items() %}{% if v is not none %}
+　　・{{ k }}: {{ v }}
+{% endif %}{% endfor %}{% endif %}
+{% if ec_platform %}
+　　・連携 EC プラットフォーム: {{ ec_platform }}
+{% endif %}
+
+　▼ 影響
+{% if rationale %}
+　　{{ rationale }}
+{% else %}
+　　本ルールが定義する運用課題について、貴社の媒体配信効率に影響を与えます。
+{% endif %}
+
+{% if legal_reference %}
+　▼ 法令・規制
+　　・根拠: {{ legal_reference.law if legal_reference.law is defined else legal_reference }}
+{% if legal_reference.article is defined %}
+　　・条文: {{ legal_reference.article }}
+{% endif %}
+{% if legal_reference.description is defined %}
+　　・概要: {{ legal_reference.description }}
+{% endif %}
+
+{% endif %}
+　▼ ご相談事項
+　　現状、当該ルールに対応する運用が確認できていません。
+{% if deadline %}
+　　{{ deadline }}（{{ deadline_days }}日以内）を目処に、現状ご共有をお願いいたします。
+{% endif %}
+　　貴社運用方針に応じて、以下のいずれかをお選びください:
+　　　A. 既に対応済み → 現状をご共有いただき、本指摘をクローズします。
+　　　B. 対応予定 → スケジュール感をご共有ください。
+　　　C. 対応不要 → 理由をご共有ください（運用憲章へ反映）。
+　　　D. 別途相談 → Zynect 担当より個別に手順をご案内します。
+
+　ご質問・不明点があればこちらにご返信ください。
+　─────────────────────
+　[{{ rule_id }}] Phase {{ phase }} | 自動提案エンジン (ADR-013) | {{ current_year }}/{{ "%02d"|format(current_month) }} 時点
+[/info]

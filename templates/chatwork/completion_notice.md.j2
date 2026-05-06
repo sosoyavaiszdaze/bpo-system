@@ -18,7 +18,7 @@
 {% if c.achieved_effect %}
 　　・想定確実値：{{ c.achieved_effect.minimum }}
 　　・想定現実値：{{ c.achieved_effect.realistic }}
-{% if c.achieved_effect.optimistic %}
+{% if c.achieved_effect.optimistic is defined and c.achieved_effect.optimistic %}
 　　・想定上限値：{{ c.achieved_effect.optimistic }}
 {% endif %}
 {% else %}

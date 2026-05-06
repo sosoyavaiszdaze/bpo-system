@@ -30,9 +30,72 @@ IndicationState に upsert する。
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Iterable, Optional
 
+import yaml
+
 log = logging.getLogger("bpo")
+
+# ---------- ルールメタ補完 (空 fact/impact のフォールバック用) ----------
+_RULE_META_CACHE: Optional[dict[str, dict]] = None
+_RULES_DIR = Path(__file__).resolve().parent.parent / "config" / "rules"
+
+
+def _load_rule_meta() -> dict[str, dict]:
+    """config/rules/*.yaml を全部読んで rule_id → {name, category, severity} の辞書を返す。
+
+    fact/impact が空の analyzer 出力 (M62 等) を補完するためのフォールバック情報源。
+    """
+    global _RULE_META_CACHE
+    if _RULE_META_CACHE is not None:
+        return _RULE_META_CACHE
+    out: dict[str, dict] = {}
+    if _RULES_DIR.exists():
+        for yaml_file in _RULES_DIR.glob("*.yaml"):
+            try:
+                data = yaml.safe_load(yaml_file.read_text(encoding="utf-8")) or {}
+                for rule in data.get("rules", []):
+                    rid = rule.get("id")
+                    if rid:
+                        out[rid] = {
+                            "name": rule.get("name", ""),
+                            "category": rule.get("category", ""),
+                            "severity": rule.get("severity", "medium"),
+                            "platform": rule.get("platform", ""),
+                        }
+            except (yaml.YAMLError, OSError):
+                continue
+    _RULE_META_CACHE = out
+    return out
+
+
+def _enrich_payload(payload: dict, rule_id: str) -> dict:
+    """payload の title/fact/impact が空なら rule_id のメタ情報で補完する。
+
+    ads_audit 等が message を空のまま issue を返すケース (M62 等) で
+    daily_indication.md.j2 が「事実」「影響」欄を空表示するのを防ぐ。
+    """
+    meta = _load_rule_meta().get(rule_id, {})
+    name = meta.get("name") or rule_id
+    category = meta.get("category") or ""
+    if not payload.get("title"):
+        payload["title"] = name
+    if not payload.get("fact"):
+        payload["fact"] = (
+            f"{name} (ルールID: {rule_id}) のチェックに該当しています"
+            + (f"（カテゴリ: {category}）" if category else "")
+            + "。"
+        )
+    if not payload.get("impact"):
+        action = payload.get("recommended_action") or ""
+        payload["impact"] = (
+            f"本指摘 ({rule_id}) は {category or '運用品質'} に関わる"
+            + ("重大" if meta.get("severity") in ("critical", "high") else "")
+            + f"課題で、未対応のまま運用すると {category or '配信効率'} に悪影響が及びます。"
+            + (f" 推奨アクション: {action}" if action else "")
+        )
+    return payload
 
 # severity 同義語マップ（warning → high など analyzer 個別の用語を吸収）
 SEVERITY_NORMALIZE = {
@@ -84,19 +147,20 @@ def from_ads_audit(audit_result: Optional[dict]) -> list[dict]:
         platform = _safe_str(issue.get("platform"), "cross")
         # campaign 名 or campaign_id を target_id として使う（無ければ rule-level → "global"）
         target = _safe_str(_coalesce(issue.get("campaign_id"), issue.get("campaign"), default="global"))
+        payload = {
+            "source": "ads_audit",
+            "title": _safe_str(issue.get("message")) or rule_id,
+            "fact": _safe_str(issue.get("message")),
+            "impact": _safe_str(issue.get("impact")) or _safe_str(issue.get("message")),
+            "recommended_action": _safe_str(issue.get("action")),
+            "campaign": _safe_str(issue.get("campaign")),
+        }
         out.append({
             "rule_id": rule_id,
             "platform": platform,
             "target_id": target,
             "severity": _norm_severity(issue.get("severity")),
-            "payload": {
-                "source": "ads_audit",
-                "title": _safe_str(issue.get("message")) or rule_id,
-                "fact": _safe_str(issue.get("message")),
-                "impact": _safe_str(issue.get("impact")) or _safe_str(issue.get("message")),
-                "recommended_action": _safe_str(issue.get("action")),
-                "campaign": _safe_str(issue.get("campaign")),
-            },
+            "payload": _enrich_payload(payload, rule_id),
         })
     return out
 
@@ -116,19 +180,20 @@ def from_anomaly(anomaly_result: Optional[dict]) -> list[dict]:
         metric = _safe_str(_coalesce(alert.get("metric"), alert.get("type"), default="anomaly"))
         rule_id = f"ANO_{metric.upper()}"
         target = _safe_str(_coalesce(alert.get("campaign_id"), alert.get("campaign"), platform, default="global"))
+        payload = {
+            "source": "anomaly",
+            "title": _safe_str(alert.get("message"), "異常検知"),
+            "fact": _safe_str(alert.get("message")),
+            "impact": _safe_str(alert.get("cause")),
+            "recommended_action": _safe_str(alert.get("action")),
+            "metric": metric,
+        }
         out.append({
             "rule_id": rule_id,
             "platform": platform,
             "target_id": target,
             "severity": _norm_severity(alert.get("severity")),
-            "payload": {
-                "source": "anomaly",
-                "title": _safe_str(alert.get("message"), "異常検知"),
-                "fact": _safe_str(alert.get("message")),
-                "impact": _safe_str(alert.get("cause")),
-                "recommended_action": _safe_str(alert.get("action")),
-                "metric": metric,
-            },
+            "payload": _enrich_payload(payload, rule_id),
         })
     return out
 
@@ -148,18 +213,19 @@ def from_fraud_audit(fraud_result: Optional[dict]) -> list[dict]:
             continue
         platform = _safe_str(issue.get("platform"), "cross")
         target = _safe_str(_coalesce(issue.get("campaign"), platform, default="global"))
+        payload = {
+            "source": "fraud_audit",
+            "title": _safe_str(issue.get("message"), rule_id),
+            "fact": _safe_str(issue.get("message")),
+            "impact": _safe_str(issue.get("impact")) or _safe_str(issue.get("message")),
+            "recommended_action": _safe_str(issue.get("action")),
+        }
         out.append({
             "rule_id": rule_id,
             "platform": platform,
             "target_id": target,
             "severity": _norm_severity(issue.get("severity")),
-            "payload": {
-                "source": "fraud_audit",
-                "title": _safe_str(issue.get("message"), rule_id),
-                "fact": _safe_str(issue.get("message")),
-                "impact": _safe_str(issue.get("impact")) or _safe_str(issue.get("message")),
-                "recommended_action": _safe_str(issue.get("action")),
-            },
+            "payload": _enrich_payload(payload, rule_id),
         })
     return out
 
