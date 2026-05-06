@@ -59,23 +59,36 @@ ANSWER_CODE_PATTERN = re.compile(r"(?<![A-Za-z])([A-FＡ-Ｆ])(?![A-Za-z])")
 SEPARATOR_PATTERN = re.compile(r"[\s:：→\-→]+")
 
 # answer_label → status マッピング (rule_messaging.action_options の label を判定)
+#
+# 判定順序 (上から優先) — 5/8 P2 修正:
+#   1. wants_help    : 「検討したい / 確認したい / 相談」を含む系は支援要求
+#                       (例: 「未活用、検討したい」は not_done ではなく wants_help)
+#   2. not_applicable: 「対応不要 / 適用外 / 活用予定なし」は除外希望
+#   3. confirmed_done: 「済」「全て」「明示」「取得済」等の完了表現
+#   4. not_done      : 上記いずれも当たらない「未対応」系
+#
+# Python 3.7+ では dict は挿入順を保持。判定は順次 LABEL_TO_STATUS_KEYWORDS の
+# キーを上から走査するため、wants_help を not_done より先に置くことで
+# 「未活用、検討したい」が wants_help に正しく分類される。
 LABEL_TO_STATUS_KEYWORDS = {
+    "wants_help": [
+        "確認したい", "検討したい", "状況不明", "現状未確認",
+        "別途相談", "支援してほしい", "詳細を", "次回確認",
+    ],
+    "not_applicable": [
+        "活用予定なし", "対応不要", "該当なし", "適用外", "対象外",
+    ],
     "confirmed_done": [
-        "済", "認証済み", "活用中", "ハッシュ化済", "全項目表示済", "整合済み",
-        "範囲内のみ", "問題なし", "全て確認", "全て根拠あり", "明示済", "明記済",
-        "取得済", "明示済み",
+        "認証済み", "ハッシュ化済", "全項目表示済", "全て確認", "全て根拠あり",
+        "明示済", "明記済", "取得済", "範囲内のみ", "問題なし",
+        "整合済み", "活用中",
+        # 末尾に置く幅広い "済" — 上記キーワードで絞った後の残漁
+        "済",
     ],
     "not_done": [
         "未対応", "未設定", "未活用", "平文送信中", "一部不足", "未確認",
         "一部根拠不足", "一部のみ", "一部該当", "一部未確認",
         "届かない", "見直したい",
-    ],
-    "wants_help": [
-        "確認したい", "状況不明", "現状未確認", "確認したいです",
-        "別途相談", "詳細を確認したい", "次回確認したい",
-    ],
-    "not_applicable": [
-        "活用予定なし", "対応不要", "該当なし", "適用外",
     ],
 }
 
@@ -205,11 +218,26 @@ def _extract_answer_for_rule(
     """
     action_options = rule_msg.get("action_options") or {}
 
-    # 1. label による直接マッチ (より具体的なので優先)
+    # 1a. label の完全マッチ (例: "F-AH-04 認証済み")
     for code, label in action_options.items():
         if label and label in segment:
             status = _map_label_to_status(label)
             return (code, label, status)
+
+    # 1b. (5/8 P2 follow-up) 句読点で分割した部分キーワードでマッチ
+    # 例: action_options.B = "未活用、検討したい" のとき、segment に「検討したい」だけ
+    # 書かれていても hit させる。
+    for code, label in action_options.items():
+        if not label:
+            continue
+        # label を「、」「,」で分割し、各サブキーワードが segment に含まれるか確認
+        for kw in re.split(r"[、,]", label):
+            kw = kw.strip()
+            if not kw or len(kw) < 3:   # 短すぎるキーワードは誤マッチの元 (3 文字未満は除外)
+                continue
+            if kw in segment:
+                status = _map_label_to_status(label)
+                return (code, label, status)
 
     # 2. answer_code 単独 (A/B/C/D/E/F)
     # rule_id を空白に置換して、rule_id 内の文字 (F-AH-04 の F 等) を answer_code として

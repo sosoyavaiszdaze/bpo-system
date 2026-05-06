@@ -298,12 +298,42 @@ def build_daily_todo(
     except Exception as e:
         log.debug(f"[{client_id}] response store load failed (no-op): {e}")
 
+    # === 0b. answer_source_preference 解決 (5/8 v3 P1-B 修正) ===
+    # 各 rule の answer_source_preference に従って api / validator / chatwork_reply
+    # の順で答えを取得試行。上位 source で resolved=True なら顧客質問抑制。
+    # 現状: api 経路は Phase B で実装予定の stub、validator は限定的、
+    # chatwork_reply は response_status_map と同じ判定 (confirmed_done/not_applicable)
+    # → 効果は主に「明示的な解決パスの宣言」と「Phase B で API 連携時に質問抑制が
+    # 自動的に効く」枠組み作り。
+    suppressed_by_resolver: set = set()
+    resolver_reasons: dict = {}
+    try:
+        from engine.answer_resolver import should_suppress_question
+        for rid, msg_def in (messaging.get("rules") or {}).items():
+            if not (msg_def or {}).get("answer_source_preference"):
+                continue
+            should_suppress, reason = should_suppress_question(client_id, rid, msg_def)
+            if should_suppress:
+                suppressed_by_resolver.add(rid)
+                resolver_reasons[rid] = reason
+        if suppressed_by_resolver:
+            log.info(
+                f"[{client_id}] resolver-suppressed rules "
+                f"({len(suppressed_by_resolver)}): "
+                f"{', '.join(sorted(suppressed_by_resolver))}"
+            )
+    except Exception as e:
+        log.debug(f"[{client_id}] answer_resolver load failed (no-op): {e}")
+
+    # 統合: response store と answer_resolver の両方で除外されるべき rule_id を結合
+    suppressed_total = suppressed_by_response | suppressed_by_resolver
+
     # === 1. Layer A indications を items に変換 ===
     layer_a_items: list[dict] = []
     unmapped: list[str] = []
     suppressed_count = 0
     for rid in layer_a_rule_ids:
-        if rid in suppressed_by_response:
+        if rid in suppressed_total:
             suppressed_count += 1
             continue
         msg_def = (messaging.get("rules") or {}).get(rid)
@@ -321,7 +351,7 @@ def build_daily_todo(
     auto_items: list[dict] = []
     for r in eligible_rules:
         rid = r.get("id", "")
-        if rid in suppressed_by_response:
+        if rid in suppressed_total:
             suppressed_count += 1
             continue
         msg_def = (messaging.get("rules") or {}).get(rid)
@@ -403,8 +433,11 @@ def build_daily_todo(
         "internal_unmapped_rules": sorted(set(unmapped)),
         "anomaly_summary":     anomaly_summary or {},
         "already_notified_ids": sorted(already_notified_ids),
-        # 5/8 v3 ingestion: response store による除外件数 / status map (preview 用)
+        # 5/8 v3 ingestion: response store + answer_resolver による除外件数 (preview 用)
         "suppressed_by_response_count": suppressed_count,
+        "suppressed_by_response_ids":   sorted(suppressed_by_response),
+        "suppressed_by_resolver_ids":   sorted(suppressed_by_resolver),
+        "resolver_reasons":             resolver_reasons,
         "response_status_map":          response_status_map,
     }
 

@@ -66,6 +66,7 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
     from engine.chatwork_response_store import save_response
 
     summary = {
+        "ok": True,                    # 5/8 P1-A: API 障害時に False に変更
         "client_id": client_id,
         "fetched_messages": 0,
         "parsed_answers":   0,
@@ -86,14 +87,20 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
         summary["errors"].append(msg)
         return summary
 
-    # 2. メッセージ取得
+    # 2. メッセージ取得 — 5/8 P1-A: ChatWork API エラーは「成功 0 件」扱いせず、
+    # ok=False / error 詳細を summary に記録して呼出元で exit code 非ゼロにできるようにする
     client = ChatWorkClient(room_id=str(room_id), dry_run=False)
     try:
         messages = client.fetch_messages(room_id=str(room_id))
+        summary["ok"] = True
     except Exception as e:
-        msg = f"fetch_messages failed: {e}"
+        msg = f"fetch_messages failed: {e.__class__.__name__}: {e}"
         log.error(msg)
         summary["errors"].append(msg)
+        summary["ok"] = False
+        summary["fetch_error"] = str(e)
+        # 朝ジョブ前段で取り込みが落ちているのに通知が走るのを防ぐため、
+        # API 障害は呼出元で検知できるよう ok=False で早期 return
         return summary
     summary["fetched_messages"] = len(messages)
 
@@ -160,7 +167,9 @@ def main() -> int:
         for a in summary["answers_summary"]:
             print(f"  {a['rule_id']:18} code={a['answer_code']:2} status={a['status']:18} label={a['answer_label']}")
 
-    if summary["errors"]:
+    # 5/8 P1-A: API 障害 (ok=False) または save 失敗時は非ゼロ exit
+    # 朝ジョブの前段で気づけるよう、運用ログに「ingest 失敗」が明示される
+    if not summary.get("ok") or summary["errors"]:
         return 1
     return 0
 

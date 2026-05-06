@@ -277,6 +277,145 @@ class TestTodoBuilderResponseIntegration:
 # answer_source_preference
 # ============================================================
 
+class TestParserStatusOrder:
+    """5/8 P2 修正: 「未活用、検討したい」が wants_help に正しく分類される"""
+
+    def test_consultation_label_maps_to_wants_help(self, sample_messaging):
+        """「未活用、検討したい」は wants_help (旧バグでは not_done に誤分類)"""
+        from engine.chatwork_response_parser import parse_message
+
+        results = parse_message("F-DG-01 B", sample_messaging)
+        # F-DG-01 B = "未活用、検討したい" → wants_help (検討したい優先)
+        assert len(results) == 1
+        assert results[0].rule_id == "F-DG-01"
+        assert results[0].answer_code == "B"
+        assert results[0].status == "wants_help", \
+            f"「未活用、検討したい」が wants_help でない: {results[0].status}"
+
+    def test_label_directly_consultation(self, sample_messaging):
+        """label を直接書いたケース (例: 「F-DG-01 検討したい」) も wants_help"""
+        from engine.chatwork_response_parser import parse_message
+
+        results = parse_message("F-DG-01 検討したい", sample_messaging)
+        assert len(results) == 1
+        assert results[0].status == "wants_help"
+
+
+class TestFetchMessagesPropagatesError:
+    """5/8 P1-A 修正: ChatWork API エラーは握りつぶさず raise / ingest 失敗"""
+
+    def test_fetch_messages_raises_on_http_error(self, monkeypatch):
+        """ChatWorkClient._request が ChatWorkError を raise したら、
+        fetch_messages は黙って空 list を返さず例外を上位に伝播する"""
+        from notifiers.chatwork_notifier import ChatWorkClient, ChatWorkError
+
+        client = ChatWorkClient(api_token="DUMMY", room_id="111")
+
+        def fake_request(method, path, **kw):
+            raise ChatWorkError(f"401 Unauthorized: {path}")
+
+        monkeypatch.setattr(client, "_request", fake_request)
+
+        with pytest.raises(ChatWorkError):
+            client.fetch_messages()
+
+    def test_ingest_returns_ok_false_on_api_error(self, monkeypatch, tmp_path):
+        """ingest スクリプトの ingest() は API エラー時に ok=False を返す"""
+        from scripts import ingest_chatwork_responses
+        from notifiers.chatwork_notifier import ChatWorkClient, ChatWorkError
+
+        # clients.yaml は実物を使う (pilotton chatwork_rooms.main がある前提)。
+        # ChatWorkClient.fetch_messages を mock して ChatWorkError を raise
+        def fake_fetch(self, room_id=None, force=1):
+            raise ChatWorkError("Mock API down")
+
+        monkeypatch.setattr(ChatWorkClient, "fetch_messages", fake_fetch)
+
+        summary = ingest_chatwork_responses.ingest("pilotton", dry_run=True)
+        assert summary["ok"] is False, \
+            f"API エラー時に ok=True で返している (旧バグ): {summary}"
+        assert summary["errors"], "errors が空 (API 障害が通知されない)"
+        assert "Mock API down" in summary.get("fetch_error", ""), \
+            f"fetch_error にエラー詳細が記録されていない: {summary}"
+
+
+class TestAnswerSourcePreferenceResolver:
+    """5/8 P1-B 修正: answer_source_preference が実行経路に乗る"""
+
+    def test_resolve_chatwork_reply_confirmed_done(self, isolated_responses_dir):
+        """chatwork_reply で confirmed_done な回答があれば resolved=True"""
+        from engine.chatwork_response_store import save_response
+        from engine.answer_resolver import resolve_rule_answer
+
+        save_response("test_client", {
+            "rule_id": "F-AH-04", "answer_code": "A", "answer_label": "認証済み",
+            "status": "confirmed_done", "raw_message": "F-AH-04 A",
+        })
+
+        msg_def = {"answer_source_preference": ["api", "validator", "chatwork_reply"]}
+        result = resolve_rule_answer("test_client", "F-AH-04", msg_def)
+        assert result["status"] == "resolved"
+        assert result["source"] == "chatwork_reply"
+        assert "confirmed_done" in result["reason"] or result["value"] == "confirmed_done"
+
+    def test_resolve_unanswered_returns_manual_required(self, isolated_responses_dir):
+        """どの source でも解決できない場合は manual_required"""
+        from engine.answer_resolver import resolve_rule_answer
+
+        msg_def = {"answer_source_preference": ["api", "chatwork_reply"]}
+        result = resolve_rule_answer("test_client", "UNKNOWN-RULE", msg_def)
+        assert result["status"] == "manual_required"
+        assert "未解決" in result["reason"]
+
+    def test_resolve_no_preference_returns_unknown(self, isolated_responses_dir):
+        """answer_source_preference 未宣言なら unknown"""
+        from engine.answer_resolver import resolve_rule_answer
+
+        result = resolve_rule_answer("test_client", "X", {})
+        assert result["status"] == "unknown"
+
+    def test_should_suppress_question_when_resolved(self, isolated_responses_dir):
+        """resolved な rule は本文から除外 (should_suppress=True)"""
+        from engine.chatwork_response_store import save_response
+        from engine.answer_resolver import should_suppress_question
+
+        save_response("test_client", {
+            "rule_id": "F-AH-04", "answer_code": "A", "answer_label": "認証済み",
+            "status": "confirmed_done", "raw_message": "test",
+        })
+        msg_def = {"answer_source_preference": ["chatwork_reply"]}
+        suppress, reason = should_suppress_question("test_client", "F-AH-04", msg_def)
+        assert suppress is True
+        assert "resolved via chatwork_reply" in reason
+
+    def test_daily_todo_uses_resolver(self, isolated_responses_dir, reset_messaging_cache):
+        """build_daily_todo が answer_resolver で suppress された rule を本文除外"""
+        from engine.chatwork_response_store import save_response
+        from engine.daily_todo_builder import build_daily_todo
+
+        save_response("test_client", {
+            "rule_id": "F-AH-04", "answer_code": "A", "answer_label": "認証済み",
+            "status": "confirmed_done", "raw_message": "test",
+        })
+
+        ctx = build_daily_todo(
+            client_id="test_client", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=[],
+            eligible_rules=[
+                {"id": "F-AH-04", "daily_cap_group": "default", "severity": "high"},
+                {"id": "F-DG-01", "daily_cap_group": "default", "severity": "medium"},
+            ],
+            today_str="2026-05-08",
+            already_notified_ids=set(),
+        )
+        assert "F-AH-04" not in ctx["displayed_rule_ids"], \
+            "F-AH-04 が answer_resolver で除外されていない"
+        # ctx に suppressed_by_resolver_ids が記録されている
+        assert "F-AH-04" in ctx.get("suppressed_by_resolver_ids", []) \
+            or "F-AH-04" in ctx.get("suppressed_by_response_ids", []), \
+            f"suppressed source が記録されていない: {ctx.get('suppressed_by_resolver_ids')}"
+
+
 class TestAnswerSourcePreference:
     def test_rule_messaging_yaml_has_answer_source_preference(self):
         """主要 rule に answer_source_preference が宣言されていることを確認"""

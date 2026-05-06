@@ -494,15 +494,20 @@ class ChatWorkClient:
         Returns:
             messages 配列 (ChatWork API の戻り値そのまま、最大 100 件)
             各要素: {"message_id", "account", "body", "send_time", "update_time", ...}
-            未送信時は空 list、エラー時も空 list (例外は raise しない、上位で扱う)
+            未送信時は空 list (HTTP 200 で空 list)。
+
+        Raises:
+            ChatWorkError: API エラー / トークン不正 / 権限不足等。
+              5/8 P1-A 修正: 旧実装は例外を握りつぶして空 list を返していたが、
+              これだと API 障害が "正常終了 + 0 件" として扱われ、回答取り込みが
+              ブロックされていることに気づけない。例外は上位 (ingest スクリプト) に
+              伝播させ、exit code を非ゼロにすることで運用が検知できるようにする。
         """
         rid = self._resolve_room_id(room_id)
         path = f"/rooms/{rid}/messages?force={int(force)}"
-        try:
-            result = self._request("GET", path)
-        except ChatWorkError as e:
-            log.warning(f"ChatWork fetch_messages failed: {e}")
-            return []
+        # _request は HTTP エラー時に ChatWorkError を raise するので、ここでは
+        # try/except せずそのまま伝播させる
+        result = self._request("GET", path)
         # ChatWork API は messages を直接 list で返すか、{"messages": [...]} の形
         if isinstance(result, list):
             return result
