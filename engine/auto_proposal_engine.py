@@ -40,6 +40,10 @@ LAYER_DIRS = {
 
 CLIENT_STATE_DIR = ROOT / "outputs" / "client_state"
 HISTORY_DIR = ROOT / "outputs" / "auto_proposal_history"
+RULE_MESSAGING_PATH = CONFIG_DIR / "rule_messaging.yaml"
+
+# 1 日 1 まとめ投稿: 優先度 A の表示上限 (Atlassian alert fatigue best practice)
+DAILY_RECOMMENDATIONS_PRIORITY_A_TOP = 3
 
 
 # ========== Public API ==========
@@ -102,62 +106,53 @@ def run_auto_proposal(
     sorted_rules = _apply_severity_priority(eligible)
 
     # 5. daily_cap_group ごとに上限適用
-    selected = _enforce_caps(sorted_rules, history, today_str)
+    # 5/8 cap-bug-fix: history record に daily_cap_group が無い旧データに備え、
+    # 全 rule index を渡して逆引きフォールバックを可能にする
+    rules_index = {r.get("id"): r for r in rules}
+    selected = _enforce_caps(sorted_rules, history, today_str, all_rules_index=rules_index)
     log.info(f"[{client_id}] selected after caps: {len(selected)} rules")
 
-    # 6. 投稿 (5/8 改修: 結果カウントを sent / skipped / dry_run / failed で分離)
-    posted: list[dict] = []           # 試行した全 result (旧仕様の "posted" を保持、後方互換)
-    attempted_count = 0
-    sent_count = 0
-    skipped_count = 0
-    dry_run_count = 0
-    failed_count = 0
+    # 6. 投稿 (5/8 通知 UX 改修: 1 日 1 まとめ投稿)
+    # 旧実装: rule ごとに個別 ChatWork 投稿 → 連投で alert fatigue
+    # 新実装: selected 全件を 1 メッセージ (_daily_recommendations.md.j2) にまとめて投稿
+    # rule_messaging.yaml で performance_category / expected_effect / next_action_question
+    # に変換し、優先度 A (今日確認) と B (今週中) の 2 階層で表示
+    bundle_result = _render_and_post_bundle(
+        selected, state, client_cfg, today_str=today_str, dry_run=dry_run,
+    )
 
-    for rule in selected:
-        attempted_count += 1
-        try:
-            result = _render_and_post(rule, state, client_cfg, dry_run=dry_run)
-            posted.append(result)
+    chatwork_result = (bundle_result or {}).get("result") or {}
+    is_dry_run = bool(chatwork_result.get("dry_run"))
+    is_skipped = bool(chatwork_result.get("skipped"))
+    is_failed = bool(bundle_result.get("error"))
 
-            # _render_and_post の戻り値は {"rule_id", "result": <chat.post_message 戻り値>, ...}
-            # chat.post_message 戻り値:
-            #   - 実送信成功: {"message_id": "..."}
-            #   - skipped (idempotency): {"skipped": True, "idempotency_key": ...}
-            #   - dry_run:               {"dry_run": True, "idempotency_key": ...}
-            chatwork_result = (result or {}).get("result") or {}
-            is_dry_run = bool(chatwork_result.get("dry_run"))
-            is_skipped = bool(chatwork_result.get("skipped"))
+    # 1 まとめ投稿のため、各カウントは「selected の総件数」または「0」
+    attempted_count = len(selected)
+    sent_count = 0 if (is_dry_run or is_skipped or is_failed) else attempted_count
+    skipped_count = attempted_count if is_skipped else 0
+    dry_run_count = attempted_count if is_dry_run else 0
+    failed_count = attempted_count if is_failed else 0
 
-            if is_dry_run:
-                dry_run_count += 1
-            elif is_skipped:
-                skipped_count += 1
-            else:
-                sent_count += 1
-
-            # history 更新は「本番モードかつ実送信成功」だけ。
-            # dry_run / skipped (idempotency hit) では _update_history を呼ばない
-            # (5/8 dry-run 副作用ゼロ修正と整合)
-            if not dry_run and not is_skipped and not is_dry_run:
-                _update_history(client_id, rule["id"], result, today_str)
-        except Exception as e:
-            failed_count += 1
-            log.error(f"[{client_id}] rule {rule['id']} post failed: {e}")
+    # 実送信成功時のみ history 更新 (各 rule の daily_cap_group も保存)
+    if not dry_run and not is_skipped and not is_dry_run and not is_failed:
+        for rule in selected:
+            _update_history(
+                client_id, rule["id"], bundle_result, today_str,
+                daily_cap_group=rule.get("daily_cap_group", "default"),
+            )
 
     return {
         "client_id": client_id,
         "loaded_rules_count": len(rules),
         "environment_matched_count": len(matched),
         "eligible_count": len(eligible),
-        # 新カウント (5/8 改修): 「実送信」と「試行」を区別
         "attempted_count": attempted_count,
         "sent_count":      sent_count,
         "skipped_count":   skipped_count,
         "dry_run_count":   dry_run_count,
         "failed_count":    failed_count,
-        # 後方互換: posted_count は sent_count と同値 (旧 callers が見ているのは「実送信数」)
-        "posted_count":    sent_count,
-        "posted":          posted,    # 試行した全 result (旧仕様維持)
+        "posted_count":    sent_count,    # 後方互換
+        "posted":          [bundle_result] if bundle_result else [],  # 1 まとめなので 1 要素 list
     }
 
 
@@ -526,16 +521,31 @@ DEFAULT_CAPS = {
 }
 
 
-def _enforce_caps(sorted_rules: list[dict], history: dict, today_str: str) -> list[dict]:
-    """daily_cap_group ごとに上限適用"""
+def _enforce_caps(
+    sorted_rules: list[dict], history: dict, today_str: str,
+    all_rules_index: Optional[dict] = None,
+) -> list[dict]:
+    """daily_cap_group ごとに上限適用 (5/8 cap-bug-fix)
+
+    cap counter は history record の `daily_cap_group` を優先。
+    旧 history (フィールド無し) は all_rules_index から rule_id → daily_cap_group を
+    逆引きしてフォールバック。逆引きできなければ "default" 扱い。
+    """
     selected = []
     today_count_per_group: dict[str, int] = {}
+    rules_index = all_rules_index or {r.get("id"): r for r in sorted_rules}
 
     # 既に今日投稿済の件数を集計
     for rule_id, h in history.items():
-        if h.get("last_sent_date") == today_str:
-            grp = h.get("daily_cap_group", "default")
-            today_count_per_group[grp] = today_count_per_group.get(grp, 0) + 1
+        if h.get("last_sent_date") != today_str:
+            continue
+        # 1. history record に保存された daily_cap_group を優先
+        grp = h.get("daily_cap_group")
+        if not grp:
+            # 2. フォールバック: rule 定義側から逆引き
+            rule_def = rules_index.get(rule_id) or {}
+            grp = rule_def.get("daily_cap_group", "default")
+        today_count_per_group[grp] = today_count_per_group.get(grp, 0) + 1
 
     for rule in sorted_rules:
         grp = rule.get("daily_cap_group", "default")
@@ -591,6 +601,118 @@ def _render_and_post(rule: dict, state: dict, client_cfg: dict, dry_run: bool = 
     }
 
 
+# ========== Bundle Render & Post (5/8 1日1まとめ投稿改修) ==========
+
+_RULE_MESSAGING_CACHE: Optional[dict] = None
+
+
+def _load_rule_messaging() -> dict:
+    """config/rule_messaging.yaml をキャッシュ付きでロード"""
+    global _RULE_MESSAGING_CACHE
+    if _RULE_MESSAGING_CACHE is not None:
+        return _RULE_MESSAGING_CACHE
+    if not RULE_MESSAGING_PATH.exists():
+        _RULE_MESSAGING_CACHE = {"rules": {}, "category_labels": {}, "default": {}}
+        return _RULE_MESSAGING_CACHE
+    try:
+        _RULE_MESSAGING_CACHE = yaml.safe_load(RULE_MESSAGING_PATH.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        _RULE_MESSAGING_CACHE = {"rules": {}, "category_labels": {}, "default": {}}
+    return _RULE_MESSAGING_CACHE
+
+
+def _build_recommendation_item(rule: dict, messaging: dict) -> dict:
+    """rule + rule_messaging.yaml から 1 件分の表示用 dict を構築"""
+    rule_id = rule.get("id", "")
+    msg = (messaging.get("rules") or {}).get(rule_id) or messaging.get("default") or {}
+    labels = messaging.get("category_labels") or {}
+
+    perf_keys = msg.get("performance_category") or ["operational_foundation"]
+    perf_labels = [labels.get(k, k) for k in perf_keys]
+
+    return {
+        "rule_id":          rule_id,
+        "customer_title":   (msg.get("customer_title") or rule.get("name", rule_id)).format(rule_id=rule_id),
+        "performance_category_keys":   perf_keys,
+        "performance_category_labels": perf_labels,
+        "priority":             msg.get("priority", "B"),
+        "expected_effect":      msg.get("expected_effect") or ["運用基盤の整備"],
+        "next_action_question": msg.get("next_action_question") or f"本項目 ({rule_id}) について現状をご共有ください。",
+        "action_options":       msg.get("action_options") or {"A": "対応済", "B": "未対応", "C": "確認したい"},
+        "legal_note":           msg.get("legal_note"),
+    }
+
+
+def _render_and_post_bundle(
+    selected_rules: list[dict], state: dict, client_cfg: dict,
+    today_str: str, dry_run: bool = False,
+) -> dict:
+    """selected の全 rule を 1 メッセージ (_daily_recommendations.md.j2) にまとめて投稿
+
+    Returns:
+        {
+            "rule_ids": [...],
+            "result": <chatwork.post_message 戻り値>,
+            "body_length": int,
+            "items_priority_a_count": int,
+            "items_priority_b_count": int,
+        } or {"error": "..."} (selected 空 / 投稿失敗時)
+    """
+    if not selected_rules:
+        return {"rule_ids": [], "result": {"skipped": True}, "body_length": 0,
+                "items_priority_a_count": 0, "items_priority_b_count": 0}
+
+    from notifiers.chatwork_notifier import ChatWorkClient, ChatWorkError
+    from templates.chatwork import render
+
+    messaging = _load_rule_messaging()
+
+    items = [_build_recommendation_item(r, messaging) for r in selected_rules]
+    items_a = [i for i in items if i["priority"] == "A"]
+    items_b = [i for i in items if i["priority"] != "A"]
+
+    # 優先度 A は上位 N 件のみ表示、残りは "extra" に
+    items_a_extra_count = max(0, len(items_a) - DAILY_RECOMMENDATIONS_PRIORITY_A_TOP)
+    items_a_top = items_a[:DAILY_RECOMMENDATIONS_PRIORITY_A_TOP]
+
+    company = client_cfg.get("company") or {}
+    chatwork_rooms = client_cfg.get("chatwork_rooms") or {}
+    room_id = chatwork_rooms.get("main")
+
+    context = {
+        "client_name": company.get("name") or client_cfg.get("client_id", "クライアント"),
+        "honorific":   company.get("honorific", "御中"),
+        "today":       today_str,
+        "items_priority_a": items_a_top,
+        "items_priority_b": items_b,
+        "items_priority_a_extra_count": items_a_extra_count,
+    }
+
+    body = render("_daily_recommendations.md.j2", context)
+
+    rule_ids = [r.get("id") for r in selected_rules]
+    try:
+        chat = ChatWorkClient(room_id=room_id, dry_run=dry_run)
+        result = chat.post_message(body)
+    except ChatWorkError as e:
+        return {
+            "rule_ids": rule_ids,
+            "result": {"error": str(e)},
+            "error":  str(e),
+            "body_length": len(body),
+            "items_priority_a_count": len(items_a_top),
+            "items_priority_b_count": len(items_b),
+        }
+
+    return {
+        "rule_ids": rule_ids,
+        "result":   result,
+        "body_length": len(body),
+        "items_priority_a_count": len(items_a_top),
+        "items_priority_b_count": len(items_b),
+    }
+
+
 def _calc_deadline(rule: dict) -> Optional[str]:
     days = rule.get("deadline_days")
     if days is None:
@@ -623,11 +745,21 @@ def _save_history(client_id: str, history: dict) -> None:
     tmp.replace(path)
 
 
-def _update_history(client_id: str, rule_id: str, result: dict, today_str: str) -> None:
+def _update_history(
+    client_id: str, rule_id: str, result: dict, today_str: str,
+    daily_cap_group: str = "default",
+) -> None:
+    """5/8 cap-bug-fix: daily_cap_group を history に保存し、_enforce_caps で
+    cap グループ別 counter が正しく動くようにする。
+    旧実装は daily_cap_group を保存していなかったため、_enforce_caps が
+    全件 "default" 扱いに fallback し、別グループの cap が空いていると誤判定
+    して同日 2 回目実行で追加投稿が発生していた。
+    """
     history = _load_history(client_id)
     history[rule_id] = {
         "last_sent_date": today_str,
         "last_sent_at": datetime.now().isoformat(timespec="seconds"),
+        "daily_cap_group": daily_cap_group,
         "result": result.get("result", {}),
     }
     _save_history(client_id, history)
