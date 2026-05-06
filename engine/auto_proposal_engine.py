@@ -169,10 +169,15 @@ def _load_all_layers(layer_filter: Optional[list[str]] = None) -> list[dict]:
 def _filter_by_environment(rules: list[dict], client_cfg: dict) -> list[dict]:
     """applies_to の各フィールドでクライアント環境とマッチするルールを返す
 
-    マッチング:
-    - countries / verticals / ec_platforms / ad_platforms / business_models
-    - リスト [all] は常にマッチ
-    - リスト [A, B] は client が A or B なら OR マッチ
+    対応 applies_to キー:
+      既存: countries / verticals / ec_platforms / ad_platforms / business_models
+      ADR-015 拡張 (5/7 新規):
+        tag_managers / analytics_platforms / mas / crms / cdps /
+        capi_status / ab_testing_tools / chatbots
+
+    フェイルセーフ (ADR-015 §2.4):
+      tech_stack の confidence が "low" または値が "unknown" のカテゴリに依存するルールは
+      スキップする (誤った指摘を避ける)。
     """
     matched = []
     company = client_cfg.get("company") or {}
@@ -184,6 +189,19 @@ def _filter_by_environment(rules: list[dict], client_cfg: dict) -> list[dict]:
         if (client_cfg.get("ads") or {}).get(plat)
     ]
     client_bm = client_cfg.get("business_model", "b2c")
+
+    tech_stack = client_cfg.get("tech_stack") or {}
+    stack_resolved = {
+        "tag_manager":  _stack_value(tech_stack, "tag_manager"),
+        "analytics":    _stack_list_or_value(tech_stack, "analytics"),
+        "ma":           _stack_value(tech_stack, "ma"),
+        "crm":          _stack_value(tech_stack, "crm"),
+        "cdp":          _stack_value(tech_stack, "cdp"),
+        "ab_testing":   _stack_value(tech_stack, "ab_testing"),
+        "chatbot":      _stack_value(tech_stack, "chatbot"),
+        "capi_status":  tech_stack.get("capi_status") or {},
+    }
+    stack_confidence = {k: _stack_confidence(tech_stack, k) for k in stack_resolved}
 
     for rule in rules:
         applies_to = rule.get("applies_to") or {}
@@ -197,6 +215,25 @@ def _filter_by_environment(rules: list[dict], client_cfg: dict) -> list[dict]:
             continue
         if not _match_list(applies_to.get("business_models", ["all"]), client_bm):
             continue
+
+        # ADR-015 §2.4 拡張: tech_stack カテゴリ
+        if not _match_stack_category(applies_to.get("tag_managers"), stack_resolved["tag_manager"], stack_confidence["tag_manager"], rule):
+            continue
+        if not _match_stack_category(applies_to.get("analytics_platforms"), stack_resolved["analytics"], stack_confidence["analytics"], rule):
+            continue
+        if not _match_stack_category(applies_to.get("mas"), stack_resolved["ma"], stack_confidence["ma"], rule):
+            continue
+        if not _match_stack_category(applies_to.get("crms"), stack_resolved["crm"], stack_confidence["crm"], rule):
+            continue
+        if not _match_stack_category(applies_to.get("cdps"), stack_resolved["cdp"], stack_confidence["cdp"], rule):
+            continue
+        if not _match_stack_category(applies_to.get("ab_testing_tools"), stack_resolved["ab_testing"], stack_confidence["ab_testing"], rule):
+            continue
+        if not _match_stack_category(applies_to.get("chatbots"), stack_resolved["chatbot"], stack_confidence["chatbot"], rule):
+            continue
+        if not _match_capi_status(applies_to.get("capi_status"), stack_resolved["capi_status"]):
+            continue
+
         matched.append(rule)
     return matched
 
@@ -213,6 +250,87 @@ def _match_any(allowed: list, actual_list: list) -> bool:
     if not allowed or "all" in allowed:
         return True
     return any(item in allowed for item in actual_list)
+
+
+# ========== ADR-015 拡張ヘルパ ==========
+
+def _stack_value(tech_stack: dict, key: str) -> Optional[str]:
+    v = tech_stack.get(key)
+    if isinstance(v, dict):
+        return v.get("value")
+    if isinstance(v, list):
+        return v[0] if v else None
+    if isinstance(v, str):
+        return v
+    return None
+
+
+def _stack_list_or_value(tech_stack: dict, key: str) -> list:
+    v = tech_stack.get(key)
+    if isinstance(v, list):
+        return v
+    if isinstance(v, dict):
+        val = v.get("value")
+        return [val] if val else []
+    if isinstance(v, str):
+        return [v]
+    return []
+
+
+def _stack_confidence(tech_stack: dict, key: str) -> str:
+    v = tech_stack.get(key)
+    if isinstance(v, dict):
+        return v.get("confidence") or "low"
+    if isinstance(v, list):
+        return "high" if v else "low"
+    if isinstance(v, str):
+        return "medium"
+    return "low"
+
+
+def _match_stack_category(
+    allowed: Optional[list], actual_value, actual_confidence: str, rule: dict,
+) -> bool:
+    """tech_stack カテゴリの突合 (ADR-015 §2.4 フェイルセーフ込み)
+
+    - applies_to に当該キー無し / [all] → 常にマッチ
+    - confidence が "low" または値が unknown → 該当ルールはスキップ (= return False)
+    - actual_value が list (analytics 等) → any-match
+    - actual_value が str → 完全一致
+    """
+    if not allowed or "all" in allowed:
+        return True
+    # フェイルセーフ: 不確実カテゴリ依存ルールは評価しない
+    if actual_confidence in ("low", "unknown") or actual_value in (None, "unknown", []):
+        return False
+    if isinstance(actual_value, list):
+        return any(v in allowed for v in actual_value)
+    return actual_value in allowed
+
+
+def _match_capi_status(allowed: Optional[dict], actual: dict) -> bool:
+    """capi_status の突合: applies_to.capi_status は {meta: not_configured} 等の dict 形式
+
+    - applies_to に capi_status 指定なし → マッチ
+    - 指定があれば、各 platform key について actual の同 key と一致するか確認
+    - actual に対象 platform 未設定 → 不確実とみなしスキップ (False)
+    """
+    if not allowed:
+        return True
+    if not isinstance(allowed, dict) or not isinstance(actual, dict):
+        return False
+    for plat, expected_status in allowed.items():
+        actual_status = actual.get(plat)
+        if actual_status is None:
+            return False
+        # 単一値 or リストでの指定を許容
+        if isinstance(expected_status, list):
+            if actual_status not in expected_status:
+                return False
+        else:
+            if actual_status != expected_status:
+                return False
+    return True
 
 
 # ========== Data Source Resolution (ADR-013 D-7) ==========

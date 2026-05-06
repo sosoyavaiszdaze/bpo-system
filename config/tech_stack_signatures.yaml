@@ -1,0 +1,411 @@
+# MarTech シグネチャ定義 (ADR-015 §2.2)
+#
+# 各カテゴリ × ツールに対し、HTTP/HTML/Cookie シグナルから検出するルールを定義。
+# Wappalyzer の technologies.json (https://github.com/AliasIO/wappalyzer) を参考。
+#
+# シグナル種類 (validator が解釈する 6 種類):
+#   - http_header:<key>           : レスポンスヘッダの key 存在 (大文字小文字区別なし)
+#   - html_contains:<substring>   : レスポンス HTML に部分文字列を含む
+#   - js_global:<varname>         : <script> タグ内に該当変数の宣言/参照を含む
+#   - cookie:<name>               : Set-Cookie ヘッダに当該 cookie 名を含む
+#   - domain_regex:<regex>        : ホスト名が正規表現にマッチ
+#   - url_path_regex:<regex>      : URL パスが正規表現にマッチ
+#
+# 信頼度判定 (ADR-015 §2.2 — 5/7 修正):
+#   - strong 1 件マッチ                     → confidence: high
+#   - medium 2 件以上マッチ                  → confidence: medium
+#   - medium 1 件 + weak 1 件以上 (合算 >= 2) → confidence: medium (weak が medium に昇格)
+#   - medium 1 件のみ                        → confidence: low
+#   - weak のみ (単独 / 複数問わず)         → 未検出扱い (cookie 残存問題で誤検知防止)
+#   - マッチなし                             → 未検出
+#
+# Cookie シグナルは原則 weak のみに置く。理由: GA タグを撤去したサイトでも _ga が
+# 最大 2 年残るなど、cookie 単独では "現在使用中" を保証できない。
+# validator は medium/strong との同時ヒットで初めて weak を加算する設計。
+#
+# 5/7 Phase A 対応: ec_platform / tag_manager / analytics / ad_platforms / capi_status
+# 5/8 以降ヒアリング主体: ma / crm / cdp / ab_testing / chatbot
+
+version: "1.0"
+last_updated: "2026-05-07"
+schema_version: 1
+
+
+# ============================================================
+# EC プラットフォーム (Phase A 自動検出主体)
+# ============================================================
+ec_platform:
+  shopify:
+    strong:
+      - http_header:X-ShopId
+      - http_header:X-Shopify-Stage
+      - domain_regex:\.myshopify\.com$
+    medium:
+      - html_contains:cdn.shopify.com
+      - js_global:Shopify
+      - html_contains:Shopify.shop
+      - html_contains:shopify-section
+    weak:
+      - cookie:_shopify_y
+      - cookie:_shopify_s
+
+  ecforce:
+    strong:
+      - domain_regex:\.ec-force\.com$
+      - html_contains:ec-force.com/lp
+    medium:
+      - url_path_regex:/lp\?u=
+      - html_contains:ec-force
+      - html_contains:ecforce
+      - js_global:ECForce
+      - html_contains:/static/ecforce
+    weak:
+      - cookie:ECF_session
+
+  color_me:
+    strong:
+      - domain_regex:\.shop-pro\.jp$
+      - html_contains:shop-pro.jp
+    medium:
+      - html_contains:colormebs
+    weak:
+      - cookie:_colorme_session
+
+  futureshop:
+    strong:
+      - domain_regex:\.future-shop\.jp$
+      - html_contains:future-shop.jp
+    weak:
+      - cookie:fs_token
+
+  makeshop:
+    strong:
+      - domain_regex:\.makeshop\.jp$
+      - html_contains:makeshop.jp
+    weak:
+      - cookie:makeshop_session
+
+  magento:
+    strong:
+      - http_header:X-Magento-Vary
+    medium:
+      - html_contains:Magento
+    weak:
+      - cookie:X-Magento-Vary
+      - cookie:mage-cache-storage
+
+  custom:
+    # 検出シグナルなし = どの strong/medium にも該当しない場合のフォールバック
+    # validator が他全て unknown のときに「custom (自社開発の可能性)」と推定する
+    notes: "No positive signals; inferred when no other ec_platform matches"
+
+
+# ============================================================
+# タグマネージャー (Phase A 自動検出主体)
+# ============================================================
+tag_manager:
+  gtm:
+    strong:
+      - html_contains:googletagmanager.com/gtm.js
+      - html_contains:googletagmanager.com/gtag/js
+    medium:
+      - js_global:dataLayer
+      - js_global:google_tag_manager
+      - html_contains:GTM-
+
+  yahoo_tag_manager:
+    strong:
+      - html_contains:s.yimg.jp/images/listing/tool/cv
+      - html_contains:b92.yahoo.co.jp/js/s_retargeting.js
+    medium:
+      - html_contains:yj-loader
+
+  tealium:
+    strong:
+      - html_contains:tags.tiqcdn.com
+    medium:
+      - js_global:utag
+      - js_global:utag_data
+
+  adobe_launch:
+    strong:
+      - html_contains:assets.adobedtm.com
+    medium:
+      - html_contains:launch-
+
+  none:
+    notes: "No positive signals; tag manager not used (direct tag insertion)"
+
+
+# ============================================================
+# アクセス解析 (Phase A 自動検出主体)
+# ============================================================
+analytics:
+  ga4:
+    strong:
+      - html_contains:google-analytics.com/g/collect
+      - html_contains:googletagmanager.com/gtag/js?id=G-
+    medium:
+      - js_global:gtag
+    weak:
+      # cookie:_ga は GA 撤去後も 2 年残存するため weak 固定。
+      # 単独では未検出扱い、medium/strong との同時ヒットで medium に昇格する。
+      - cookie:_ga
+      - cookie:_ga_
+
+  universal_analytics:
+    # 既に廃止されているが、レガシータグが残っているケースを検知
+    strong:
+      - html_contains:google-analytics.com/analytics.js
+      - html_contains:google-analytics.com/ga.js
+    medium:
+      - js_global:_gaq
+    weak:
+      - cookie:_gat
+
+  adobe_analytics:
+    strong:
+      - html_contains:assets.adobedtm.com
+      - html_contains:.sc.omtrdc.net
+    medium:
+      - js_global:s_code
+      - js_global:s_account
+
+  matomo:
+    strong:
+      - html_contains:matomo.js
+      - html_contains:piwik.js
+    medium:
+      - js_global:_paq
+    weak:
+      - cookie:_pk_id
+
+
+# ============================================================
+# 広告媒体 (Phase A 自動検出: pixel / 計測タグ ベースで判定)
+# ============================================================
+ad_platforms:
+  meta:
+    strong:
+      - html_contains:connect.facebook.net/en_US/fbevents.js
+      - html_contains:facebook.com/tr?id=
+    medium:
+      - js_global:fbq
+      - html_contains:fbevents.js
+    weak:
+      - cookie:_fbp
+
+  google:
+    strong:
+      - html_contains:googleadservices.com/pagead/conversion
+      - html_contains:googletagmanager.com/gtag/js?id=AW-
+    medium:
+      - js_global:google_trackConversion
+    weak:
+      - cookie:_gcl_au
+
+  yahoo:
+    strong:
+      - html_contains:s.yimg.jp/images/listing/tool/cv
+      - html_contains:b92.yahoo.co.jp/js/s_retargeting.js
+    weak:
+      # cookie:B は Yahoo 全体で使われ、広告利用と無関係でもセットされる極めて汎用的な cookie
+      - cookie:B
+
+  tiktok:
+    strong:
+      - html_contains:analytics.tiktok.com/i18n/pixel/events.js
+    medium:
+      - js_global:ttq
+
+  line:
+    strong:
+      - html_contains:d.line-scdn.net/n/line_tag/public/v1/lt
+    medium:
+      - js_global:_lt
+      - js_global:_ltq
+
+  x_twitter:
+    strong:
+      - html_contains:static.ads-twitter.com/uwt.js
+    medium:
+      - js_global:twq
+
+  criteo:
+    strong:
+      - html_contains:dynamic.criteo.com/js/ld
+    medium:
+      - js_global:criteo_q
+
+
+# ============================================================
+# CAPI / 拡張計測 (Phase A 自動検出: ヘッダ / 戻り値 等で間接推定)
+# ============================================================
+capi_status:
+  meta_capi:
+    # CAPI 自体はサーバ間通信なので Web HTML から直接検出は困難。
+    # 代わりに「Pixel と CAPI を併用しているサインを推定する間接シグナル」
+    indirect:
+      - html_contains:fbevents.js              # Pixel 設置あり
+      - html_contains:fb_dedup_key             # dedup 用 ID 生成タグ (Pixel + CAPI 重複排除)
+      - html_contains:eventID                  # event_id を Pixel 側に渡しているサイン
+    notes: |
+      CAPI 有効/無効は Meta Events Manager API 経由で判定するのが正確 (Phase B Week 2-3)。
+      Phase A は indirect シグナル + clients.yaml 宣言値の整合チェックのみ。
+
+  google_enhanced_conversions:
+    indirect:
+      - html_contains:gtag('config'             # gtag タグ + 何らかの user_data 拡張
+      - html_contains:enhanced_conversions
+    notes: "Phase A は宣言値 + gtag シグナルでの間接推定。Phase B は Google Ads API で確認"
+
+
+# ============================================================
+# MA (Phase A はヒアリング主体、5/8 以降質問票で確定)
+# ============================================================
+ma:
+  hubspot:
+    strong:
+      - html_contains:js.hs-scripts.com
+      - html_contains:js.hs-banner.com
+    medium:
+      - js_global:_hsq
+    weak:
+      - cookie:hubspotutk
+
+  marketo:
+    strong:
+      - html_contains:munchkin.marketo.net
+    medium:
+      - js_global:Munchkin
+
+  pardot:
+    strong:
+      - html_contains:pi.pardot.com
+    weak:
+      # visitor_id は他多数のシステムも使う極めて汎用的な cookie 名
+      - cookie:visitor_id
+
+  karte:
+    strong:
+      - html_contains:cdn-edge.plaid.co.jp
+      - html_contains:karte.io
+    medium:
+      - js_global:tracker
+    weak:
+      - cookie:_karte_tracker
+
+  bdash:
+    strong:
+      - html_contains:bdash-marketing.com
+    weak:
+      - cookie:bdash
+
+  none:
+    notes: "MA tools not detected; verify via hearing"
+
+
+# ============================================================
+# CRM (Phase A はヒアリング主体、HTML 検出は限定的)
+# ============================================================
+crm:
+  salesforce:
+    strong:
+      - html_contains:force.com
+      - html_contains:salesforce.com/embeddedservice
+    medium:
+      - js_global:embedded_svc
+    weak:
+      - cookie:BrowserId
+
+  hubspot:
+    strong:
+      - html_contains:js.hs-scripts.com
+    medium:
+      - js_global:_hsq
+
+  kintone:
+    # kintone は社内利用なので公開 LP には現れにくい。検出は通常不可
+    notes: "Internal-only tool; not detectable from public LP, hearing required"
+
+  none:
+    notes: "Detect via hearing only"
+
+
+# ============================================================
+# CDP (Phase A はヒアリング主体)
+# ============================================================
+cdp:
+  treasure_data:
+    strong:
+      - html_contains:cdn.treasuredata.com
+      - html_contains:in.treasuredata.com
+    medium:
+      - js_global:Treasure
+
+  segment:
+    strong:
+      - html_contains:cdn.segment.com/analytics.js
+    medium:
+      - js_global:analytics
+
+  tealium_audiencestream:
+    strong:
+      - html_contains:visitor.tiqcdn.com
+    medium:
+      - js_global:utag.view
+
+  none:
+    notes: "Detect via hearing only"
+
+
+# ============================================================
+# A/B テスト (Phase A はヒアリング主体)
+# ============================================================
+ab_testing:
+  vwo:
+    strong:
+      - html_contains:dev.visualwebsiteoptimizer.com
+    medium:
+      - js_global:_vwo_code
+
+  optimizely:
+    strong:
+      - html_contains:cdn.optimizely.com
+    medium:
+      - js_global:optimizely
+
+  karte_blocks:
+    strong:
+      - html_contains:cdn-edge.plaid.co.jp
+    medium:
+      - js_global:karte
+
+  none:
+    notes: "Detect via hearing only"
+
+
+# ============================================================
+# チャットボット (Phase A はヒアリング主体)
+# ============================================================
+chatbot:
+  intercom:
+    strong:
+      - html_contains:widget.intercom.io
+    medium:
+      - js_global:Intercom
+
+  zendesk:
+    strong:
+      - html_contains:static.zdassets.com
+    medium:
+      - js_global:zE
+
+  channel_talk:
+    strong:
+      - html_contains:cf.channel.io
+    medium:
+      - js_global:ChannelIO
+
+  none:
+    notes: "Detect via hearing only"

@@ -1,0 +1,86 @@
+client_id: pilotton
+history:
+- client_id: pilotton
+  validated_at: '2026-05-06T13:17:21'
+  url_probed: null
+  probe_status: null
+  probe_error: no_url
+  categories:
+    ec_platform:
+      detected: null
+      confidence: unknown
+      matched_signals: []
+      declared: ecforce
+      diagnosis: declared_only
+    tag_manager:
+      detected: null
+      confidence: unknown
+      matched_signals: []
+      declared: unknown
+      diagnosis: pending
+    analytics:
+      detected: null
+      confidence: unknown
+      matched_signals: []
+      declared: unknown
+      diagnosis: pending
+    ad_platforms:
+      detected: null
+      confidence: unknown
+      matched_signals: []
+      declared: meta
+      diagnosis: declared_only
+    capi_status:
+      detected: null
+      confidence: unknown
+      matched_signals: []
+      declared: null
+      diagnosis: pending
+    ma:
+      detected: null
+      confidence: unknown
+      matched_signals: []
+      declared: unknown
+      diagnosis: pending
+    crm:
+      detected: null
+      confidence: unknown
+      matched_signals: []
+      declared: unknown
+      diagnosis: pending
+    cdp:
+      detected: null
+      confidence: unknown
+      matched_signals: []
+      declared: unknown
+      diagnosis: pending
+    ab_testing:
+      detected: null
+      confidence: unknown
+      matched_signals: []
+      declared: unknown
+      diagnosis: pending
+    chatbot:
+      detected: null
+      confidence: unknown
+      matched_signals: []
+      declared: unknown
+      diagnosis: pending
+  summary:
+    total_categories: 10
+    by_diagnosis:
+      match: 0
+      detected_only: 0
+      declared_only: 2
+      mismatch: 0
+      pending: 8
+    auto_categories:
+    - tag_manager
+    - analytics
+    - ec_platform
+    - ad_platforms
+    - capi_status
+  internal_notifications:
+  - '[pilotton] ec_platform: 宣言値あり (declared=ecforce) だが LP から検出できず'
+  - '[pilotton] ad_platforms: 宣言値あり (declared=meta) だが LP から検出できず'
+last_validated_at: '2026-05-06T13:17:21'
