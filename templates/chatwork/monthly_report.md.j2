@@ -49,6 +49,20 @@
 ▼ 添付資料
 　・{{ attached_pdf }}
 {% endif %}
+{% if grey_zone_decisions_this_month is defined %}
+
+▼ 今月の判断一貫性 (ADR-009 二層判断フレーム)
+　・灰ゾーン判断: {{ grey_zone_decisions_this_month }} 件
+　・運用憲章との整合率: {{ charter_consistency_pct }}%
+　・過去判断との整合率: {{ past_consistency_pct }}%
+{% if consistency_dropping %}
+
+▼ 推奨アクション
+　整合率が前月比 {{ consistency_delta_pct }}% 低下しています。
+　四半期レビュー前の中間チェックをお勧めします。
+　弊社運用担当 (山本) が個別にご連絡いたします。
+{% endif %}
+{% endif %}
 
 ご質問・ご相談はこちらにご返信ください。
 [/info]

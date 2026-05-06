@@ -1,0 +1,64 @@
+{% import "_disclaimer_ai_assist.md.j2" as disclaimer with context %}
+[info][title]【自動診断】四半期 運用憲章レビュー — {{ quarter }}[/title]
+[Zynect Auto-Reporter からの自動投稿 / {{ today }}]
+
+{{ client_name }} {{ honorific or "御中" }}
+
+四半期に 1 度の運用憲章レビューのお時間です。
+過去 3 ヶ月の判断傾向をもとに、運用方針の見直しをご検討ください。
+
+▼ 過去 3 ヶ月 ({{ quarter }}) の判断件数
+　・灰ゾーン判断 合計: {{ grey_zone_count }} 件
+　　├ ブロック実行: {{ block_count }} 件
+　　├ モニタリング継続: {{ monitor_count }} 件
+　　└ investigate: {{ investigate_count }} 件
+
+▼ 媒体別内訳
+{% for media, counts in media_breakdown.items() %}
+　・{{ media }}: 合計 {{ counts.total }} 件 (B:{{ counts.block }} / M:{{ counts.monitor }} / I:{{ counts.investigate }})
+{% endfor %}
+
+▼ 運用憲章との整合率
+　・整合率: **{{ consistency_rate }}%** ({{ "前期比 " + delta_pct + "%" if delta_pct else "" }})
+　・主要 KPI ({{ primary_kpi }}) との一致: {{ kpi_alignment }}%
+
+▼ ズレが大きい項目
+{% if deviation_analysis %}
+{% for item in deviation_analysis %}
+　・{{ item.field }}: 想定 {{ item.expected }} / 実績 {{ item.actual }} ({{ item.delta }})
+　　└ 原因仮説: {{ item.hypothesis }}
+{% endfor %}
+{% else %}
+　・特になし (整合率 80% 以上で良好な運用)
+{% endif %}
+
+▼ 効果サマリ
+　・ブロック実行による広告費保護: ¥{{ "{:,}".format(blocked_ad_cost_jpy) }}
+　・誤検知 CV 損失 (保守見積): {{ false_positive_cv_count }} 件 / ¥{{ "{:,}".format(false_positive_loss_jpy) }}
+　・ネット効果: ¥{{ "{:,}".format(net_quarterly_benefit_jpy) }}
+
+▼ 憲章更新案 (本スレッド返信で A-D いずれかをご回答ください)
+
+　[A] **現憲章維持** (推奨度: {{ "★Zynect 推奨★" if recommended_option == "A" else "—" }})
+　　・現状の primary_kpi={{ current_primary_kpi }} 維持
+　　・cv_loss_tolerance_pct={{ current_tolerance }}% 維持
+
+　[B] **primary_kpi 変更** (推奨度: {{ "★Zynect 推奨★" if recommended_option == "B" else "—" }})
+　　・現: {{ current_primary_kpi }} → 提案: {{ suggested_kpi_change }}
+　　・理由: {{ kpi_change_rationale }}
+
+　[C] **cv_loss_tolerance_pct 変更** (推奨度: {{ "★Zynect 推奨★" if recommended_option == "C" else "—" }})
+　　・現: {{ current_tolerance }}% → 提案: {{ suggested_tolerance_change }}%
+　　・理由: {{ tolerance_change_rationale }}
+
+　[D] **その他カスタム調整**
+　　・お考えのご方針を本スレッドに記載してください
+　　・例: delegation_scope を full_review → grey_threshold に拡大
+
+▼ 次回レビュー予定
+　・{{ next_review_date }} (3 ヶ月後)
+
+{{ disclaimer.render() }}
+
+[charter_version: {{ charter_version }} / Zynect Media 自動運用システム]
+[/info]

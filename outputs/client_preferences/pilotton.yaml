@@ -1,0 +1,43 @@
+# パイロットン 運用憲章 (Operating Charter)
+# ADR-009 二層判断フレーム — 第一層
+# 作成: 2026-05-05、kickoff day (5/14 想定) で本確定予定
+
+client_id: pilotton
+
+operating_charter:
+  primary_kpi: tbd                    # 5/7 提案後ヒアリングで確定
+                                      # 候補: cv_max | cpa_min | roas_max | balanced
+  learning_phase_tolerance: tbd       # candidates: conservative | aggressive | uniform
+  cv_loss_tolerance_pct: tbd          # 候補: 5 / 10 / 15 / 20
+  decision_frequency: per_event       # 仮値: 灰ゾーン都度確認 (Phase A 安全側)
+  delegation_scope: tbd               # 候補: black_only | grey_threshold | full_review
+
+  charter_version: "0.1-draft"
+  established_at: null                # kickoff day で記録
+  next_review_at: null                # established_at + 90 days
+
+  notes: |
+    5/7 パイロットン提案後のヒアリングで本確定する。
+    現在は仮値 (tbd) で運用、灰ゾーン検知時は Zynect 推奨を保守的に
+    (CV 保全寄り) 提示する。
+    四半期レビュー時に整合率データをもとに refine 予定。
+
+# ML 学習ステータス (ADR-009 §7、サンプル数連動 confidence)
+ml_learning_status:
+  decision_count: 0
+  confidence_band_pct: 50             # 0 件 → 50%、10 件で 20% に narrowing
+  last_estimation_at: null
+
+# 軸別選好 (ADR-009 §7、Phase B で蓄積される判断データから推定)
+axis_preferences:
+  TO-01: { value: 0.0, confidence: 0.0, sample_count: 0 }
+  TO-02: { value: 0.0, confidence: 0.0, sample_count: 0 }
+  TO-04: { value: 0.0, confidence: 0.0, sample_count: 0 }
+  TO-07: { value: 0.0, confidence: 0.0, sample_count: 0 }
+  TO-09: { value: 0.0, confidence: 0.0, sample_count: 0 }
+  TO-10: { value: 0.0, confidence: 0.0, sample_count: 0 }
+  TO-11: { value: 0.0, confidence: 0.0, sample_count: 0 }
+  TO-12: { value: 0.0, confidence: 0.0, sample_count: 0 }   # 不正ブロック vs CV 保全 (本日新設)
+
+# 個別ルール選好の override (Phase B Week 2 以降に蓄積)
+rule_preferences: {}

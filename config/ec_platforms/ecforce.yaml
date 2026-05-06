@@ -1,0 +1,223 @@
+# EC Platform Layer: ECフォース (8 ルール、5/5 中身実装)
+name: "EC Platform - ECフォース"
+version: "1.0"
+last_updated: "2026-05-05"
+layer: ec_platform
+category: ecforce
+
+rules:
+  - id: P-EF-01
+    layer: ec_platform
+    category: ecforce
+    name: "ECフォース 注文 API 連携"
+    severity: high
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [ecforce]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.ecforce_api_integrated == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [ecforce_api_integrated, ecforce_access_granted]
+    cooldown_days: 30
+    daily_cap_group: default
+    template: _client_request_ec_platform_ecforce.md.j2
+    rationale: "受注データ取得の API 連携、AOV / LTV 自動算出の前提"
+
+  - id: P-EF-02
+    layer: ec_platform
+    category: ecforce
+    name: "ECフォース カスタム CV 送信 (FB CV API タブ)"
+    severity: high
+    polarity: negative
+    axis_position: TO-11
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: P-EF-01
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [ecforce]
+      ad_platforms: [meta]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.ecforce_fb_cv_api_configured == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [ecforce_fb_cv_api_configured]
+    cooldown_days: 14
+    daily_cap_group: default
+    template: _client_request_ec_platform_ecforce.md.j2
+    rationale: "ECフォース 標準機能、CAPI 連携の最短ルート (M02 解消)"
+
+  - id: P-EF-03
+    layer: ec_platform
+    category: ecforce
+    name: "ECフォース 商品マスタとフィードの整合"
+    severity: medium
+    polarity: negative
+    axis_position: TO-08
+    root_cause_group: creative_optimization
+    duplicate_factor: 0.5
+    prerequisite: V-EC-05
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [ecforce]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.ecforce_product_feed_synced == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [ecforce_product_feed_synced]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_ec_platform_ecforce.md.j2
+    rationale: "ECフォース 商品マスタと Catalog/GMC の同期、不整合は配信不承認"
+
+  - id: P-EF-04
+    layer: ec_platform
+    category: ecforce
+    name: "ECフォース 定期購入計測"
+    severity: high
+    polarity: negative
+    axis_position: TO-10
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: P-EF-01
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [ecforce]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.subscription_offered == True and client_state.ecforce_subscription_tracking == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [subscription_offered, ecforce_subscription_tracking]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_ec_platform_ecforce.md.j2
+    rationale: "F2 転換率 / LTV 算出に必須、ECフォース 定期購入機能を活用"
+
+  - id: P-EF-05
+    layer: ec_platform
+    category: ecforce
+    name: "ECフォース クーポン使用フラグ計測"
+    severity: low
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: P-EF-01
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [ecforce]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.ecforce_coupon_tracking == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [ecforce_coupon_tracking]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_ec_platform_ecforce.md.j2
+    rationale: "クーポン経由 CV を識別、施策効果の純粋分析"
+
+  - id: P-EF-06
+    layer: ec_platform
+    category: ecforce
+    name: "ECフォース カート放棄計測"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: P-EF-01
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [ecforce]
+      ad_platforms: [meta, google]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.ecforce_cart_abandonment_tracking == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [ecforce_cart_abandonment_tracking]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_ec_platform_ecforce.md.j2
+    rationale: "DPA リマケのトリガー、カート放棄ユーザへの再接触で CVR 向上"
+
+  - id: P-EF-07
+    layer: ec_platform
+    category: ecforce
+    name: "ECフォース 顧客マスタとの突合"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: targeting
+    duplicate_factor: 0.4
+    prerequisite: P-EF-01
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [ecforce]
+      ad_platforms: [meta]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.ecforce_customer_master_synced == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [ecforce_customer_master_synced]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_ec_platform_ecforce.md.j2
+    rationale: "Customer Audience アップロードの基礎データ、ecforce bi 連動"
+
+  - id: P-EF-08
+    layer: ec_platform
+    category: ecforce
+    name: "ECフォース 側 CSV 取込みフロー"
+    severity: low
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: P-EF-01
+    applies_to:
+      countries: [JP]
+      verticals: [ec_d2c]
+      ec_platforms: [ecforce]
+      ad_platforms: [all]
+      business_models: [b2c]
+    trigger:
+      condition: "client_state.ecforce_csv_export_tested == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [ecforce_csv_export_tested]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_ec_platform_ecforce.md.j2
+    rationale: "API 連携不可時のフォールバック、月次バッチ処理の前提"

@@ -3,13 +3,21 @@
 <!--
   BPO System 日次 ChatWork ジョブ (ADR-005 / Phase A)
 
-  実行: 毎日 09:00 JST (Asia/Tokyo)
+  実行: 毎日 09:00 / 09:15 / 09:30 JST の 3 連射 (Option C)
   内容: scripts/daily_chatwork_check.py --client pilotton --prefix "[テスト] "
   Phase A 内部レビュー期間 (最初の 2 週間) は [テスト] プレフィクス付き投稿
   本番化時は ProgramArguments の "--prefix" 行 2 つを削除
 
-  登録: launchctl load ~/Library/LaunchAgents/com.zynect.bpo.daily-chatwork.plist
-  解除: launchctl unload ~/Library/LaunchAgents/com.zynect.bpo.daily-chatwork.plist
+  3 連射の根拠 (Option C):
+    - chatwork_sent.json の sha256(room_id|body) 冪等性により、
+      同日同状態の 2 回目以降は {"skipped": True} で副作用なし
+    - 09:00 が Mac 起動直後/スリープ復帰直後で失敗した場合、
+      09:15 / 09:30 の再試行で確実に 1 回送信を保証
+    - 失敗時の launchd 再試行 (Status≠0 → 10 秒後) と独立した安全網
+
+  登録: launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zynect.bpo.daily-chatwork.plist
+  解除: launchctl bootout    gui/$(id -u)/com.zynect.bpo.daily-chatwork
+  状態: launchctl print      gui/$(id -u)/com.zynect.bpo.daily-chatwork
 -->
 <plist version="1.0">
 <dict>
@@ -30,12 +38,26 @@
     <string>/Users/trunktrunk/bpo-system/bpo-system</string>
 
     <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>9</integer>
-        <key>Minute</key>
-        <integer>0</integer>
-    </dict>
+    <array>
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>15</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>30</integer>
+        </dict>
+    </array>
 
     <key>EnvironmentVariables</key>
     <dict>

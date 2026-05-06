@@ -1,0 +1,169 @@
+# Foundation Layer: データガバナンス (7 ルール)
+name: "Foundation - Data Governance"
+version: "1.0"
+last_updated: "2026-05-05"
+layer: foundation
+category: data_governance
+
+rules:
+  - id: F-DG-01
+    layer: foundation
+    category: data_governance
+    name: "1st パーティデータ管理体制の整備度"
+    severity: high
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: targeting
+    duplicate_factor: 0.4
+    prerequisite: null
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [all], business_models: [b2c] }
+    trigger:
+      condition: "client_state.first_party_data_strategy_documented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [first_party_data_strategy_documented]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_data_governance.md.j2
+    rationale: "Cookie 廃止後の集客基盤、戦略文書化が顧客リスト活用の前提"
+
+  - id: F-DG-02
+    layer: foundation
+    category: data_governance
+    name: "個人情報のハッシュ化 (SHA256)"
+    severity: high
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: targeting
+    duplicate_factor: 0.4
+    prerequisite: F-DG-01
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [meta, google], business_models: [b2c] }
+    trigger:
+      condition: "client_state.pii_hashing_implemented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [pii_hashing_implemented]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_data_governance.md.j2
+    rationale: "Customer File アップロード前の必須前処理、平文送信は法的リスク"
+
+  - id: F-DG-03
+    layer: foundation
+    category: data_governance
+    name: "CRM-CDP 連携状況"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: targeting
+    duplicate_factor: 0.4
+    prerequisite: F-DG-01
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [all], business_models: [b2c, b2b] }
+    trigger:
+      condition: "client_state.crm_cdp_integration_status == 'not_started'"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [crm_cdp_integration_status]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_data_governance.md.j2
+    rationale: "顧客データの中央集約、Lookalike + 除外配信の精度向上"
+
+  - id: F-DG-04
+    layer: foundation
+    category: data_governance
+    name: "オフライン CV 取込み体制"
+    severity: medium
+    polarity: negative
+    axis_position: TO-02
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: F-DG-01
+    applies_to: { countries: [JP], verticals: [btob_lead, real_estate, finance, healthcare_clinic, education, local_service], ec_platforms: [all], ad_platforms: [meta, google], business_models: [b2c, b2b] }
+    trigger:
+      condition: "client_state.offline_cv_import_implemented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [offline_cv_import_implemented]
+    cooldown_days: 60
+    daily_cap_group: default
+    template: _client_request_data_governance.md.j2
+    rationale: "BtoB / リード型業種で来店・契約・面談 CV を Meta / Google に逆送信"
+
+  - id: F-DG-05
+    layer: foundation
+    category: data_governance
+    name: "データ保管期限の設定"
+    severity: medium
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [all], business_models: [b2c, b2b, both] }
+    trigger:
+      condition: "client_state.data_retention_policy_documented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [data_retention_policy_documented]
+    cooldown_days: 180
+    daily_cap_group: default
+    template: _client_request_data_governance.md.j2
+    rationale: "GDPR 準拠 + 個情法、保管期限明記が監査要件"
+
+  - id: F-DG-06
+    layer: foundation
+    category: data_governance
+    name: "データ所有権の文書化"
+    severity: low
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-AH-06
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [all], business_models: [b2c, b2b, both] }
+    trigger:
+      condition: "client_state.data_ownership_documented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [data_ownership_documented]
+    cooldown_days: 365
+    daily_cap_group: default
+    template: _client_request_data_governance.md.j2
+    rationale: "代理店切替時のデータ移行、所有権の事前明記でトラブル回避"
+
+  - id: F-DG-07
+    layer: foundation
+    category: data_governance
+    name: "DPIA (データ保護影響評価) の実施"
+    severity: low
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-PP-07
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [all], business_models: [b2c] }
+    trigger:
+      condition: "ad_platform_data.eu_traffic_share > 0.05 and client_state.dpia_completed == False"
+      operator: AND
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [eu_traffic_share]
+      - source: client_state
+        fields: [dpia_completed]
+    cooldown_days: 365
+    daily_cap_group: adr_013_legal
+    template: _client_request_data_governance.md.j2
+    legal_reference:
+      law: "GDPR"
+      article: "Article 35"
+      description: "高リスクデータ処理は DPIA (Data Protection Impact Assessment) 必須"
+      disclaimer: "Zynect Media は法律の専門家ではなく、本指摘は気づきレベルでの提示です。"
+    rationale: "EU 流入時の GDPR Article 35 必須、不実施は最大 1,000 万 EUR ペナルティ"

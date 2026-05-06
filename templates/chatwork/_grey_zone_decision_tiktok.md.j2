@@ -1,0 +1,17 @@
+{# Phase B Week 2-3 で中身実装、TikTok 媒体特有のブロック手段 (Custom Audience exclusion / プレースメント除外) を反映 #}
+{% import "_disclaimer_ai_assist.md.j2" as disclaimer with context %}
+[info][title]【自動提案 / 判断要請】TikTok 灰ゾーン検知 — {{ entity_type }}「{{ entity_name }}」[/title]
+[Zynect Auto-Reporter からの自動投稿 / {{ today }}]
+
+(Phase B Week 2-3 で本実装予定 — TikTok 特有の Custom Audience exclusion + プレースメント除外を反映)
+
+骨格構造は _grey_zone_decision_meta.md.j2 と同様。差分:
+　・選択肢 A: Custom Audience exclusion (TikTok 仕様)
+　・選択肢 B: プレースメント除外
+　・選択肢 C: モニタリング継続
+　※ TikTok は IP 除外非対応のため選択肢に含めない
+
+{{ disclaimer.render() }}
+
+[判断 ID: {{ decision_id }} / Zynect Media 自動運用システム]
+[/info]

@@ -107,10 +107,12 @@ def test_prerequisite_ids_exist(filename, _):
     assert not missing, "Missing prerequisite targets:\n" + "\n".join(missing)
 
 
-def test_tradeoff_axes_11():
-    """トレードオフ軸が11件"""
+def test_tradeoff_axes_12():
+    """トレードオフ軸が 12 件 (2026-05-05 ADR-009 で TO-12 追加)"""
     data = _load_yaml("tradeoff_axes.yaml")
-    assert len(data["axes"]) == 11
+    assert len(data["axes"]) == 12
+    ids = [a["id"] for a in data["axes"]]
+    assert "TO-12" in ids
 
 
 def test_category_weights_exist():

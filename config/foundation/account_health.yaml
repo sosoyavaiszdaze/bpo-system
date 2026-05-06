@@ -1,0 +1,186 @@
+# Foundation Layer: アカウントヘルス (8 ルール)
+name: "Foundation - Account Health"
+version: "1.0"
+last_updated: "2026-05-05"
+layer: foundation
+category: account_health
+
+rules:
+  - id: F-AH-01
+    layer: foundation
+    category: account_health
+    name: "広告アカウント停止リスクの事前検知"
+    severity: critical
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [all], business_models: [b2c, b2b, both] }
+    trigger:
+      condition: "ad_platform_data.policy_violation_warnings > 0 or client_state.account_warning_received == True"
+      operator: OR
+    data_source:
+      - source: ad_platform_api
+        platform: meta
+        fields: [policy_violation_warnings]
+      - source: client_state
+        fields: [account_warning_received]
+    cooldown_days: 7
+    daily_cap_group: default
+    template: _client_request_account_health.md.j2
+    rationale: "停止後の復旧は数週間〜不可、警告段階での介入が最重要"
+
+  - id: F-AH-02
+    layer: foundation
+    category: account_health
+    name: "2 段階認証 (2FA) 全管理者導入"
+    severity: high
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [all], business_models: [b2c, b2b, both] }
+    trigger:
+      condition: "client_state.all_admins_2fa_enabled == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [all_admins_2fa_enabled]
+    cooldown_days: 30
+    daily_cap_group: default
+    template: _client_request_account_health.md.j2
+    rationale: "管理者アカウント乗っ取り = 広告費全損リスク、2FA は必須"
+
+  - id: F-AH-03
+    layer: foundation
+    category: account_health
+    name: "支払い手段の冗長化"
+    severity: medium
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [all], business_models: [b2c, b2b, both] }
+    trigger:
+      condition: "client_state.payment_method_count < 2"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [payment_method_count]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_account_health.md.j2
+    rationale: "単一カード期限切れで配信停止、予備カード登録で継続性確保"
+
+  - id: F-AH-04
+    layer: foundation
+    category: account_health
+    name: "ドメイン認証の完了 (Meta 等)"
+    severity: high
+    polarity: negative
+    axis_position: null
+    root_cause_group: measurement_foundation
+    duplicate_factor: 0.2
+    prerequisite: null
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [meta], business_models: [b2c, b2b, both] }
+    trigger:
+      condition: "client_state.domain_verification_status != 'completed'"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [domain_verification_status]
+    cooldown_days: 14
+    daily_cap_group: default
+    template: _client_request_account_health.md.j2
+    rationale: "AEM / iOS 配信最適化の前提条件、未完了で機能制限"
+
+  - id: F-AH-05
+    layer: foundation
+    category: account_health
+    name: "商標 (ブランド名) 保護設定"
+    severity: medium
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [google], business_models: [b2c, b2b] }
+    trigger:
+      condition: "client_state.brand_protection_registered == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [brand_protection_registered]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_account_health.md.j2
+    rationale: "Google 商標申し立てで競合の指名検索広告を排除可能"
+
+  - id: F-AH-06
+    layer: foundation
+    category: account_health
+    name: "代理店所有権・引き継ぎ準備"
+    severity: medium
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [all], business_models: [b2c, b2b, both] }
+    trigger:
+      condition: "client_state.agency_ownership_documented == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [agency_ownership_documented]
+    cooldown_days: 180
+    daily_cap_group: default
+    template: _client_request_account_health.md.j2
+    rationale: "代理店切替時のアカウント所有権移行、契約書面で明記"
+
+  - id: F-AH-07
+    layer: foundation
+    category: account_health
+    name: "復旧バックアップ手順の整備"
+    severity: medium
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: F-AH-01
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [all], business_models: [b2c, b2b, both] }
+    trigger:
+      condition: "client_state.account_recovery_runbook_exists == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [account_recovery_runbook_exists]
+    cooldown_days: 180
+    daily_cap_group: default
+    template: _client_request_account_health.md.j2
+    rationale: "停止時の対応 SOP、再申請窓口・サポート連絡先のドキュメント化"
+
+  - id: F-AH-08
+    layer: foundation
+    category: account_health
+    name: "データ共有設定 (Meta Business Manager / Google Ads)"
+    severity: low
+    polarity: negative
+    axis_position: null
+    root_cause_group: independent
+    duplicate_factor: 1.0
+    prerequisite: null
+    applies_to: { countries: [JP], verticals: [all], ec_platforms: [all], ad_platforms: [meta, google], business_models: [b2c, b2b, both] }
+    trigger:
+      condition: "client_state.data_sharing_configured == False"
+      operator: AND
+    data_source:
+      - source: client_state
+        fields: [data_sharing_configured]
+    cooldown_days: 90
+    daily_cap_group: default
+    template: _client_request_account_health.md.j2
+    rationale: "Meta Aggregated Event Measurement / Google データ共有の最適化"

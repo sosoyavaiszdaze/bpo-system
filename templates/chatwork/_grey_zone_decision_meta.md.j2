@@ -1,0 +1,62 @@
+{% import "_disclaimer_ai_assist.md.j2" as disclaimer with context %}
+[info][title]【自動提案 / 判断要請】Meta 灰ゾーン検知 — {{ entity_type }}「{{ entity_name }}」[/title]
+[Zynect Auto-Reporter からの自動投稿 / {{ today }}]
+
+{{ client_name }} {{ honorific or "御中" }}
+
+弊社の自動診断システムが Meta 広告アカウントで **灰ゾーン (不正シグナル高 + CV 発生中)** を検知しました。
+判断のご協力をお願いします。
+
+▼ 状況
+　・対象: {{ entity_type }}「{{ entity_name }}」
+　・fraud_score: {{ fraud_score }} (Meta 平均 {{ media_avg }})
+　・CV 発生率: {{ cv_rate }}%
+　・直近 30 日 CV 数: {{ cv_count }} 件
+　・該当広告費: ¥{{ "{:,}".format(ad_cost) }}
+　・不正シグナル発生プレースメント: {{ placement_breakdown }}
+
+▼ 機械学習状況
+　・{{ learning_status }}
+　・再学習リスク: {{ relearning_risk }}
+
+▼ 何を得て、何を失う可能性があるか
+
+　【選択肢 A】Custom Audience 除外 (推奨度: {% if recommended_action == 'custom_audience_exclude' %}★Zynect 推奨★{% else %}—{% endif %})
+　　・✅ 得る: 不正セグメントを精密に除外、CAPI ハッシュベースで再混入防止
+　　・⚠️ 失う: 該当 Audience の {{ cv_count }} CV は今後計上されない
+　　・📊 ネット見込み: ¥{{ "{:,}".format(option_a_net_yen) }} / 月
+
+　【選択肢 B】Audience Network 完全除外 (推奨度: {% if recommended_action == 'audience_network_block' %}★Zynect 推奨★{% else %}—{% endif %})
+　　・✅ 得る: AN 経由の不正流入を完全遮断、広告費 {{ "{:,}".format(an_cost_savings) }} 節約見込み
+　　・⚠️ 失う: AN 経由の優良 CV (推定 {{ an_legitimate_cv }} 件 / 月) も巻き込む
+　　・📊 ネット見込み: ¥{{ "{:,}".format(option_b_net_yen) }} / 月
+
+　【選択肢 C】モニタリング継続 (推奨度: {% if recommended_action == 'monitor_with_close_watch' %}★Zynect 推奨★{% else %}—{% endif %})
+　　・✅ 得る: CV 損失ゼロ、判断保留で機械学習継続
+　　・⚠️ 失う: 不正配信費の継続発生、月 ¥{{ "{:,}".format(monitoring_cost_per_month) }} 想定
+　　・📊 ネット見込み: ¥-{{ "{:,}".format(monitoring_cost_per_month) }} / 月 (損失維持)
+
+▼ Zynect 推奨: {{ recommended_action_label }}
+　推奨理由: {{ recommendation_rationale }}
+　confidence: {{ confidence_pct }}% ({{ confidence_band_basis }})
+
+▼ 過去の類似判断
+{% if similar_past_decisions %}
+{% for d in similar_past_decisions %}
+　{{ loop.index }}. {{ d.date }} [{{ d.entity_name }}] → {{ d.action }} ({{ d.outcome }})
+{% endfor %}
+{% else %}
+　(過去 5 件以内に類似事案なし、初回判断)
+{% endif %}
+
+▼ 選択肢 (本スレッドへの返信で 1-5 のいずれかをご回答ください)
+　[1] Zynect 推奨採用
+　[2] Audience Network 完全除外 (選択肢 B)
+　[3] モニタリング継続 (選択肢 C)
+　[4] 詳細データ要求 (Custom Audience 別 CV 内訳など)
+　[5] 運用憲章を見直したい (四半期レビュー前倒し)
+
+{{ disclaimer.render() }}
+
+[判断 ID: {{ decision_id }} / 運用憲章 v{{ charter_version }} / Zynect Media 自動運用システム]
+[/info]
