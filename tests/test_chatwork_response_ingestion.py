@@ -78,6 +78,24 @@ def sample_messaging():
                     "C": "状況不明、確認したい",
                 },
             },
+            "F-MF-02": {
+                "customer_title": "CV イベントの動作確認",
+                "priority": "A",
+                "goal_stage": "measurement_recovery",
+                "performance_category": ["measurement_quality"],
+                "today_action": "CV イベントを確認。",
+                "yes_no_question": "テストイベントで CV シグナルが届きましたか?",
+                "action_options": {"A": "届いた", "B": "届かない", "C": "未確認"},
+            },
+            "F-MF-08": {
+                "customer_title": "アトリビューション設定の確認",
+                "priority": "A",
+                "goal_stage": "measurement_recovery",
+                "performance_category": ["measurement_quality"],
+                "today_action": "設定を確認。",
+                "yes_no_question": "アトリビューション設定が整合していますか?",
+                "action_options": {"A": "整合済み", "B": "見直したい", "C": "現状未確認"},
+            },
         },
         "category_labels": {"measurement_quality": "計測精度改善", "first_party_data": "1st Party Data 活用"},
         "goal_stage_order": {"measurement_recovery": 1, "first_party_data": 4},
@@ -679,6 +697,57 @@ class TestBotMessageFilter:
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" + msg["body"]
         )
         results = parse_messages_bulk([msg_with_marker], sample_messaging)
+        assert results == []
+
+
+# ============================================================
+# 5/7 P4: 1 文字返信を直近通知の表示順へ割り当てる
+# ============================================================
+
+class TestContextualOneLetterReplies:
+    """通知文どおりの `C` / `C、C` 返信を displayed_rule_ids に割り当てる"""
+
+    def test_single_code_maps_to_first_displayed_rule(self, sample_messaging):
+        from engine.chatwork_response_parser import parse_messages_bulk
+
+        context = {
+            "message_id": "100",
+            "displayed_rule_ids": ["F-MF-02", "F-MF-08"],
+        }
+        msg = {"message_id": "101", "send_time": 1715000001, "body": "C", "account": {"account_id": 9}}
+        results = parse_messages_bulk([msg], sample_messaging, reply_context=context)
+
+        assert len(results) == 1
+        assert results[0].rule_id == "F-MF-02"
+        assert results[0].answer_code == "C"
+        assert results[0].answer_label == "未確認"
+        assert results[0].status == "not_done"
+
+    def test_multiple_codes_map_in_display_order(self, sample_messaging):
+        from engine.chatwork_response_parser import parse_messages_bulk
+
+        context = {
+            "message_id": "100",
+            "displayed_rule_ids": ["F-MF-02", "F-MF-08"],
+        }
+        msg = {"message_id": "102", "send_time": 1715000002, "body": "C、C", "account": {"account_id": 9}}
+        results = parse_messages_bulk([msg], sample_messaging, reply_context=context)
+
+        assert [(r.rule_id, r.answer_code, r.answer_label) for r in results] == [
+            ("F-MF-02", "C", "未確認"),
+            ("F-MF-08", "C", "現状未確認"),
+        ]
+
+    def test_code_only_before_context_message_is_ignored(self, sample_messaging):
+        from engine.chatwork_response_parser import parse_messages_bulk
+
+        context = {
+            "message_id": "100",
+            "displayed_rule_ids": ["F-MF-02"],
+        }
+        msg = {"message_id": "99", "send_time": 1715000000, "body": "C", "account": {"account_id": 9}}
+        results = parse_messages_bulk([msg], sample_messaging, reply_context=context)
+
         assert results == []
 
 

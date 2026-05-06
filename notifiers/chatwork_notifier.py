@@ -363,7 +363,12 @@ class ChatWorkClient:
                 # ロック取得後の最新状態で再確認 (lock 待機中に別プロセスが先送した可能性)
                 if self._is_already_sent(key):
                     log.info(f"ChatWork: 送信済みスキップ key={key[:12]}…")
-                    return {"skipped": True, "idempotency_key": key}
+                    sent_rec = (self._load_sent() or {}).get(key) or {}
+                    return {
+                        "skipped": True,
+                        "idempotency_key": key,
+                        "message_id": sent_rec.get("message_id"),
+                    }
 
                 if self.dry_run:
                     # 5/8 修正: dry-run は本番 idempotency ストアに記録しない (副作用ゼロ原則)。

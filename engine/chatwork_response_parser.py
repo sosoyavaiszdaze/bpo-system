@@ -261,6 +261,7 @@ def is_bot_message(msg: dict, bot_account_ids: Optional[set] = None) -> bool:
 def parse_messages_bulk(
     messages: list[dict], rule_messaging: dict,
     bot_account_ids: Optional[set] = None,
+    reply_context: Optional[dict] = None,
 ) -> list[ParsedAnswer]:
     """複数の ChatWork メッセージをまとめてパース (Bot 投稿は除外)
 
@@ -269,6 +270,8 @@ def parse_messages_bulk(
                   各要素: {"message_id", "body", "send_time", "account": {...}}
         rule_messaging: load_messaging() の戻り値
         bot_account_ids: Bot 自身の account_id 集合 (None なら本文 marker のみで判定)
+        reply_context: 直近通知の文脈。{"message_id", "displayed_rule_ids"} を使い、
+                       ルールID無しの `C、C` を上から順に割り当てる。
 
     Returns:
         全 ParsedAnswer のリスト (Bot 自動通知を含むメッセージは skip)
@@ -283,13 +286,80 @@ def parse_messages_bulk(
         msg_id = str(msg.get("message_id", ""))
         send_time = msg.get("send_time")
         answered_at = _send_time_to_iso(send_time)
-        out.extend(parse_message(body, rule_messaging, chatwork_message_id=msg_id, answered_at=answered_at))
+        parsed = parse_message(body, rule_messaging, chatwork_message_id=msg_id, answered_at=answered_at)
+        if not parsed and _message_is_after_context(msg, reply_context):
+            parsed = _parse_contextual_answer_codes(
+                body, rule_messaging, reply_context,
+                chatwork_message_id=msg_id, answered_at=answered_at,
+            )
+        out.extend(parsed)
     if skipped_bot:
         log.info(f"chatwork_response_parser: Bot 自動通知 {skipped_bot} 件をスキップ")
     return out
 
 
 # ========== Private ==========
+
+def _parse_contextual_answer_codes(
+    text: str, rule_messaging: dict, reply_context: dict,
+    chatwork_message_id: Optional[str] = None,
+    answered_at: Optional[str] = None,
+) -> list[ParsedAnswer]:
+    """ルールIDなしの A/B/C 返信を直近通知の表示順に割り当てる。
+
+    例:
+      displayed_rule_ids = [F-MF-02, F-MF-08, F-PP-01]
+      "C、C" -> F-MF-02=C, F-MF-08=C
+      "A\nB\nC" -> 1,2,3 番目へ順に割当
+    """
+    codes = _extract_code_sequence(text)
+    if not codes:
+        return []
+    displayed = list((reply_context or {}).get("displayed_rule_ids") or [])
+    if not displayed:
+        return []
+
+    rules_meta = rule_messaging.get("rules") or {}
+    out: list[ParsedAnswer] = []
+    for idx, code in enumerate(codes[:len(displayed)]):
+        rid = displayed[idx]
+        rule_msg = rules_meta.get(rid) or {}
+        action_options = rule_msg.get("action_options") or {}
+        label = action_options.get(code, "")
+        status = _map_label_to_status(label) if label else "wants_help"
+        out.append(ParsedAnswer(
+            rule_id=rid, answer_code=code, answer_label=label, status=status,
+            raw_message=text.strip(), chatwork_message_id=chatwork_message_id,
+            answered_at=answered_at,
+        ))
+    return out
+
+
+def _extract_code_sequence(text: str) -> list[str]:
+    """`C、C` / `A B C` / `Ａ\nＢ` のようなコード列だけを抽出する。"""
+    if not text:
+        return []
+    normalized = text.translate(str.maketrans("ＡＢＣＤＥＦ", "ABCDEF")).strip()
+    tokens = [t for t in re.split(r"[\s,，、/／]+", normalized) if t]
+    if not tokens:
+        return []
+    if any(not re.fullmatch(r"[A-F]", t) for t in tokens):
+        return []
+    return tokens
+
+
+def _message_is_after_context(msg: dict, reply_context: Optional[dict]) -> bool:
+    """返信文脈保存後のメッセージだけを context 割当に使う。"""
+    if not reply_context:
+        return False
+    context_id = reply_context.get("message_id")
+    msg_id = msg.get("message_id")
+    if context_id and msg_id:
+        try:
+            return int(msg_id) > int(context_id)
+        except (TypeError, ValueError):
+            return str(msg_id) > str(context_id)
+    return False
 
 def _extract_answer_for_rule(
     segment: str, rule_id: str, rule_msg: dict,

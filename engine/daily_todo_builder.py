@@ -674,11 +674,15 @@ def post_daily_todo(
         return summary
 
     if is_skipped:
+        if result.get("message_id"):
+            _save_reply_context_for_todo(client_id, today_str, context, result)
         summary["auto_proposal_skipped"] = len(selected_rules)
         log.info(f"[{client_id}] 統合 TODO スキップ (idempotency hit)")
         return summary
 
     # 7. 本番送信成功時のみ state を進める
+    _save_reply_context_for_todo(client_id, today_str, context, result)
+
     summary["auto_proposal_sent"] = len([r for r in selected_rules
                                           if r.get("id") in context["displayed_rule_ids"]])
     summary["posted_indications"] = len([rid for rid in layer_a_rule_ids
@@ -700,6 +704,19 @@ def post_daily_todo(
         f"auto_proposal={summary['auto_proposal_sent']}"
     )
     return summary
+
+
+def _save_reply_context_for_todo(client_id: str, today_str: str, context: dict, result: dict) -> None:
+    """統合TODOの表示順を、1文字返信マッピング用に保存する。"""
+    try:
+        from engine.chatwork_reply_context_store import save_latest_context
+        save_latest_context(client_id, {
+            "message_id": result.get("message_id"),
+            "today": today_str,
+            "displayed_rule_ids": context.get("displayed_rule_ids") or [],
+        })
+    except Exception as e:
+        log.warning(f"[{client_id}] reply context 保存失敗: {e}")
 
 
 def _extract_actual_monthly_spend(audit_results: Optional[dict]) -> Optional[float]:

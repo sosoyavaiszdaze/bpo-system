@@ -48,6 +48,7 @@ from notifiers.chatwork_notifier import ChatWorkClient
 from engine.daily_todo_builder import load_messaging
 from engine.chatwork_response_parser import parse_messages_bulk
 from engine.chatwork_response_store import save_response
+from engine.chatwork_reply_context_store import load_latest_context
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("ingest")
@@ -144,8 +145,15 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
             log.warning(f"--since-id 不正形式: {since_id}、無視して全件処理")
 
     # 3-4. パース (Bot 自動通知を本文 marker / account_id で除外してから regex 抽出)
+    # 5/7 P4: 直近通知文脈があれば、`C、C` のようなルールIDなし返信を
+    # 表示順に割り当てる。
     rule_messaging = load_messaging()
-    parsed = parse_messages_bulk(messages, rule_messaging, bot_account_ids=bot_account_ids or None)
+    reply_context = load_latest_context(client_id)
+    parsed = parse_messages_bulk(
+        messages, rule_messaging,
+        bot_account_ids=bot_account_ids or None,
+        reply_context=reply_context,
+    )
     summary["parsed_answers"] = len(parsed)
 
     # 5. 永続化 (dry-run なら skip)
