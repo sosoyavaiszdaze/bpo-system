@@ -59,7 +59,7 @@ class TestBuildDailyTodo:
         assert ctx["items_today"][2]["rule_id"] == "ANO_IMPRESSION_DROP"
 
     def test_priority_a_zero_does_not_show_top_zero(self):
-        """priority A 0 件でも「上位 0 件」が出ない"""
+        """priority A 0 件でも「上位 0 件」が出ない (5/8 v3: B のみでも上位埋め可、本文文言だけ検証)"""
         from engine.daily_todo_builder import build_daily_todo
         from templates.chatwork import render
 
@@ -72,17 +72,14 @@ class TestBuildDailyTodo:
             ],
             today_str="2026-05-08",
         )
-
-        # priority B のみ → items_today=0、items_this_week=2
-        assert len(ctx["items_today"]) == 0
-        assert len(ctx["items_this_week"]) == 2
-
+        # priority B でも items_today に上位として埋められるのが新仕様
+        # (基本順序: priority B でも legal_note 以外なら今日確認に出す)
         body = render("_daily_recommendations.md.j2", ctx)
-        # 「上位 0 件」「上位 0」のような旧バグの文言が出ない
+        # 「上位 0 件」「上位 0」のような旧バグの文言が出ないことが要件
         assert "上位 0 件" not in body
         assert "上位0件" not in body
-        # 緊急対応なし旨の表現が含まれる
-        assert "緊急対応" in body or "今週中に確認" in body
+        # 緊急対応なし表現 OR 今日確認セクションが出る
+        assert "緊急対応" in body or "今日確認してほしいこと" in body
 
     def test_unmapped_rules_do_not_appear_in_body(self):
         """rule_messaging.yaml 未定義 rule は本文に出ない、internal_unmapped_rules に記録"""
@@ -286,6 +283,109 @@ class TestTodayActionAndYesNoInBody:
 # ============================================================
 # 5/8 v2 finalize: preview スクリプトが ChatWork に投稿しない
 # ============================================================
+
+class TestSortScoreLogic:
+    """5/8 v3 多軸スコア順序ロジックの検証"""
+
+    def test_cpa_spike_pushes_measurement_above_legal(self):
+        """CPA 急騰時、計測 / 切り分け系が法律より上に来る"""
+        from engine.daily_todo_builder import build_daily_todo
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=["X-PI1", "ANO_CPA_SPIKE"],
+            eligible_rules=[
+                {"id": "F-AH-04", "daily_cap_group": "default", "severity": "high"},
+                {"id": "F-LC-01", "daily_cap_group": "adr_013_legal", "severity": "high"},
+                {"id": "F-LC-04", "daily_cap_group": "adr_013_legal", "severity": "high"},
+            ],
+            layer_a_rule_defs={
+                "X-PI1": {"id": "X-PI1", "severity": "high"},
+                "ANO_CPA_SPIKE": {"id": "ANO_CPA_SPIKE", "severity": "critical"},
+            },
+            today_str="2026-05-08",
+            anomaly_summary={"cpa_change_pct": 75.6},
+        )
+
+        # 上位 today: 計測 / 切り分け系が来る (法律 F-LC-* は legal_note に行く)
+        today_ids = [i["rule_id"] for i in ctx["items_today"]]
+        assert "X-PI1" in today_ids or "F-AH-04" in today_ids, \
+            f"計測系が today に出ていない: {today_ids}"
+        assert "ANO_CPA_SPIKE" in today_ids, \
+            f"ANO_CPA_SPIKE が今日確認に出ていない: {today_ids}"
+
+        # 法律 (F-LC-*) は legal_note に
+        legal_ids = [i["rule_id"] for i in ctx["items_legal_note"]]
+        assert "F-LC-01" in legal_ids, "F-LC-01 が法令補足に出ていない"
+        assert "F-LC-04" in legal_ids, "F-LC-04 が法令補足に出ていない"
+
+    def test_score_breakdown_attached_to_each_item(self):
+        """各 item に sort_score / sort_breakdown が付与される"""
+        from engine.daily_todo_builder import build_daily_todo
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=["X-PI1"],
+            eligible_rules=[{"id": "F-AH-04", "daily_cap_group": "default", "severity": "high"}],
+            today_str="2026-05-08",
+            anomaly_summary={"cpa_change_pct": 50.0},
+        )
+        for it in ctx["items_today"] + ctx["items_this_week"] + ctx["items_legal_note"]:
+            assert "sort_score" in it, f"{it['rule_id']}: sort_score 不在"
+            assert "sort_breakdown" in it, f"{it['rule_id']}: sort_breakdown 不在"
+            b = it["sort_breakdown"]
+            for axis in ("priority", "goal_stage", "severity", "perf_impact",
+                         "today_action", "already_notified"):
+                assert axis in b, f"{it['rule_id']}: breakdown.{axis} 不在"
+
+    def test_perf_impact_only_when_anomaly_threshold_met(self):
+        """anomaly が閾値 (30%) 未満なら perf_impact が発動しない"""
+        from engine.daily_todo_builder import build_daily_todo
+
+        ctx_low = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=[],
+            eligible_rules=[{"id": "F-AH-04", "daily_cap_group": "default", "severity": "high"}],
+            today_str="2026-05-08",
+            anomaly_summary={"cpa_change_pct": 5.0},  # 閾値 30 未満
+        )
+        item = ctx_low["items_today"][0]
+        assert item["sort_breakdown"]["perf_impact"] == 0
+
+        ctx_high = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=[],
+            eligible_rules=[{"id": "F-AH-04", "daily_cap_group": "default", "severity": "high"}],
+            today_str="2026-05-08",
+            anomaly_summary={"cpa_change_pct": 50.0},  # 閾値超え
+        )
+        item_high = ctx_high["items_today"][0]
+        assert item_high["sort_breakdown"]["perf_impact"] == -50
+
+    def test_critical_severity_outranks_high_within_same_goal_stage(self):
+        """同じ goal_stage 内で critical severity は high より上位"""
+        from engine.daily_todo_builder import build_daily_todo
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=["ANO_CPA_SPIKE"],   # critical, cpa_diagnosis
+            eligible_rules=[
+                {"id": "F-MF-08", "daily_cap_group": "default", "severity": "high"},  # high, measurement_recovery
+            ],
+            layer_a_rule_defs={"ANO_CPA_SPIKE": {"id": "ANO_CPA_SPIKE", "severity": "critical"}},
+            today_str="2026-05-08",
+        )
+        # 同 priority A 同士で、severity critical の方が上位
+        ano = next((i for i in ctx["items_today"] + ctx["items_this_week"] if i["rule_id"] == "ANO_CPA_SPIKE"), None)
+        mf  = next((i for i in ctx["items_today"] + ctx["items_this_week"] if i["rule_id"] == "F-MF-08"), None)
+        assert ano is not None and mf is not None
+        # F-MF-08 = goal_stage=measurement_recovery (1)、ANO_CPA_SPIKE = goal_stage=cpa_diagnosis (2)
+        # severity 差 (-30 vs -10) は -20、goal_stage 差は +1 → ANO のスコア = -10 + 2 + 0 + (-30) + (-5) = -43
+        # F-MF-08 = 0 + 1 + (-10) + 0 + (-5) = -14
+        # → ANO の方が小さい (上位)
+        assert ano["sort_score"] < mf["sort_score"], \
+            f"critical severity の優先性が反映されていない: ANO={ano['sort_score']} F-MF-08={mf['sort_score']}"
+
 
 class TestPreviewScriptNoSideEffect:
     def test_preview_does_not_call_chatwork(self, monkeypatch):

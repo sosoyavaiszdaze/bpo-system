@@ -1,4 +1,4 @@
-"""統合 daily TODO ビルダー (5/8 v2 緊急修正)
+"""統合 daily TODO ビルダー (5/8 v2 緊急修正 + 5/8 v3 順序ロジック明文化)
 
 責務: Layer A の indications (anomaly / ads_audit / fraud / X-PI1 等) と
       Layer 0-3 の auto_proposal eligible rules を 1 つの統合通知
@@ -7,18 +7,54 @@
 設計原則:
     - 1 日 1 通の統合通知に集約 (個別投稿廃止)
     - rule_messaging.yaml 未定義 rule は **顧客向けに出さない** (fallback 禁止)
-      未定義は internal log に internal_unmapped_rule として記録
-    - 表示順序は goal_stage 順 (measurement_recovery → cpa_diagnosis →
-      delivery_diagnosis → first_party_data → legal_review)
+    - rule_messaging 未定義は internal log に internal_unmapped_rule として記録
     - 上位 3 件は「今日確認」として詳細表示、4 件目以降は「今週中」要約
-    - priority A 0 件時は適切なメッセージで案内 (旧「上位0件」バグ修正)
+    - priority A 0 件時は適切なメッセージで案内
     - 冒頭に「今日の結論」を 1〜2 行 (anomaly 由来の数値があれば差し込み)
+
+
+==============================================================================
+表示順スコアの計算 (5/8 v3 明文化)
+==============================================================================
+各 item の表示順は、以下 5 軸を加算した整数スコア (sort_score) で決まる。
+**スコアが小さいほど上位**。同スコアは rule_id 辞書順でタイブレーク。
+
+  sort_score =
+      priority_w           # A=0,  B=100, C=200
+    + goal_stage_w         # measurement_recovery=1, ..., legal_review=5
+    + severity_w           # critical=-30, high=-10, medium=0, low=+10
+    + perf_impact_w        # 実データ異常 (CPA 急騰 / 配信量急減 / CV 欠損) と
+                           # 相性の良い goal_stage の rule は -50
+    + today_action_w       # today_action 文字列を持つ rule は -5
+    + already_notified_p   # 過去通知済 rule は +200 (fallback 抑止)
+
+設計意図:
+  - **priority_w が間隔 100** で、他軸は 1〜50 の範囲。priority A は基本上位だが、
+    「priority B でも CPA 急騰相性 (-50) + critical (-30) + measurement_recovery (1)」
+    のように合計が低ければ priority A を抜くこともある。
+    これは「実データ異常がある日は法律より計測/切り分けが必ず上に来る」要件
+    を満たす設計。
+  - **perf_impact_w は anomaly_summary に依存**:
+      cpa_change_pct > +30%  → goal_stage in {measurement_recovery, cpa_diagnosis}
+                                の rule に -50
+      impression_change_pct < -30% → goal_stage in {delivery_diagnosis,
+                                       measurement_recovery} の rule に -50
+      cv_change_pct < -30%   → goal_stage in {measurement_recovery, cpa_diagnosis}
+                                の rule に -50
+  - **goal_stage_order** (rule_messaging.yaml で定義):
+      measurement_recovery=1 → cpa_diagnosis=2 → delivery_diagnosis=3 →
+      first_party_data=4 → legal_review=5
+  - **legal_review** 系は priority B + perf_impact 該当なしなら必ず最下層 (補足)
+
+各 item には sort_score / sort_breakdown が記録され、preview スクリプトで
+順序の根拠を確認できる (debug 出力)。
 
 主要関数:
     - build_daily_todo(client_id, indications, eligible_rules, anomaly_summary, ...)
-      → context dict (テンプレ render 用)
+      → context dict (テンプレ render 用、sort_score 付き)
     - load_messaging() → rule_messaging.yaml キャッシュロード
-    - resolve_rule_message(rule_id, fallback_meta=None) → messaging 取得 (未定義は None)
+    - resolve_rule_message(rule_id) → messaging 取得 (未定義は None)
+    - compute_sort_score(item, anomaly_summary, goal_order) → 単一スコア + breakdown
 """
 from __future__ import annotations
 
@@ -76,6 +112,8 @@ def build_recommendation_item(rule_id: str, rule_def: dict, msg_def: dict, messa
     labels = messaging.get("category_labels") or {}
     perf_keys = msg_def.get("performance_category") or []
     perf_labels = [labels.get(k, k) for k in perf_keys]
+    # severity は rule_def (Layer A indication record / Layer 0-3 rule yaml) から拾う
+    severity = (rule_def.get("severity") or msg_def.get("severity") or "medium").lower()
     return {
         "rule_id":             rule_id,
         "customer_title":      msg_def.get("customer_title") or rule_def.get("name", rule_id),
@@ -83,12 +121,80 @@ def build_recommendation_item(rule_id: str, rule_def: dict, msg_def: dict, messa
         "performance_category_labels": perf_labels,
         "priority":            msg_def.get("priority", "B"),
         "goal_stage":          msg_def.get("goal_stage", "measurement_recovery"),
+        "severity":            severity,                   # 5/8 v3: ソート軸用
         "expected_effect":     msg_def.get("expected_effect") or [],
         "today_action":        msg_def.get("today_action") or "",
         "yes_no_question":     msg_def.get("yes_no_question") or "",
         "action_options":      msg_def.get("action_options") or {"A": "対応済", "B": "未対応", "C": "確認したい"},
         "legal_note":          msg_def.get("legal_note"),
     }
+
+
+# ========== 5/8 v3 表示順スコア計算 ==========
+
+PRIORITY_WEIGHTS = {"A": 0, "B": 100, "C": 200}
+
+SEVERITY_WEIGHTS = {
+    "critical": -30,
+    "high":     -10,
+    "medium":     0,
+    "low":      +10,
+}
+
+# 実データ異常 (anomaly) と相性の良い goal_stage の rule に下駄
+PERF_IMPACT_BOOST_PER_HIT = -50
+
+# anomaly トリガー閾値 (絶対値 %)
+ANOMALY_THRESHOLD_PCT = 30.0
+
+# 各 anomaly が「成果を引き上げる対象」goal_stage の集合
+ANOMALY_TO_BOOSTED_GOALS = {
+    "cpa":        {"measurement_recovery", "cpa_diagnosis"},
+    "impression": {"delivery_diagnosis", "measurement_recovery"},
+    "cv":         {"measurement_recovery", "cpa_diagnosis"},
+}
+
+
+def compute_sort_score(
+    item: dict, anomaly_summary: Optional[dict], goal_order: dict,
+    already_notified_ids: Optional[set] = None,
+) -> dict:
+    """1 件の item の表示順スコアと内訳を返す
+
+    Returns:
+        {"score": int, "breakdown": {priority, goal_stage, severity, perf_impact,
+                                     today_action, already_notified}}
+    """
+    already = already_notified_ids or set()
+    breakdown: dict = {}
+
+    breakdown["priority"]   = PRIORITY_WEIGHTS.get(item.get("priority", "B"), 999)
+    breakdown["goal_stage"] = goal_order.get(item.get("goal_stage", "measurement_recovery"), 99)
+    breakdown["severity"]   = SEVERITY_WEIGHTS.get((item.get("severity") or "medium").lower(), 0)
+
+    # perf_impact: anomaly summary に該当する goal_stage の rule を引き上げる
+    perf_impact = 0
+    if anomaly_summary:
+        item_goal = item.get("goal_stage")
+        cpa_pct = anomaly_summary.get("cpa_change_pct")
+        imp_pct = anomaly_summary.get("impression_change_pct")
+        cv_pct  = anomaly_summary.get("cv_change_pct")
+        if cpa_pct is not None and cpa_pct >= ANOMALY_THRESHOLD_PCT \
+                and item_goal in ANOMALY_TO_BOOSTED_GOALS["cpa"]:
+            perf_impact += PERF_IMPACT_BOOST_PER_HIT
+        if imp_pct is not None and imp_pct <= -ANOMALY_THRESHOLD_PCT \
+                and item_goal in ANOMALY_TO_BOOSTED_GOALS["impression"]:
+            perf_impact += PERF_IMPACT_BOOST_PER_HIT
+        if cv_pct is not None and cv_pct <= -ANOMALY_THRESHOLD_PCT \
+                and item_goal in ANOMALY_TO_BOOSTED_GOALS["cv"]:
+            perf_impact += PERF_IMPACT_BOOST_PER_HIT
+    breakdown["perf_impact"] = perf_impact
+
+    breakdown["today_action"] = -5 if item.get("today_action") else 0
+    breakdown["already_notified"] = +200 if item.get("rule_id") in already else 0
+
+    score = sum(breakdown.values())
+    return {"score": score, "breakdown": breakdown}
 
 
 def build_daily_todo(
@@ -148,30 +254,38 @@ def build_daily_todo(
             continue
         auto_items.append(build_recommendation_item(rid, r, msg_def, messaging))
 
-    # === 3. 統合 + goal_stage 順ソート ===
+    # === 3. 統合 + 多軸スコア順ソート (5/8 v3 順序ロジック明文化) ===
     all_items = layer_a_items + auto_items
     goal_order = messaging.get("goal_stage_order") or {}
-    priority_order = {"A": 0, "B": 1, "C": 2}
 
-    def _sort_key(it):
-        return (
-            priority_order.get(it["priority"], 99),
-            goal_order.get(it["goal_stage"], 99),
-            it["rule_id"],
-        )
+    # 各 item に sort_score / sort_breakdown を付与
+    for it in all_items:
+        scored = compute_sort_score(it, anomaly_summary, goal_order)
+        it["sort_score"]     = scored["score"]
+        it["sort_breakdown"] = scored["breakdown"]
 
-    all_items.sort(key=_sort_key)
+    # スコア小さい順、タイブレーク = rule_id 辞書順
+    all_items.sort(key=lambda it: (it["sort_score"], it["rule_id"]))
 
     # === 4. items_today / items_this_week / items_legal_note に分割 ===
+    # 「今日確認」: スコア順上位 DETAILED_TOP_N 件 (priority A だけに限定しない)
+    # 「補足」:    legal_review 系で perf_impact が無いもの (= 法令・プライバシー)
+    # 「今週中」: それ以外
     items_today = []
     items_this_week = []
     items_legal_note = []
 
     for it in all_items:
-        if it["priority"] == "A" and len(items_today) < DETAILED_TOP_N:
-            items_today.append(it)
-        elif it["goal_stage"] == "legal_review" and it["priority"] != "A":
+        # 「今日確認」上位 N 件: スコア閾値ではなく、上位 N 件で詳細表示
+        # ただし legal_review の rule で perf_impact が無いものは「補足」へ強制
+        is_legal_only = (
+            it["goal_stage"] == "legal_review"
+            and it["sort_breakdown"].get("perf_impact", 0) == 0
+        )
+        if is_legal_only:
             items_legal_note.append(it)
+        elif len(items_today) < DETAILED_TOP_N:
+            items_today.append(it)
         else:
             items_this_week.append(it)
 
