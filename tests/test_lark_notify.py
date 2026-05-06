@@ -9,7 +9,7 @@ class TestLarkCard:
     """Lark Interactive Card 構築テスト"""
 
     def test_build_card_basic(self):
-        from outputs.lark_notify import _build_card
+        from notifiers.lark_notify import _build_card
         results = {
             "client_name": "Test Client",
             "ads_audit": {
@@ -29,7 +29,7 @@ class TestLarkCard:
         assert len(card["elements"]) >= 1
 
     def test_suppressed_excluded(self):
-        from outputs.lark_notify import _build_card
+        from notifiers.lark_notify import _build_card
         results = {
             "ads_audit": {
                 "score": 50, "grade": "C",
@@ -48,7 +48,7 @@ class TestLarkCard:
         assert "抑止済み" not in card_text
 
     def test_empty_issues(self):
-        from outputs.lark_notify import _build_card
+        from notifiers.lark_notify import _build_card
         results = {
             "ads_audit": {"score": 95, "grade": "A", "total_checks": 10, "issues": [], "quick_wins": []},
             "anomalies": {"alert_count": 0},
@@ -58,7 +58,7 @@ class TestLarkCard:
         assert card["header"]["template"] == "green"
 
     def test_context_note_included(self):
-        from outputs.lark_notify import _build_card
+        from notifiers.lark_notify import _build_card
         results = {
             "ads_audit": {
                 "score": 60, "grade": "C",
@@ -80,7 +80,7 @@ class TestLarkNotifyNoWebhook:
     """Webhook未設定時の安全動作"""
 
     def test_no_crash_without_webhook(self):
-        from outputs.lark_notify import send_lark_notification
+        from notifiers.lark_notify import send_lark_notification
         assert send_lark_notification("test", {}, {"webhook_env": ""}) is None
         assert send_lark_notification("test", {}, {"lark_webhook_env": ""}) is None
 

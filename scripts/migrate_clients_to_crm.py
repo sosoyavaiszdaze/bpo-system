@@ -62,7 +62,7 @@ def main():
                 print("  → ERROR: TWENTY_API_URL / TWENTY_API_KEY 未設定")
                 continue
 
-            from outputs.crm_twenty import TwentyCRM
+            from notifiers.crm_twenty import TwentyCRM
             crm = TwentyCRM()
 
             existing = crm.get_client(client_id)

@@ -1,4 +1,13 @@
-"""日次 ChatWork 指摘・解消通知ジョブ (ADR-005 / Day 3 D1)
+"""日次 ChatWork 指摘・解消通知ジョブ (ADR-005 / ADR-016 launchd 本番エントリ)
+
+役割 (ADR-016 §2.1):
+    launchd 9:00 / 9:15 / 9:30 の本番エントリポイント。クライアント別に最新監査を
+    走らせ、ChatWork で運用指摘 / 完了通知 / auto_proposal (Layer 0-3 の 248 ルール)
+    / AdTruth (灰/黒ゾーン) を投稿する。
+    手動レポート生成 (PDF) は pipeline.py を使うこと、本ファイルは PDF を出さない。
+
+(以下 ADR-005 当初の説明)
+
 
 実行: venv/bin/python3 scripts/daily_chatwork_check.py [--client pilotton] [--dry-run] [--prefix "[テスト]"]
 
@@ -43,6 +52,9 @@ except ImportError:
 from engine.indication_state import IndicationState
 from engine.indication_detector import detect_and_upsert, reconcile_clean
 from engine.indication_filter import filter_indications
+from engine.structured_logger import (
+    install_structured_handler, StructuredLogContext, set_status, new_run_id,
+)
 from notifiers.chatwork_notifier import ChatWorkClient, ChatWorkError
 from templates.chatwork import render
 
@@ -51,6 +63,9 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+# R4a: JSON line 構造化ログを追加 (logs/daily-chatwork.json.log)
+# 既存 stdout / launchd ログには影響しない、opt-out は STRUCTURED_LOGS=0
+install_structured_handler()
 
 
 # ---------- analyzer 結果取得 ----------
@@ -143,13 +158,28 @@ def run_daily_check(
 ) -> dict:
     """日次チェックの本処理
 
+    R4a: 構造化ログ context を関数全体に注入。run_id は呼出ごとに発行。
+    各ステップでの step 付与は将来の段階的拡張で順次組込む (Phase B)。
+
     Returns:
         {"posted_indications": int, "posted_completions": int, "errors": [...]}
     """
+    run_id = new_run_id()
+    with StructuredLogContext(run_id=run_id, client_id=client_id, step="run_daily_check"):
+        return _run_daily_check_impl(
+            client_id, dry_run, test_prefix, today, run_id,
+        )
+
+
+def _run_daily_check_impl(
+    client_id: str, dry_run: bool, test_prefix: str,
+    today: Optional[str], run_id: str,
+) -> dict:
+    """run_daily_check の実装本体 (StructuredLogContext 内で呼ばれる)"""
     today_str = today or datetime.now().strftime("%Y-%m-%d")
     state = IndicationState(client_id=client_id)
 
-    log.info(f"日次 ChatWork チェック開始: client={client_id} dry_run={dry_run} prefix='{test_prefix}'")
+    log.info(f"日次 ChatWork チェック開始: client={client_id} dry_run={dry_run} prefix='{test_prefix}' run_id={run_id}")
 
     # 1. analyzer 結果取得
     try:

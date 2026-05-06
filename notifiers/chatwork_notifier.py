@@ -47,6 +47,63 @@ SENT_LOG_PATH = os.path.join(
     "chatwork_sent.json",
 )
 
+# R2-#4: idempotency store の同時書込を防ぐ file lock
+try:
+    import fcntl as _fcntl
+    _FCNTL_AVAILABLE = True
+except ImportError:
+    _FCNTL_AVAILABLE = False
+
+
+class _FileLock:
+    """fcntl.flock(LOCK_EX) ベースの排他ロック context manager
+
+    Phase A 用途: launchd 9:00/9:15/9:30 の 3 連射が同時実行されたときの
+    chatwork_sent.json の read-modify-write race を防ぐ。
+
+    macOS / Linux 前提。Windows では fcntl が import できないため no-op。
+    """
+
+    def __init__(self, lock_path: str, timeout_sec: float = 10.0):
+        self.lock_path = lock_path
+        self.timeout_sec = timeout_sec
+        self._fd: Optional[int] = None
+
+    def __enter__(self):
+        if not _FCNTL_AVAILABLE:
+            return self  # Windows 等は no-op
+        os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
+        self._fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+
+        # blocking lock を timeout 付きで取得 (poll 方式)
+        deadline = time.monotonic() + self.timeout_sec
+        while True:
+            try:
+                _fcntl.flock(self._fd, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+                return self
+            except BlockingIOError:
+                if time.monotonic() > deadline:
+                    log.warning(
+                        f"_FileLock: timeout waiting for {self.lock_path} "
+                        f"({self.timeout_sec}s); proceeding without lock"
+                    )
+                    return self
+                time.sleep(0.05)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._fd is None or not _FCNTL_AVAILABLE:
+            return False
+        try:
+            _fcntl.flock(self._fd, _fcntl.LOCK_UN)
+        except Exception:
+            pass
+        try:
+            os.close(self._fd)
+        except Exception:
+            pass
+        self._fd = None
+        return False
+
 
 class ChatWorkError(Exception):
     """ChatWork API 呼び出し失敗"""
@@ -125,13 +182,36 @@ class ChatWorkClient:
         os.replace(tmp, self.sent_log_path)
 
     def _is_already_sent(self, idempotency_key: str) -> bool:
+        # R2-#4: file lock 不要 (read-only、最新を読み逃しても _record_sent 側で
+        # exclusive lock 取得後に再確認するため二重投稿には繋がらない)
         store = self._load_sent()
         return idempotency_key in store
 
     def _record_sent(self, idempotency_key: str, meta: dict) -> None:
-        store = self._load_sent()
-        store[idempotency_key] = meta
-        self._save_sent(store)
+        """sha256 idempotency ストアへの read-modify-write を排他ロックで保護 (R2-#4)
+
+        launchd 9:00 / 9:15 / 9:30 の 3 連射が同時実行されたとき、ロック無しだと
+        2 つのプロセスが同時に load → 別々の store を save → 後勝ちで先の追記が消える
+        race が発生し得る。fcntl.flock(LOCK_EX) で read-modify-write を 1 トランザクションに。
+
+        macOS / Linux の launchd 環境前提。Windows 未対応 (本サービスは Mac mini 専用)。
+        """
+        os.makedirs(os.path.dirname(self.sent_log_path), exist_ok=True)
+        with self._sent_store_lock():
+            store = self._load_sent()
+            # 二重防御: ロック取得後に再確認 (lock 待機中に別プロセスが先に書き込んだ可能性)
+            if idempotency_key in store:
+                return
+            store[idempotency_key] = meta
+            self._save_sent(store)
+
+    def _sent_store_lock(self):
+        """fcntl.flock(LOCK_EX) ベースの排他ロック context manager
+
+        ロックファイルは `{sent_log_path}.lock`。プロセス終了時に自動解除。
+        Windows 環境では fcntl が無いため no-op (開発用、本番は macOS launchd)。
+        """
+        return _FileLock(self.sent_log_path + ".lock")
 
     # ---------- Rate Limit ----------
 
