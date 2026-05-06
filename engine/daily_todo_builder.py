@@ -114,6 +114,8 @@ def build_recommendation_item(rule_id: str, rule_def: dict, msg_def: dict, messa
     perf_labels = [labels.get(k, k) for k in perf_keys]
     # severity は rule_def (Layer A indication record / Layer 0-3 rule yaml) から拾う
     severity = (rule_def.get("severity") or msg_def.get("severity") or "medium").lower()
+    # 5/8 v3 ADR-001: 3 層効果 (minimum / realistic / upper)
+    impact_three_layer = _build_impact_three_layer(msg_def.get("impact_estimate"), perf_labels)
     return {
         "rule_id":             rule_id,
         "customer_title":      msg_def.get("customer_title") or rule_def.get("name", rule_id),
@@ -127,7 +129,67 @@ def build_recommendation_item(rule_id: str, rule_def: dict, msg_def: dict, messa
         "yes_no_question":     msg_def.get("yes_no_question") or "",
         "action_options":      msg_def.get("action_options") or {"A": "対応済", "B": "未対応", "C": "確認したい"},
         "legal_note":          msg_def.get("legal_note"),
+        "impact_three_layer":  impact_three_layer,
     }
+
+
+def _build_impact_three_layer(impact_estimate: Optional[dict], perf_labels: list) -> dict:
+    """ADR-001 三層効果の表示用 dict を構築
+
+    Args:
+        impact_estimate: rule_messaging.yaml の impact_estimate (minimum/realistic/upper)
+                         None なら calculable=False
+        perf_labels: 算定不可時の効果区分表示に使う
+
+    Returns:
+        {
+            "calculable": bool,
+            "minimum":   int (yen) or None,
+            "realistic": int (yen) or None,
+            "upper":     int (yen) or None,
+            "display": {
+                "minimum":   "+¥30,000",
+                "realistic": "+¥80,000",
+                "upper":     "+¥200,000",
+                "category_label": "計測精度改善 / 配信学習安定化",   # 算定不可時のみ
+            }
+        }
+    """
+    if not impact_estimate or not isinstance(impact_estimate, dict):
+        return {
+            "calculable": False,
+            "minimum":   None,
+            "realistic": None,
+            "upper":     None,
+            "display": {
+                "category_label": " / ".join(perf_labels) if perf_labels else "—",
+            },
+        }
+    minimum   = impact_estimate.get("minimum")
+    realistic = impact_estimate.get("realistic")
+    upper     = impact_estimate.get("upper") or impact_estimate.get("independent")
+    return {
+        "calculable": True,
+        "minimum":   minimum,
+        "realistic": realistic,
+        "upper":     upper,
+        "display": {
+            "minimum":   _format_yen(minimum),
+            "realistic": _format_yen(realistic),
+            "upper":     _format_yen(upper),
+            "category_label": " / ".join(perf_labels) if perf_labels else "—",
+        },
+    }
+
+
+def _format_yen(amount) -> str:
+    """月額 JPY を「+¥30,000」形式に整形"""
+    if amount is None:
+        return "—"
+    try:
+        return f"+¥{int(amount):,}"
+    except (ValueError, TypeError):
+        return "—"
 
 
 # ========== 5/8 v3 表示順スコア計算 ==========

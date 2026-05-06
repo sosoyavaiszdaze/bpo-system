@@ -42,6 +42,12 @@ try:
 except ImportError:
     pass
 
+# 5/8 P3: テストから monkeypatch できるよう module-level import に統一
+from notifiers.chatwork_notifier import ChatWorkClient
+from engine.daily_todo_builder import load_messaging
+from engine.chatwork_response_parser import parse_messages_bulk
+from engine.chatwork_response_store import save_response
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("ingest")
 
@@ -60,11 +66,6 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
             "answers_summary": [...]    # rule_id + status のサマリ
         }
     """
-    from notifiers.chatwork_notifier import ChatWorkClient
-    from engine.daily_todo_builder import load_messaging
-    from engine.chatwork_response_parser import parse_messages_bulk
-    from engine.chatwork_response_store import save_response
-
     summary = {
         "ok": True,                    # 5/8 P1-A: API 障害時に False に変更
         "client_id": client_id,
@@ -103,6 +104,16 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
         # API 障害は呼出元で検知できるよう ok=False で早期 return
         return summary
     summary["fetched_messages"] = len(messages)
+
+    # 5/8 P3: send_time / message_id 昇順 (古い順) にソートしてから parse / save。
+    # これにより同 rule_id への複数回答が時系列順に処理され、最後に保存されるのが
+    # 最も新しい回答になる。store 側にも単調性チェックがあるが二重防御。
+    def _sort_key(m):
+        try:
+            return (int(m.get("send_time", 0) or 0), int(m.get("message_id", 0) or 0))
+        except (ValueError, TypeError):
+            return (0, 0)
+    messages.sort(key=_sort_key)
 
     # since_id フィルタ (numeric 比較)
     if since_id and messages:

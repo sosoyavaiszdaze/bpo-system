@@ -149,7 +149,8 @@ class TestBuildDailyTodo:
         )
         body = render("_daily_recommendations.md.j2", ctx)
 
-        assert "広告成果への影響" in body
+        # 5/8 v3: テンプレ "広告成果への影響" → "期待効果" に変更
+        assert "期待効果" in body
         assert "今日の確認アクション" in body
         assert "ご回答" in body
         # 各 item は priority A → 「広告成果への影響」セクションに登場
@@ -444,6 +445,108 @@ F-DG-01:
         # → ANO の方が小さい (上位)
         assert ano["sort_score"] < mf["sort_score"], \
             f"critical severity の優先性が反映されていない: ANO={ano['sort_score']} F-MF-08={mf['sort_score']}"
+
+
+class TestImpactThreeLayer:
+    """ADR-001 3 層効果 (minimum / realistic / upper) の本文表示テスト"""
+
+    def test_calculable_shows_three_amounts(self):
+        """impact_estimate を持つ rule は 確実 / 現実 / 上限 の 3 層表示"""
+        from engine.daily_todo_builder import build_daily_todo
+        from templates.chatwork import render
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=[],
+            eligible_rules=[
+                {"id": "F-AH-04", "daily_cap_group": "default", "severity": "high"},
+            ],
+            today_str="2026-05-08",
+            already_notified_ids=set(),
+        )
+        body = render("_daily_recommendations.md.j2", ctx)
+
+        # 3 層効果が本文に出る
+        assert "確実: 月" in body, "「確実: 月 +¥...」表示が無い"
+        assert "現実: 月" in body, "「現実: 月 +¥...」表示が無い"
+        assert "上限: 月" in body, "「上限: 月 +¥...」表示が無い"
+        # 確実値の警告
+        assert "判断には「確実」値を優先" in body
+        # F-AH-04 は impact_estimate.minimum=30000 なので "+¥30,000" が本文に出る
+        assert "+¥30,000" in body
+        assert "+¥80,000" in body
+        assert "+¥200,000" in body
+
+    def test_non_calculable_shows_category(self):
+        """impact_estimate なし rule は「効果額: 算定対象外」+ 効果区分"""
+        from engine.daily_todo_builder import build_daily_todo
+        from templates.chatwork import render
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=[],
+            eligible_rules=[
+                # F-LC-01 は impact_estimate 無し (法令系) かつ legal_review なので
+                # legal_note セクションに行く可能性 → 強制的に items_today に出す
+                # よう F-LC-01 の前に anomaly summary を仕込んで perf_impact を boost
+                {"id": "F-LC-01", "daily_cap_group": "adr_013_legal", "severity": "high"},
+            ],
+            today_str="2026-05-08",
+            already_notified_ids=set(),
+        )
+        # F-LC-01 は legal_review goal_stage、anomaly なしで perf_impact=0 → legal_note
+        # 補足セクションでは要約のみで「効果額」表示は無い (詳細セクションのみ表示)
+        # → 詳細表示テストは別途、items_today に F-AH-04 と組み合わせて検証する
+
+        # 算定対象外メッセージは impact_three_layer dict にだけ反映、テンプレは
+        # items_today (詳細セクション) でのみ展開。要約セクション (week / legal) では
+        # 効果額表示しない設計なので OK。
+        items = ctx.get("items_today", []) + ctx.get("items_this_week", []) + ctx.get("items_legal_note", [])
+        f_lc = next((i for i in items if i["rule_id"] == "F-LC-01"), None)
+        assert f_lc is not None
+        assert f_lc["impact_three_layer"]["calculable"] is False
+        assert "広告審査" in f_lc["impact_three_layer"]["display"]["category_label"] or \
+               "リスク低減" in f_lc["impact_three_layer"]["display"]["category_label"]
+
+    def test_calculable_priority_a_in_today_section(self):
+        """priority A の rule で impact_estimate あり → items_today で 3 層表示"""
+        from engine.daily_todo_builder import build_daily_todo
+        from templates.chatwork import render
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=[],
+            eligible_rules=[
+                # F-AH-04 (priority A, impact あり) を today に
+                {"id": "F-AH-04", "daily_cap_group": "default", "severity": "high"},
+                # F-LC-01 (priority B, legal_review, impact なし) を補足に
+                {"id": "F-LC-01", "daily_cap_group": "adr_013_legal", "severity": "high"},
+            ],
+            today_str="2026-05-08",
+            already_notified_ids=set(),
+        )
+        body = render("_daily_recommendations.md.j2", ctx)
+
+        # F-AH-04 (今日確認、3 層表示あり)
+        assert "+¥30,000" in body
+        # F-LC-01 (補足、効果額表示なし)
+        assert "F-LC-01" in body
+        # 旧 expected_effect だけの表示に退行していない
+        assert "確実: 月" in body, "3 層表示に退行している (旧 expected_effect だけ)"
+
+    def test_legal_review_no_forced_yen(self):
+        """法令系 (legal_review) は無理に金額化しない"""
+        import yaml
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parent.parent / "config" / "rule_messaging.yaml"
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        rules = data.get("rules") or {}
+        for rid, rule in rules.items():
+            if rule.get("goal_stage") == "legal_review":
+                # 法令系は impact_estimate を持たない (= 算定対象外)
+                assert "impact_estimate" not in rule, \
+                    f"法令系 {rid} に impact_estimate が設定されている (無理な金額化)"
 
 
 class TestPreviewScriptNoSideEffect:

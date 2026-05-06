@@ -81,7 +81,16 @@ def load_responses(client_id: str) -> dict:
 
 
 def save_response(client_id: str, response_record: dict) -> str:
-    """1 件の response を上書き保存
+    """1 件の response を保存 (5/8 P3 単調性保証)
+
+    既存より新しい response でなければ保存をスキップ。
+    比較順:
+      1. answered_at (ISO datetime) — メイン比較
+      2. chatwork_message_id (整数列) — answered_at が同じ or 欠けている時のフォールバック
+
+    これにより、ingest が古い順で再取り込みされても最終状態が壊れない:
+      - 既存 A (新) + 新 B (古) → A のまま (B は skip)
+      - 既存 B (古) + 新 A (新) → A に上書き
 
     Args:
         response_record: {rule_id, answer_code, answer_label, raw_message,
@@ -89,7 +98,7 @@ def save_response(client_id: str, response_record: dict) -> str:
                           expires_at (optional, status から自動算出)}
 
     Returns:
-        rule_id (上書き対象キー)
+        rule_id (保存対象 / スキップでも同じ)
     """
     rule_id = response_record.get("rule_id")
     if not rule_id:
@@ -110,10 +119,49 @@ def save_response(client_id: str, response_record: dict) -> str:
     response_record.setdefault("answered_at", _now().isoformat(timespec="seconds"))
 
     data = load_responses(client_id)
+    existing = (data.get("responses") or {}).get(rule_id)
+    if existing and _existing_is_newer(existing, response_record):
+        log.info(
+            f"chatwork_response_store: skip older response for {rule_id} "
+            f"(existing answered_at={existing.get('answered_at')}, "
+            f"incoming={response_record.get('answered_at')})"
+        )
+        return rule_id
+
     data["responses"][rule_id] = response_record
     data["last_ingested_at"] = _now().isoformat(timespec="seconds")
     _atomic_write(client_id, data)
     return rule_id
+
+
+def _existing_is_newer(existing: dict, incoming: dict) -> bool:
+    """既存 response が incoming より新しいか判定 (5/8 P3 単調性)
+
+    比較順 (片方欠けたら次を見る):
+      1. answered_at (ISO datetime)
+      2. chatwork_message_id (整数列、ChatWork API の昇順性)
+    両方とも比較不能なら False (= incoming で上書き、保守側)。
+    """
+    e_at = _parse_iso(existing.get("answered_at"))
+    i_at = _parse_iso(incoming.get("answered_at"))
+    if e_at and i_at:
+        if e_at > i_at:
+            return True
+        if e_at < i_at:
+            return False
+        # 同 timestamp の場合は message_id で tie-break
+
+    # message_id 比較 (ChatWork API は数値文字列で発番順=昇順)
+    e_id = existing.get("chatwork_message_id")
+    i_id = incoming.get("chatwork_message_id")
+    if e_id and i_id:
+        try:
+            return int(e_id) > int(i_id)
+        except (ValueError, TypeError):
+            return str(e_id) > str(i_id)
+
+    # 比較不能 (両方とも timestamp / id 欠落) → incoming で上書きを許容
+    return False
 
 
 def get_active_response(

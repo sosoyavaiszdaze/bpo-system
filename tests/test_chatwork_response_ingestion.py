@@ -277,6 +277,119 @@ class TestTodoBuilderResponseIntegration:
 # answer_source_preference
 # ============================================================
 
+class TestResponseStoreMonotonic:
+    """5/8 P3: 古い回答が新しい回答を上書きしない (単調性)"""
+
+    def test_old_after_new_does_not_overwrite(self, isolated_responses_dir):
+        """先に新しい A を保存、後から古い B を保存しても A のまま"""
+        from engine.chatwork_response_store import save_response, get_active_response
+
+        # 1. 新しい answered_at で A を保存
+        save_response("test_client", {
+            "rule_id": "F-AH-04",
+            "answer_code": "A", "answer_label": "認証済み",
+            "status": "confirmed_done",
+            "raw_message": "F-AH-04 A",
+            "chatwork_message_id": "2103768587398557696",
+            "answered_at": "2026-05-08T15:00:00+09:00",
+        })
+
+        # 2. 古い answered_at で B を保存 (上書きされないはず)
+        save_response("test_client", {
+            "rule_id": "F-AH-04",
+            "answer_code": "B", "answer_label": "未対応",
+            "status": "not_done",
+            "raw_message": "F-AH-04 B",
+            "chatwork_message_id": "2103700000000000000",
+            "answered_at": "2026-05-08T10:00:00+09:00",
+        })
+
+        rec = get_active_response("test_client", "F-AH-04")
+        assert rec["answer_code"] == "A", \
+            f"古い B で上書きされてしまった: {rec['answer_code']}"
+        assert rec["status"] == "confirmed_done"
+
+    def test_new_after_old_overwrites(self, isolated_responses_dir):
+        """先に古い B を保存、後から新しい A を保存すると A に更新される"""
+        from engine.chatwork_response_store import save_response, get_active_response
+
+        save_response("test_client", {
+            "rule_id": "F-AH-04",
+            "answer_code": "B", "answer_label": "未対応",
+            "status": "not_done",
+            "raw_message": "F-AH-04 B",
+            "answered_at": "2026-05-08T10:00:00+09:00",
+        })
+        save_response("test_client", {
+            "rule_id": "F-AH-04",
+            "answer_code": "A", "answer_label": "認証済み",
+            "status": "confirmed_done",
+            "raw_message": "F-AH-04 A",
+            "answered_at": "2026-05-08T15:00:00+09:00",
+        })
+
+        rec = get_active_response("test_client", "F-AH-04")
+        assert rec["answer_code"] == "A"
+        assert rec["status"] == "confirmed_done"
+
+    def test_message_id_tiebreak_when_answered_at_equal(self, isolated_responses_dir):
+        """answered_at が同じなら chatwork_message_id (数値) で tie-break"""
+        from engine.chatwork_response_store import save_response, get_active_response
+
+        same_ts = "2026-05-08T10:00:00+09:00"
+        save_response("test_client", {
+            "rule_id": "F-AH-04",
+            "answer_code": "A", "answer_label": "認証済み",
+            "status": "confirmed_done",
+            "chatwork_message_id": "2103768587398557696",   # 大 = 新
+            "answered_at": same_ts,
+        })
+        # 同じ timestamp、小さい message_id (古い) → skip されるはず
+        save_response("test_client", {
+            "rule_id": "F-AH-04",
+            "answer_code": "B", "answer_label": "未対応",
+            "status": "not_done",
+            "chatwork_message_id": "2103700000000000000",   # 小 = 古
+            "answered_at": same_ts,
+        })
+
+        rec = get_active_response("test_client", "F-AH-04")
+        assert rec["answer_code"] == "A", "message_id tie-break が効いていない"
+
+    def test_ingest_sorts_messages_ascending(self, monkeypatch):
+        """ingest_chatwork_responses が messages を send_time/message_id 昇順でソートする"""
+        from scripts import ingest_chatwork_responses
+        from notifiers.chatwork_notifier import ChatWorkClient
+
+        # mock messages: 意図的に降順で渡す → ingest 内でソートされるはず
+        messages_unsorted = [
+            {"message_id": "300", "send_time": 3000, "body": "F-DG-01 A", "account": {}},
+            {"message_id": "100", "send_time": 1000, "body": "F-DG-01 B", "account": {}},
+            {"message_id": "200", "send_time": 2000, "body": "F-DG-01 C", "account": {}},
+        ]
+        sorted_received = []
+
+        def fake_fetch(self, room_id=None, force=1):
+            return messages_unsorted
+
+        from engine.chatwork_response_parser import parse_messages_bulk as _orig_parse
+        def hooked_parse(messages, rule_messaging):
+            # ingest が渡してきた順序を記録
+            sorted_received.extend([m["message_id"] for m in messages])
+            return _orig_parse(messages, rule_messaging)
+
+        monkeypatch.setattr(ChatWorkClient, "fetch_messages", fake_fetch)
+        monkeypatch.setattr(
+            "scripts.ingest_chatwork_responses.parse_messages_bulk", hooked_parse,
+        )
+
+        ingest_chatwork_responses.ingest("pilotton", dry_run=True)
+
+        # parse_messages_bulk に渡される時点で 100, 200, 300 の昇順
+        assert sorted_received == ["100", "200", "300"], \
+            f"messages が昇順ソートされていない: {sorted_received}"
+
+
 class TestParserStatusOrder:
     """5/8 P2 修正: 「未活用、検討したい」が wants_help に正しく分類される"""
 
