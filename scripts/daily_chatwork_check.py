@@ -420,6 +420,22 @@ def main() -> int:
         )
         if result["errors"]:
             log.warning(f"部分失敗あり: {result['errors']}")
+            # 5/7 P3 P2 fix: ChatWork を主監視にする運用で、ingest / audit 失敗時も
+            # 顧客通知だけでなく自己監視通知も送る。run_daily_check 内の早期 return
+            # (ingest_failed / audit_fetch / ingest_exception) では顧客通知が一切出ず、
+            # かつ exit 3 では ChatWork に何も流れないため、launchd ログを見るまで
+            # 障害に気づけない。non-dry-run 時は ChatWork に critical を投げる。
+            #
+            # post_self_alert の idempotency_key は (date, hash(message)) なので、
+            # 9:00 / 9:15 / 9:30 の 3 連射でも同一エラーは 1 日 1 回に de-dupe される。
+            if not args.dry_run:
+                err_lines = "\n".join(f"・{e}" for e in result["errors"])
+                post_self_alert(
+                    f"日次 ChatWork チェックで失敗が発生しました (client={args.client}):\n"
+                    f"{err_lines}\n\n"
+                    "顧客通知は送信されていません。launchd の次回 retry または手動再実行を確認してください。",
+                    dry_run=False,
+                )
             return 3
         return 0
     except Exception as e:
