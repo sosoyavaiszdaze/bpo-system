@@ -24,8 +24,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml jinja2 python-dotenv pytest ruff pydantic
-          # オプショナル依存（インストール失敗してもCIは続行）
+          # 必須依存 (5/7 P1-A: python-pptx を必須側に明示。pyproject.toml の
+          # >=1.0 宣言と整合)。tests/test_pptx_generation.py は importorskip
+          # 二重防御済 — 何らかの理由で install 失敗しても CI が崩壊しない。
+          pip install pyyaml jinja2 python-dotenv pytest ruff pydantic python-pptx
+          # オプショナル依存 (失敗しても CI 続行)
           pip install google-ads anthropic apscheduler flask || true
 
       - name: Lint with ruff

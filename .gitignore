@@ -40,6 +40,8 @@ outputs/*.html
 state/chatwork_sent.json
 state/chatwork_sent.json.tmp
 state/chatwork_sent.json.preview-bk-*
+# fcntl.flock 用ロックファイル (R2 で生成、P3-D 5/7 で gitignore 明示)
+state/*.lock
 
 # 指摘の状態遷移ストア (engine.indication_state.save() 経由で書込)
 outputs/chatwork_state/*.json

@@ -13,6 +13,12 @@ from pathlib import Path
 
 import pytest
 
+# 5/7 P1-A: python-pptx は提案資料生成専用のオプショナル依存。
+# 未インストール環境 (CI 一部 / requirements.lock 不在環境) では
+# import 時点でモジュールごと collect-skip させ、CI の "ModuleNotFoundError"
+# による全件 fail を防ぐ。pip install python-pptx で全テスト通る。
+pytest.importorskip("pptx", reason="python-pptx 未インストール (オプショナル依存)")
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 

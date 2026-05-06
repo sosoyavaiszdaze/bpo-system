@@ -289,7 +289,18 @@ class ChatWorkClient:
         idempotency_key: Optional[str] = None,
         self_unread: int = 0,
     ) -> dict:
-        """メッセージを投稿
+        """メッセージを投稿 (5/7 P1-C: check + send + record を 1 つの flock で保護)
+
+        以前は _record_sent() のみロック対象だったため、launchd 9:00/9:15/9:30 が
+        重なった場合に 2 プロセスとも _is_already_sent==False と判定 → 両方が POST →
+        片方だけ record (もう片方は skip) で **二重投稿** が発生し得た。
+
+        本実装では post_message 全体を _sent_store_lock で囲み、check → POST → record
+        を 1 トランザクション化する。HTTP リクエストの数秒間ロックを保持するが、
+        3 連射の最短間隔 (15 分) と比較すると影響は無視できる。
+
+        失敗時 (HTTP 例外) は _record_sent を呼ばないので、次回 launchd で同 key で
+        再試行できる (rollback 相当)。
 
         Args:
             body: 投稿本文（Markdown 不可、ChatWork 独自記法 [info][/info] 等は可）
@@ -303,33 +314,36 @@ class ChatWorkClient:
         rid = self._resolve_room_id(room_id)
         key = idempotency_key or self._content_hash(rid, body)
 
-        if self._is_already_sent(key):
-            log.info(f"ChatWork: 送信済みスキップ key={key[:12]}…")
-            return {"skipped": True, "idempotency_key": key}
+        # P1-C: check + send + record を flock で 1 トランザクション化
+        os.makedirs(os.path.dirname(self.sent_log_path), exist_ok=True)
+        with self._sent_store_lock():
+            # ロック取得後の最新状態で再確認 (lock 待機中に別プロセスが先送した可能性)
+            if self._is_already_sent(key):
+                log.info(f"ChatWork: 送信済みスキップ key={key[:12]}…")
+                return {"skipped": True, "idempotency_key": key}
 
-        if self.dry_run:
-            log.info(f"ChatWork [dry_run] room={rid} len={len(body)} body[:60]={body[:60]!r}")
-            self._record_sent(key, {"room_id": rid, "dry_run": True, "ts": time.time()})
-            return {"dry_run": True, "idempotency_key": key, "room_id": rid}
+            if self.dry_run:
+                log.info(f"ChatWork [dry_run] room={rid} len={len(body)} body[:60]={body[:60]!r}")
+                # _record_sent 内部の lock は再入可能ではないため直接 store を更新
+                store = self._load_sent()
+                store[key] = {"room_id": rid, "dry_run": True, "ts": time.time()}
+                self._save_sent(store)
+                return {"dry_run": True, "idempotency_key": key, "room_id": rid}
 
-        form = urllib.parse.urlencode({"body": body, "self_unread": str(self_unread)}).encode("utf-8")
-        result = self._request(
-            "POST",
-            f"/rooms/{rid}/messages",
-            data=form,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-        message_id = result.get("message_id", "")
-        self._record_sent(
-            key,
-            {
-                "room_id": rid,
-                "message_id": message_id,
-                "ts": time.time(),
-            },
-        )
-        log.info(f"ChatWork 投稿成功 room={rid} message_id={message_id}")
-        return result
+            form = urllib.parse.urlencode({"body": body, "self_unread": str(self_unread)}).encode("utf-8")
+            result = self._request(
+                "POST",
+                f"/rooms/{rid}/messages",
+                data=form,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            message_id = result.get("message_id", "")
+            # ここでも _record_sent を呼ばず直接 store 更新 (再入回避)
+            store = self._load_sent()
+            store[key] = {"room_id": rid, "message_id": message_id, "ts": time.time()}
+            self._save_sent(store)
+            log.info(f"ChatWork 投稿成功 room={rid} message_id={message_id}")
+            return result
 
     def upload_file(
         self,
@@ -354,56 +368,61 @@ class ChatWorkClient:
         filename = os.path.basename(file_path)
 
         key = idempotency_key or self._content_hash(rid, f"FILE:{filename}:{size}:{message}")
-        if self._is_already_sent(key):
-            log.info(f"ChatWork: ファイル送信済みスキップ key={key[:12]}…")
-            return {"skipped": True, "idempotency_key": key}
 
-        if self.dry_run:
-            log.info(f"ChatWork [dry_run] upload room={rid} file={filename} size={size}B")
-            self._record_sent(key, {"room_id": rid, "file": filename, "dry_run": True, "ts": time.time()})
-            return {"dry_run": True, "idempotency_key": key, "file": filename}
+        # P1-C: post_message と同様、check + upload + record を 1 つの flock 内に閉じる
+        os.makedirs(os.path.dirname(self.sent_log_path), exist_ok=True)
+        with self._sent_store_lock():
+            if self._is_already_sent(key):
+                log.info(f"ChatWork: ファイル送信済みスキップ key={key[:12]}…")
+                return {"skipped": True, "idempotency_key": key}
 
-        boundary = f"----BPOChatWorkBoundary{uuid.uuid4().hex}"
-        with open(file_path, "rb") as f:
-            file_content = f.read()
-        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            if self.dry_run:
+                log.info(f"ChatWork [dry_run] upload room={rid} file={filename} size={size}B")
+                store = self._load_sent()
+                store[key] = {"room_id": rid, "file": filename, "dry_run": True, "ts": time.time()}
+                self._save_sent(store)
+                return {"dry_run": True, "idempotency_key": key, "file": filename}
 
-        body_parts: list[bytes] = []
-        if message:
+            boundary = f"----BPOChatWorkBoundary{uuid.uuid4().hex}"
+            with open(file_path, "rb") as f:
+                file_content = f.read()
+            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+            body_parts: list[bytes] = []
+            if message:
+                body_parts.append(f"--{boundary}\r\n".encode("utf-8"))
+                body_parts.append(b'Content-Disposition: form-data; name="message"\r\n\r\n')
+                body_parts.append(message.encode("utf-8"))
+                body_parts.append(b"\r\n")
             body_parts.append(f"--{boundary}\r\n".encode("utf-8"))
-            body_parts.append(b'Content-Disposition: form-data; name="message"\r\n\r\n')
-            body_parts.append(message.encode("utf-8"))
+            body_parts.append(
+                f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode("utf-8")
+            )
+            body_parts.append(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+            body_parts.append(file_content)
             body_parts.append(b"\r\n")
-        body_parts.append(f"--{boundary}\r\n".encode("utf-8"))
-        body_parts.append(
-            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode("utf-8")
-        )
-        body_parts.append(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
-        body_parts.append(file_content)
-        body_parts.append(b"\r\n")
-        body_parts.append(f"--{boundary}--\r\n".encode("utf-8"))
-        body = b"".join(body_parts)
+            body_parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+            body = b"".join(body_parts)
 
-        result = self._request(
-            "POST",
-            f"/rooms/{rid}/files",
-            data=body,
-            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-            timeout=60,  # ファイルアップロードは長め
-        )
-        file_id = result.get("file_id", "")
-        self._record_sent(
-            key,
-            {
+            result = self._request(
+                "POST",
+                f"/rooms/{rid}/files",
+                data=body,
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+                timeout=60,  # ファイルアップロードは長め
+            )
+            file_id = result.get("file_id", "")
+            store = self._load_sent()
+            store[key] = {
                 "room_id": rid,
                 "file_id": file_id,
                 "filename": filename,
                 "size": size,
                 "ts": time.time(),
-            },
-        )
-        log.info(f"ChatWork ファイル投稿成功 room={rid} file_id={file_id} {filename}")
-        return result
+            }
+            self._save_sent(store)
+            log.info(f"ChatWork ファイル投稿成功 room={rid} file_id={file_id} {filename}")
+            return result
 
 
 # ---------- module-level helpers ----------
