@@ -151,12 +151,36 @@ def preview(
         f"items_today:      {len(context['items_today'])}\n"
         f"items_this_week:  {len(context['items_this_week'])}\n"
         f"items_legal_note: {len(context['items_legal_note'])}\n"
-        f"unmapped:         {len(context['internal_unmapped_rules'])}\n",
+        f"unmapped:         {len(context['internal_unmapped_rules'])}\n"
+        f"anomaly_summary:  {context.get('anomaly_summary')}\n",
         file=sys.stderr,
     )
     if context["internal_unmapped_rules"]:
         print(
             f"  unmapped rules: {', '.join(context['internal_unmapped_rules'])}\n",
+            file=sys.stderr,
+        )
+
+    # === 5/8 v3: 表示順スコア breakdown を debug 出力 ===
+    print("=== 表示順スコア (小さいほど上位) ===", file=sys.stderr)
+    print(
+        f"{'rule_id':14} {'section':10} {'score':>5}   "
+        f"{'pri':>3} + {'goal':>4} + {'sev':>3} + {'perf':>4} + {'tact':>4} + {'notif':>5}",
+        file=sys.stderr,
+    )
+    all_items = (
+        [("today",     i) for i in context["items_today"]]
+        + [("week",      i) for i in context["items_this_week"]]
+        + [("legal",     i) for i in context["items_legal_note"]]
+    )
+    for section, item in all_items:
+        b = item.get("sort_breakdown") or {}
+        score = item.get("sort_score", "?")
+        print(
+            f"  {item['rule_id']:14} {section:10} {score:>5}   "
+            f"{b.get('priority','?'):>3} + {b.get('goal_stage','?'):>4} + "
+            f"{b.get('severity','?'):>3} + {b.get('perf_impact','?'):>4} + "
+            f"{b.get('today_action','?'):>4} + {b.get('already_notified','?'):>5}",
             file=sys.stderr,
         )
 
