@@ -107,6 +107,12 @@
 {% endfor %}
 {% endif %}
 
+▼ 返信方法
+上から順に A/B/C の1文字でご返信ください。
+例: 1件目だけ → C
+例: 1件目・2件目まとめて → C、C
+例: 2件目だけ → {{ items_today[1].rule_id if items_today|length > 1 else "F-MF-08" }} C
+
 ──────────────────────────────────────
 本通知は Zynect Auto-Reporter による自動診断結果です（{{ current_year }}/{{ "%02d"|format(current_month) }} 時点の運用ガイド準拠）。
 [/info]
