@@ -410,6 +410,10 @@ class TestResponseStoreMonotonic:
             return _orig_parse(messages, rule_messaging, **kwargs)
 
         monkeypatch.setattr(ChatWorkClient, "fetch_messages", fake_fetch)
+        monkeypatch.setattr(ingest_chatwork_responses, "load_latest_context", lambda client_id: {
+            "message_id": "0",
+            "displayed_rule_ids": ["F-DG-01"],
+        })
         monkeypatch.setattr(
             "scripts.ingest_chatwork_responses.parse_messages_bulk", hooked_parse,
         )
@@ -930,6 +934,10 @@ class TestDailyCheckIngestsBeforeNotify:
             ]
 
         monkeypatch.setattr(ChatWorkClient, "fetch_messages", fake_fetch)
+        monkeypatch.setattr(ingest_chatwork_responses, "load_latest_context", lambda client_id: {
+            "message_id": "0",
+            "displayed_rule_ids": ["F-AH-04"],
+        })
 
         summary = ingest_chatwork_responses.ingest("pilotton", dry_run=True)
         # 1 件 parse、0 件 save (dry_run のため)
@@ -938,6 +946,31 @@ class TestDailyCheckIngestsBeforeNotify:
         # yaml ファイル自体が作られていない
         assert not (responses_dir / "pilotton.yaml").exists(), \
             "dry_run なのに yaml に保存されてしまった"
+
+    def test_ingest_without_reply_context_skips_history(self, monkeypatch, tmp_path):
+        """直近TODO文脈が無い場合、古い明示 rule_id 返信を再取り込みしない"""
+        from scripts import ingest_chatwork_responses
+        from notifiers.chatwork_notifier import ChatWorkClient
+        import engine.chatwork_response_store as store
+
+        monkeypatch.setattr(store, "RESPONSES_DIR", tmp_path / "responses")
+
+        def fake_fetch(self, room_id=None, force=1):
+            return [
+                {"message_id": "2000", "send_time": 1715000000, "body": "F-MF-02 C",
+                 "account": {"account_id": 99999999}},
+            ]
+
+        monkeypatch.setattr(ChatWorkClient, "fetch_messages", fake_fetch)
+        monkeypatch.setattr(ingest_chatwork_responses, "load_latest_context", lambda client_id: None)
+
+        summary = ingest_chatwork_responses.ingest("pilotton", dry_run=False)
+
+        assert summary["fetched_messages"] == 1
+        assert summary["skipped_by_since_id"] == 1
+        assert summary["parsed_answers"] == 0
+        assert summary["saved_responses"] == 0
+        assert not (tmp_path / "responses" / "pilotton.yaml").exists()
 
 
 # ============================================================

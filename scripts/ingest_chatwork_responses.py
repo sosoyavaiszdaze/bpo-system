@@ -145,6 +145,23 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
             return (0, 0)
     messages.sort(key=_sort_key)
 
+    # 3-4. パース (Bot 自動通知を本文 marker / account_id で除外してから regex 抽出)
+    # 5/7 P4: 直近通知文脈があれば、`C、C` のようなルールIDなし返信を
+    # 表示順に割り当てる。
+    rule_messaging = load_messaging()
+    reply_context = load_latest_context(client_id)
+
+    # 5/7 P5: 通知文脈より古い ChatWork 履歴は回答取り込み対象にしない。
+    # fetch_messages は直近履歴をまとめて返すため、明示 rule_id 付きの古いテスト返信
+    # (例: F-MF-02 C) が毎朝再取り込みされる事故が起きた。顧客回答は直近TODO通知への
+    # 返信として処理するため、明示 --since-id が無い場合は latest context の message_id
+    # を watermark として使う。context が無い場合は安全側で全メッセージを parse しない。
+    if not since_id:
+        since_id = str((reply_context or {}).get("message_id") or "")
+        if not since_id:
+            summary["skipped_by_since_id"] = len(messages)
+            messages = []
+
     # since_id フィルタ (numeric 比較)
     if since_id and messages:
         try:
@@ -155,11 +172,6 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
         except (ValueError, TypeError):
             log.warning(f"--since-id 不正形式: {since_id}、無視して全件処理")
 
-    # 3-4. パース (Bot 自動通知を本文 marker / account_id で除外してから regex 抽出)
-    # 5/7 P4: 直近通知文脈があれば、`C、C` のようなルールIDなし返信を
-    # 表示順に割り当てる。
-    rule_messaging = load_messaging()
-    reply_context = load_latest_context(client_id)
     parsed = parse_messages_bulk(
         messages, rule_messaging,
         bot_account_ids=bot_account_ids or None,
