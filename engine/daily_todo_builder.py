@@ -560,6 +560,7 @@ def build_daily_todo(
         "client_name":  company.get("name") or client_id,
         "honorific":    company.get("honorific", "御中"),
         "today":        today_str,
+        "to_line":      _build_chatwork_to_line(client_cfg),
         "headline":     headline,
         "items_today":         items_today,
         "items_this_week":     items_this_week,
@@ -579,6 +580,46 @@ def build_daily_todo(
 
 
 # ========== Private ==========
+
+def _build_chatwork_to_line(client_cfg: dict, channel: str = "daily_todo") -> str:
+    """clients.yaml の chatwork_mentions から ChatWork TO 行を作る。
+
+    Supported config:
+        chatwork_mentions:
+          daily_todo:
+            - account_id: 123
+              name: "山田 太郎"
+          default: [...]
+
+    ChatWork の宛先指定は `[To:account_id]名前さん` を本文先頭に置く。
+    未設定なら空文字を返し、既存通知には影響しない。
+    """
+    mentions_cfg = client_cfg.get("chatwork_mentions") or {}
+    if isinstance(mentions_cfg, dict):
+        mentions = mentions_cfg.get(channel) or mentions_cfg.get("default") or []
+    elif isinstance(mentions_cfg, list):
+        mentions = mentions_cfg
+    else:
+        mentions = []
+
+    lines: list[str] = []
+    for mention in mentions:
+        if isinstance(mention, dict):
+            account_id = mention.get("account_id") or mention.get("id")
+            name = str(mention.get("name") or "").strip()
+        else:
+            account_id = mention
+            name = ""
+        if not account_id:
+            continue
+
+        display = name
+        if display and not display.endswith(("さん", "様")):
+            display = f"{display}さん"
+        lines.append(f"[To:{account_id}]{display}")
+
+    return "\n".join(lines)
+
 
 def post_daily_todo(
     client_id: str,
@@ -791,7 +832,7 @@ def _build_headline(items_today: list[dict], anomaly_summary: Optional[dict]) ->
         # 主軸のゴールを 1 件目から取得
         first_goal = items_today[0]["goal_stage"]
         goal_intro = {
-            "measurement_recovery": "まずは計測不備の確認を優先してください。",
+            "measurement_recovery": "まずは計測精度・設定状況の確認を優先してください。",
             "cpa_diagnosis":        "まずは CPA 悪化要因の切り分けを優先してください。",
             "delivery_diagnosis":   "まずは配信量低下の原因切り分けを優先してください。",
             "first_party_data":     "1st party data 整備を進めてください。",

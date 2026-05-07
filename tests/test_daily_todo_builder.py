@@ -33,6 +33,48 @@ def reset_messaging_cache():
 # ============================================================
 
 class TestBuildDailyTodo:
+    def test_chatwork_to_line_is_rendered_before_info_block(self):
+        """clients.yaml の chatwork_mentions を ChatWork TO 行として本文先頭に出す"""
+        from engine.daily_todo_builder import build_daily_todo
+        from templates.chatwork import render
+
+        ctx = build_daily_todo(
+            client_id="test",
+            client_cfg={
+                "company": {"name": "test"},
+                "chatwork_mentions": {
+                    "daily_todo": [
+                        {"account_id": 4078171, "name": "太田 浩嗣"},
+                        {"account_id": 6548794, "name": "槇 賢治"},
+                    ]
+                },
+            },
+            layer_a_rule_ids=["F-AH-04"],
+            eligible_rules=[],
+            today_str="2026-05-08",
+        )
+
+        assert ctx["to_line"] == "[To:4078171]太田 浩嗣さん\n[To:6548794]槇 賢治さん"
+        body = render("_daily_recommendations.md.j2", ctx)
+        assert body.startswith("[To:4078171]太田 浩嗣さん\n[To:6548794]槇 賢治さん\n[info]")
+
+    def test_chatwork_to_line_is_empty_when_unconfigured(self):
+        """chatwork_mentions 未設定の既存クライアントでは本文を変えない"""
+        from engine.daily_todo_builder import build_daily_todo
+        from templates.chatwork import render
+
+        ctx = build_daily_todo(
+            client_id="test",
+            client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=["F-AH-04"],
+            eligible_rules=[],
+            today_str="2026-05-08",
+        )
+
+        assert ctx["to_line"] == ""
+        body = render("_daily_recommendations.md.j2", ctx)
+        assert body.startswith("\n[info]") or body.startswith("[info]")
+
     def test_layer_a_anomaly_rules_appear_in_today(self):
         """X-PI1 / ANO_CPA_SPIKE / ANO_IMPRESSION_DROP が統合通知に入る"""
         from engine.daily_todo_builder import build_daily_todo
@@ -174,6 +216,8 @@ class TestBuildDailyTodo:
         headline = ctx["headline"]
         assert "75.6" in headline
         assert "68.0" in headline
+        assert "計測精度・設定状況" in headline
+        assert "計測不備" not in headline
 
 
 # ============================================================

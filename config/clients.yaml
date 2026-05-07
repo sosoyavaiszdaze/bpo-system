@@ -130,6 +130,12 @@ clients:
     chatwork_rooms:
       main: 435851481                    # ADR-011 自動通知グループ (kickoff で改名)
       staging: 435851481                 # 内部レビュー期間中は本番と共用
+    chatwork_mentions:
+      daily_todo:
+        - account_id: 4078171
+          name: "太田 浩嗣"
+        - account_id: 6548794
+          name: "槇 賢治"
     chatwork_bot_token_env: CHATWORK_BOT_API_TOKEN
     economics:
       aov_jpy: 15000                     # ADR-009 仮値 (kickoff 後実値)

@@ -8,9 +8,10 @@
      - セクション 3: 補足 (items_legal_note、法令/プライバシー、要約)
      - rule_messaging.yaml 未定義 rule は本文に出さない (内部ログのみ)
      - Markdown ** 強調は使わない (ChatWork でそのまま表示されるため)
+     - to_line がある場合は ChatWork の [To:account_id] 宛先指定を本文先頭に出す
 
    想定 context (engine/daily_todo_builder.build_daily_todo の戻り値):
-     client_name, honorific, today
+     client_name, honorific, today, to_line
      headline (str)
      items_today          (list of items)
      items_this_week      (list of items)
@@ -22,6 +23,9 @@
               priority, goal_stage, expected_effect[], today_action,
               yes_no_question, action_options{A,B,C,...}, legal_note}
 #}
+{% if to_line -%}
+{{ to_line }}
+{% endif -%}
 [info][title]【{{ client_name }}{{ honorific }}】本日の広告成果改善TODO {{ today }}（{{ total_count }}件）[/title]
 {{ headline }}
 {% if items_today %}
