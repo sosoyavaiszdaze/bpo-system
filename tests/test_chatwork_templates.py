@@ -152,6 +152,63 @@ class TestCompletionNotice:
         assert "¥-115,500" in out
         assert "conversion_mapping.yaml" in out
 
+    def test_anomaly_continued_issue_followup(self, chatwork_render):
+        """急変アラート終了後も水準が戻らない場合は YAML 仮説を表示"""
+        ctx = {
+            "client_display_name": "株式会社パイロットン",
+            "date": "2026-05-09",
+            "completions": [
+                {
+                    "title": "[Meta] CPA +76.3% 上昇 (¥5,494 → ¥9,686)",
+                    "rule_id": "ANO_CPA_SPIKE",
+                    "first_reported_at": "2026-05-07",
+                    "resolved_at": "2026-05-09",
+                    "before_state": "[Meta] CPA +76.3% 上昇 (¥5,494 → ¥9,686)",
+                    "after_state": "急変条件は3日連続で再発していません。ただし水準が戻ったとは限らないため、下記の継続課題を確認します。",
+                    "consecutive_clean_days": 3,
+                    "is_continued_issue": True,
+                    "followup": {
+                        "type": "continued_issue",
+                        "summary": "急変アラートは終了しましたが、CPA水準は悪化後の状態が残っています。",
+                        "account_metric": {"metric": "cpa", "baseline": 5494, "latest": 9458, "change_pct": 72.2},
+                        "campaign_metrics": [
+                            {
+                                "campaign": "MYNAILPLEX_配信_新",
+                                "baseline_cpa": 4120,
+                                "latest_cpa": 9387,
+                                "cpa_change_pct": 127.9,
+                                "baseline_impressions": 866756,
+                                "latest_impressions": 368544,
+                                "impression_change_pct": -57.5,
+                            }
+                        ],
+                        "hypotheses": [
+                            {
+                                "rule_id": "M68",
+                                "rule_name": "学習リセット要因イベント検出",
+                                "hypothesis": "予算・ターゲット変更で学習が再起動した可能性。",
+                                "evidence": "CPA悪化と配信量低下が同時に出ています。",
+                                "next_action": "変更履歴を確認してください。",
+                            }
+                        ],
+                        "customer_question": "5/5前後に変更はありましたか?",
+                        "answer_options": {
+                            "A": "予算・入札・ターゲットを変更した",
+                            "B": "広告素材・LP・CVイベントを変更した",
+                            "C": "特に変更していない / 不明",
+                        },
+                    },
+                }
+            ],
+        }
+        out = chatwork_render("completion_notice.md.j2", ctx)
+        assert "急変アラート終了 / 継続確認" in out
+        assert "継続課題" in out
+        assert "MYNAILPLEX_配信_新" in out
+        assert "M68 学習リセット要因イベント検出" in out
+        assert "[A] 予算・入札・ターゲットを変更した" in out
+        assert "達成効果（月次換算）" not in out
+
 
 class TestMonthlyReport:
     """monthly_report.md.j2 レンダリング"""

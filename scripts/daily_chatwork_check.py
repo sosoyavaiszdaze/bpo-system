@@ -127,9 +127,18 @@ def _to_indication_render_item(rec: dict) -> dict:
     }
 
 
-def _to_completion_render_item(rec: dict) -> dict:
+def _to_completion_render_item(rec: dict, client_id: str = "", today_str: str = "") -> dict:
     """state record → completion_notice.md.j2 completions[] 要素"""
     payload = rec.get("payload") or {}
+    followup = None
+    if client_id and today_str:
+        try:
+            from engine.claude_hypothesis_engine import build_anomaly_followup
+            followup = build_anomaly_followup(client_id, rec, today_str)
+        except Exception as e:
+            log.warning(f"anomaly followup 生成失敗: {rec.get('rule_id')} {e}")
+
+    is_continued = bool(followup and followup.get("type") == "continued_issue")
     return {
         "title": payload.get("completion_title")
                  or payload.get("title")
@@ -138,13 +147,23 @@ def _to_completion_render_item(rec: dict) -> dict:
         "first_reported_at": rec.get("first_detected_date", ""),
         "resolved_at": rec.get("resolved_date", ""),
         "before_state": payload.get("before_state") or payload.get("fact") or "(指摘時状態の記録なし)",
-        "after_state": payload.get("after_state") or "(解消後状態の記録なし — 指摘条件が3日連続で再現せず)",
+        "after_state": (
+            payload.get("after_state")
+            or (
+                "急変条件は3日連続で再発していません。ただし水準が戻ったとは限らないため、"
+                "下記の継続課題を確認します。"
+                if is_continued
+                else "(解消後状態の記録なし — 指摘条件が3日連続で再現せず)"
+            )
+        ),
         "consecutive_clean_days": rec.get("consecutive_clean_days", 0),
         "achieved_effect": payload.get("achieved_effect") or {
             "minimum": "次回月次レポートにて算定",
             "realistic": "次回月次レポートにて算定",
         },
         "note": payload.get("note"),
+        "followup": followup,
+        "is_continued_issue": is_continued,
     }
 
 
@@ -250,7 +269,10 @@ def _run_daily_check_impl(
     pending_completion = state.list_pending_completion_notification()
     if pending_completion:
         log.info(f"完了通知対象: {len(pending_completion)} 件")
-        completion_items = [_to_completion_render_item(r) for r in pending_completion]
+        completion_items = [
+            _to_completion_render_item(r, client_id=client_id, today_str=today_str)
+            for r in pending_completion
+        ]
         try:
             body = render("completion_notice.md.j2", {
                 "client_display_name": client_display,
