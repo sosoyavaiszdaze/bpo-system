@@ -20,6 +20,10 @@ anthropic>=0.39
 # スケジューラ
 apscheduler>=3.10
 
+# 運用UI（Phase B read-only console）
+fastapi>=0.115
+uvicorn>=0.30
+
 # テスト
 pytest>=8.0
 ruff>=0.4

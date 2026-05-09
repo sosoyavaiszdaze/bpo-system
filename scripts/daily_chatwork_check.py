@@ -290,6 +290,18 @@ def _run_daily_check_impl(
                 posted_completions = len(pending_completion)
                 for r in pending_completion:
                     state.mark_completion_notified(r["indication_id"], today=today_str)
+                try:
+                    from engine.stores.db import transaction
+                    from engine.stores.outcomes import record_completion_outcome
+                    with transaction() as conn:
+                        recorded = 0
+                        for r in pending_completion:
+                            if record_completion_outcome(conn, r):
+                                recorded += 1
+                    log.info(f"outcome_tracker: completion outcomes recorded={recorded}")
+                except Exception as e:
+                    log.error(f"outcome tracker 記録失敗: {e}")
+                    errors.append(f"outcome_record: {e}")
         except (ChatWorkError, Exception) as e:
             log.error(f"完了通知投稿失敗: {e}")
             errors.append(f"completion_post: {e}")

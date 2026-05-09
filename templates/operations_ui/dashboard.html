@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zynect Operations Console</title>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --line: #d9dee7;
+      --text: #1f2933;
+      --muted: #617083;
+      --bad: #b42318;
+      --warn: #b54708;
+      --ok: #027a48;
+      --accent: #155eef;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+    header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    h1 { margin: 0; font-size: 22px; }
+    h2 { margin: 0 0 12px; font-size: 16px; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(360px, .8fr);
+      gap: 16px;
+      padding: 16px 24px 32px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 9px 8px;
+      border-bottom: 1px solid #edf0f4;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .kpi {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfe;
+    }
+    .kpi strong { display: block; font-size: 20px; margin-top: 4px; }
+    .muted { color: var(--muted); }
+    .status-failed, .sev-critical { color: var(--bad); font-weight: 650; }
+    .status-partial_failure, .sev-high { color: var(--warn); font-weight: 650; }
+    .status-success { color: var(--ok); font-weight: 650; }
+    .pill {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      margin: 1px 2px 1px 0;
+      white-space: nowrap;
+    }
+    .rule-issues {
+      max-height: 520px;
+      overflow: auto;
+    }
+    @media (max-width: 980px) {
+      main { grid-template-columns: 1fr; padding: 12px; }
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Zynect Operations Console</h1>
+    <div class="muted">Read-only Phase B console: client health, cases, jobs, rule registry, outcomes.</div>
+  </header>
+  <main>
+    <div>
+      <section>
+        <h2>Client Health</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Vertical</th>
+              <th>Latest Job</th>
+              <th>Open</th>
+              <th>Waiting</th>
+              <th>Stale</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in clients %}
+            <tr>
+              <td><strong>{{ c.display_name }}</strong><br><span class="muted">{{ c.client_id }}</span></td>
+              <td>{{ c.vertical or "-" }}<br><span class="muted">{{ c.ec_platform or "-" }}</span></td>
+              <td>
+                {% if c.latest_job %}
+                  <span class="status-{{ c.latest_job.status }}">{{ c.latest_job.status }}</span><br>
+                  <span class="muted">{{ c.latest_job.job_name }} / {{ c.latest_job.started_at }}</span>
+                {% else %}
+                  <span class="muted">No job</span>
+                {% endif %}
+              </td>
+              <td>{{ c.open_cases_count }}</td>
+              <td>{{ c.waiting_client_count }} / {{ c.waiting_zynect_count }}</td>
+              <td>{{ c.stale_cases_count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Case Inbox</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Rule</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Severity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for case in case_inbox %}
+            <tr>
+              <td>{{ case.client_id }}</td>
+              <td>{{ case.rule_id }}</td>
+              <td>{{ case.title }}</td>
+              <td>{{ case.status }}</td>
+              <td class="sev-{{ case.severity }}">{{ case.severity or "-" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Recent Jobs</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Started</th>
+              <th>Client</th>
+              <th>Job</th>
+              <th>Status</th>
+              <th>Metrics</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for job in recent_jobs %}
+            <tr>
+              <td>{{ job.started_at }}</td>
+              <td>{{ job.client_id or "-" }}</td>
+              <td>{{ job.job_name }}</td>
+              <td class="status-{{ job.status }}">{{ job.status }}</td>
+              <td class="muted">{{ job.metrics }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Decision Traces</h2>
+        <p class="muted">{{ decision_trace_summary }}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Rule</th>
+              <th>Stage</th>
+              <th>Status</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for trace in recent_decision_traces %}
+            <tr>
+              <td>{{ trace.client_id }}</td>
+              <td>{{ trace.rule_id }}</td>
+              <td>{{ trace.stage }}</td>
+              <td>{{ trace.status }}</td>
+              <td class="muted">{{ trace.reason or "-" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <div>
+      <section>
+        <h2>Rule Registry Coverage</h2>
+        <div class="kpis">
+          <div class="kpi"><span class="muted">Rules</span><strong>{{ rule_registry.total_rules }}</strong></div>
+          <div class="kpi"><span class="muted">Messaging</span><strong>{{ rule_registry.messaging_coverage_pct }}%</strong></div>
+          <div class="kpi"><span class="muted">Impact</span><strong>{{ rule_registry.expected_impact_coverage_pct }}%</strong></div>
+          <div class="kpi"><span class="muted">Axis</span><strong>{{ rule_registry.decision_axis_coverage_pct }}%</strong></div>
+        </div>
+        <p class="muted">Layer counts: {{ rule_registry.layer_counts }}</p>
+        <p class="muted">Issue counts: {{ rule_registry.issue_counts }}</p>
+      </section>
+
+      <section>
+        <h2>Outcome Summary</h2>
+        <div class="kpis">
+          <div class="kpi"><span class="muted">Measured Value</span><strong>¥{{ "{:,.0f}".format(outcomes.total_estimated_value_yen or 0) }}</strong></div>
+        </div>
+        <table>
+          <thead><tr><th>Metric</th><th>N</th><th>Avg Change</th><th>Value</th></tr></thead>
+          <tbody>
+            {% for m in outcomes.metrics %}
+            <tr>
+              <td>{{ m.metric }}</td>
+              <td>{{ m.n }}</td>
+              <td>{% if m.avg_change_pct is not none %}{{ "%.1f"|format(m.avg_change_pct) }}%{% else %}-{% endif %}</td>
+              <td>¥{{ "{:,.0f}".format(m.estimated_value_yen or 0) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Recent Outcomes</h2>
+        <table>
+          <thead><tr><th>Client</th><th>Case</th><th>Metric</th><th>Change</th><th>Value</th></tr></thead>
+          <tbody>
+            {% for o in recent_outcomes %}
+            <tr>
+              <td>{{ o.client_id }}</td>
+              <td><span class="muted">{{ o.case_id }}</span></td>
+              <td>{{ o.metric }}<br><span class="muted">{{ o.confidence or "-" }}</span></td>
+              <td>{% if o.change_pct is not none %}{{ "%.1f"|format(o.change_pct) }}%{% else %}-{% endif %}</td>
+              <td>¥{{ "{:,.0f}".format(o.estimated_value_yen or 0) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="rule-issues">
+        <h2>Rule Registry Issues</h2>
+        <table>
+          <thead><tr><th>Rule</th><th>Layer</th><th>Issues</th></tr></thead>
+          <tbody>
+            {% for r in rule_registry_issues %}
+            <tr>
+              <td><strong>{{ r.rule_id }}</strong><br><span class="muted">{{ r.name }}</span></td>
+              <td>{{ r.layer }}<br><span class="muted">{{ r.source_path }}</span></td>
+              <td>{% for issue in r.issues %}<span class="pill">{{ issue }}</span>{% endfor %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

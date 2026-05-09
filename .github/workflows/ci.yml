@@ -29,7 +29,7 @@ jobs:
           # 二重防御済 — 何らかの理由で install 失敗しても CI が崩壊しない。
           pip install pyyaml jinja2 python-dotenv pytest ruff pydantic python-pptx
           # オプショナル依存 (失敗しても CI 続行)
-          pip install google-ads anthropic apscheduler flask || true
+          pip install google-ads anthropic apscheduler flask fastapi uvicorn || true
 
       - name: Lint with ruff
         run: |
