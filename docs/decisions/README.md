@@ -11,6 +11,7 @@ Zynect Media Agent の重要な設計判断を記録するディレクトリで�
 | [ADR-003](./ADR-003-pixel-health-coupling.md) | pixel_health 連動ロジック設計 | Accepted | 2026-05-02 | ADR-001, ADR-002 |
 | [ADR-004](./ADR-004-cv-normalization-and-conversion-mapping.md) | CV カウント正規化と conversion_mapping.yaml 外部化 | Accepted | 2026-05-03 | ADR-001, ADR-002, ADR-003 |
 | [ADR-005](./ADR-005-chatwork-indication-completion-monthly-loop.md) | ChatWork 経由の指摘・完了・月次運用ループ | Accepted | 2026-05-03 | ADR-001, ADR-002, ADR-003, ADR-004 |
+| [ADR-018](./ADR-018-operational-platform-architecture.md) | MVP から運用プラットフォームへの進化 | Proposed | 2026-05-09 | ADR-005, ADR-011, ADR-012, ADR-013, ADR-016, ADR-017 |
 
 ## 関連ドキュメント
 
@@ -68,4 +69,4 @@ Zynect Media Agent の重要な設計判断を記録するディレクトリで�
 
 ---
 
-*最終更新: 2026-05-02*
+*最終更新: 2026-05-09*
