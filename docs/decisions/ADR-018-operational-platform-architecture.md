@@ -497,3 +497,607 @@ Phase C 完了条件:
 - 指摘後の対応状況の追跡
 - 将来の効果測定 / rule feedback の土台
 
+## 12. Screenshot Assessment Coverage
+
+2026-05-09 時点のアーキテクチャ棚卸しで挙がった観点は、本 ADR では以下のように扱う。
+
+| 観点 | 現状課題 | ADR-018 での対応 |
+|---|---|---|
+| データ永続化 | YAML / JSON が散在し、10〜20 社で破綻しやすい | `state/zynect.db` を運用台帳にし、`clients / snapshots / cases / events / outcomes / jobs` へ統合 |
+| ルール体系 | 5 層 + 約 525+ ルールはあるが、連携が暗黙的 | `rule_evaluations` と `rule_feedback` で rule_id 単位の評価・成果・誤検知を記録 |
+| エントリポイント | `pipeline.py` と `daily_chatwork_check.py` が並走 | ADR-016 を前提に、日次運用は job と case lifecycle に寄せる |
+| スケジューリング | macOS launchd 1 台が単一障害点 | Phase B は `job_runs` で可視化、Phase C で cloud/VPS scheduler へ移行 |
+| 設定管理 | YAML 読込と `.env` の企業別 secret が増えると爆発 | `clients` / secret manager 相当 / source 別 snapshot へ分離する方針 |
+| モジュール分割 | `engine/` に巨大ファイルが増えている | `stores / rules / cases / notifications / observability` へ業務境界で分割 |
+| テスト | 件数は多いが実運用頻度・状態遷移の保証が弱い | case lifecycle / migration / job health / outcome tracker のテストを追加対象にする |
+| ドキュメント | ADR は強い | ADR-018 を上位設計にし、ADR-017 の SQLite 移行を運用台帳化へ拡張 |
+
+## 13. Additional Concerns
+
+スクリーンショット外で、今後の運用拡大時に不安が残る点。
+
+### 13.1 Multi-tenant data isolation
+
+複数社運用では、client_id の取り違えが最も危険。通知先 room_id、API token、データ snapshot、case、response はすべて client_id を必須にし、DB 制約とテストで担保する。
+
+対策:
+
+- 全テーブルに `client_id` を持たせる
+- ChatWork 送信時に `client_id -> room_id` の整合チェック
+- `pilotton` のデータが別 room に出ない regression test
+
+### 13.2 Secret management
+
+`.env` に企業別 token が増えると、更新漏れ・誤送信・漏洩リスクが上がる。
+
+対策:
+
+- Phase B は `.env` を継続しつつ、secret 名の命名規則を固定
+- Phase C で 1Password CLI / Doppler / AWS Secrets Manager / GCP Secret Manager 相当へ移行
+- ログや self alert に token / customer_id を出さないマスキングテスト
+
+### 13.3 Data retention and backup
+
+効果測定には過去データが必要。今の JSON ファイル運用では、削除・上書き・マシン故障がそのまま証跡喪失になる。
+
+対策:
+
+- SQLite は日次 backup
+- `data_snapshots` は raw payload を保持
+- 月次で gzip archive
+- restore rehearsal を月1回実施
+
+### 13.4 Notification fatigue
+
+ルールが増えるほど、正しくても通知が多すぎる問題が起きる。顧客は「全部読む」運用をしない。
+
+対策:
+
+- 1日1まとめを維持
+- `case_stale` と `waiting_client` は別枠でまとめる
+- 重要度だけでなく `expected_value / urgency / customer burden` で通知順を決める
+- 返信がない rule は聞き方を変える。単純再通知しない
+
+### 13.5 API quota and external failures
+
+Meta / Google / ChatWork / EC platform は rate limit・一時障害・権限切れが起こる。
+
+対策:
+
+- `data_snapshots.status = success / partial / failed / stale`
+- API failure と clean 判定を混同しない
+- retry は job 単位ではなく connector 単位に分離
+- token invalid は client health の critical alert
+
+### 13.6 Migration risk
+
+JSON/YAML から DB へ移る時に、既存の通知 suppression や回答履歴を壊すと顧客に二重通知が出る。
+
+対策:
+
+- 移行前に full backup
+- import 後に record count と hash を比較
+- 1週間は dual-read / single-write で確認
+- migration dry-run report を出す
+
+### 13.7 Human workflow ownership
+
+顧客が `C: 確認したい` と返した後、Zynect側の担当者が動かなければUXは悪いまま。
+
+対策:
+
+- `waiting_zynect` status を明示
+- action owner を `client / zynect` で分ける
+- Zynect 側未対応が 24h を超えたら self alert
+- 月次で担当者別 backlog を出す
+
+### 13.8 Rule governance
+
+525+ ルールは「作ったら終わり」ではなく、廃止・統合・重み調整が必要。
+
+対策:
+
+- `rule_feedback` に false positive / useful / too_hard を蓄積
+- 低反応・低成果 rule は月次レビュー
+- 法令系と広告成果系を同じ優先度軸で扱わない
+- ルール変更は ADR または rule changelog に残す
+
+### 13.9 Cost visibility
+
+Claude API、媒体 API、ChatWork、将来DB/サーバー費用が増える。
+
+対策:
+
+- `job_runs.metrics_json` に API call 数・LLM cost を保存
+- client_id 別の月次コストを出す
+- fallback が使われた回数も可視化する
+
+### 13.10 Security and audit trail
+
+運用代行に近い性質があるため、「誰が・いつ・何を判断したか」を残す必要がある。
+
+対策:
+
+- `case_events.actor_type / actor_id` を必須化
+- 手動 override は理由必須
+- 顧客回答の原文を保持
+- 重要 case は evidence URL / screenshot / API payload hash を保存
+
+## 14. Product Strategy and Moat
+
+このサービスの moat は「広告運用の通知 bot」ではなく、以下の複合資産にある。
+
+1. **運用ケースの履歴データ**
+   - どの rule_id が、どの業種・媒体・EC platform で発火したか
+   - 顧客がどう回答したか
+   - 実際に対応されたか
+   - 対応後に成果がどう変化したか
+
+2. **ルール品質の学習データ**
+   - 誤検知率
+   - 顧客回答率
+   - 実装率
+   - 効果測定到達率
+   - 改善額
+
+3. **業種・媒体・EC platform 別の運用知**
+   - ecforce × Meta
+   - Shopify × Google
+   - SaaS × Meta lead ads
+   のような組み合わせごとの「どの指摘が効くか」。
+
+4. **対応後の効果測定**
+   - 単なる指摘ではなく、「対応したら何が改善したか」まで返せること。
+
+したがって、Phase B/C の開発判断では、以下を優先する。
+
+| 優先 | 方向性 | 理由 |
+|---|---|---|
+| 1 | Operational Case / Outcome DB | moat の原材料になる |
+| 2 | Rule feedback loop | 525+ ルールの質を改善できる |
+| 3 | Client health / job observability | 多社運用で信頼を落とさない |
+| 4 | API/validator で答えられる質問の自動解決 | 顧客負担を下げる |
+| 5 | 管理画面 / CRM 連携 | DB が整ってからでよい |
+
+「きれいなアーキテクチャ」そのものは moat ではない。moat は、運用から得られる判断データと、顧客が成果を感じるフィードバックループである。
+
+## 15. Detailed Architecture Risks
+
+2026-05-09 の追加レビューで挙がった詳細論点を、設計課題として整理する。
+
+### 15.1 Full-file read/write architecture
+
+現状は indication 1 件の status 更新でも、企業単位の JSON 全体を読み込み、丸ごと書き戻す。
+
+問題:
+
+- 1 社 1,000 indications × 12 ヶ月でファイルが MB 級になる
+- 日次 3 回 retry × 媒体 × 525+ ルールで読み書き回数が増える
+- 部分更新・トランザクション・行ロックがない
+
+対応:
+
+- `operational_cases` / `case_events` / `rule_evaluations` へ行単位で保存
+- SQLite WAL mode を有効化
+- JSON/YAML は config / fixture / export 用に限定
+
+### 15.2 Cross-client queries are impossible
+
+現状では、以下のような運用クエリが全 JSON grep になる。
+
+- 過去 30 日で resolved になった指摘の中央値日数
+- クライアント横断で頻出する rule_id
+- critical が連続発生している企業ランキング
+- 回答率が低いクライアント
+- outcome 未計測の implemented case
+
+対応:
+
+- `operational_cases`, `case_events`, `outcome_measurements`, `rule_feedback` を正規化
+- `scripts/client_health.py` と `scripts/rule_quality_report.py` を作る
+
+### 15.3 Snapshot consistency and backup
+
+分散ファイルでは、復旧時に以下のような不整合が起きる。
+
+- indication は 9:05
+- chatwork_sent は 9:07
+- auto_proposal_history は 9:10
+
+ADR-005 の 9:00/9:15/9:30 retry は通知冪等性を守るが、状態整合性は守らない。
+
+対応:
+
+- DB transaction で `send -> record -> case event` を一貫更新
+- 日次 backup は DB 単位
+- migration 時は full snapshot + restore rehearsal
+
+### 15.4 Git-tracked and gitignored operational files are mixed
+
+`outputs/client_state/*.yaml` は tracked、`outputs/chatwork_state/*.json` は ignored など、運用ルールがファイルごとに違う。
+
+問題:
+
+- 新企業追加時に何を commit すべきか属人化
+- runtime state が git に混ざる
+- 顧客固有設定と運用履歴の境界が曖昧
+
+対応:
+
+- Git tracked: rule, template, schema, non-secret config
+- DB: runtime state, responses, cases, job runs, outcomes
+- Secret manager: token, room-specific secret, API credential
+- Export: human-readable YAML snapshot は生成物扱い
+
+### 15.5 Parallel classification axes are not unified
+
+現状、以下の評価軸が並列に存在する。
+
+- root_cause groups
+- tradeoff axes
+- Foundation categories
+- Precision categories
+- EC platform layer
+- vertical layer
+- severity / polarity / priority
+- intent override
+
+問題:
+
+- どの軸が通知順に効いたのか追えない
+- 二重判定が起きる
+- `intent_filter -> indication_filter -> auto_proposal` のどこで落ちたか不明
+
+対応:
+
+- `rule_evaluations.evidence_json` に各評価軸の breakdown を保存
+- `decision_trace` を標準化する
+
+```json
+{
+  "rule_id": "F-MF-01",
+  "matched": true,
+  "filters": [
+    {"name": "applies_to", "result": "pass"},
+    {"name": "intent_override", "result": "downgrade", "from": "critical", "to": "medium"},
+    {"name": "daily_cap", "result": "suppressed"}
+  ],
+  "score_breakdown": {
+    "severity": -10,
+    "expected_value": -20,
+    "customer_burden": 5
+  }
+}
+```
+
+### 15.6 Prerequisite graph is implicit
+
+ルール間 prerequisite が YAML に手書きされているが、全体グラフを可視化・検証する機構がない。
+
+問題:
+
+- 新ルール追加時に上流条件の重複を grep で確認する必要がある
+- 循環 dependency を検出できない
+- 「未達 prerequisite のため通知されない」理由が顧客にも運用者にも見えない
+
+対応:
+
+- `rule_dependencies` table を作る
+- rule load 時に dependency graph を構築
+- cycle / missing rule / duplicate prerequisite を CI で検出
+- `scripts/rule_graph.py --client pilotton` で可視化
+
+### 15.7 Duplicate symptom detection is missing
+
+Foundation measurement、Precision measurement、Layer A M02 など、同じ症状を別 rule_id で指摘する可能性がある。
+
+conflict_detector は対立検出であり、重複統合とは別問題。
+
+対応:
+
+- `symptom_key` を rule 定義に追加
+- 通知前に same symptom group を bundle
+- 顧客には 1 件として出し、内部では複数 rule_id を紐づける
+
+例:
+
+```yaml
+symptom_key: measurement.pixel_or_capi_quality
+primary_rule: F-MF-01
+related_rules: [M02, M03, X-PI1]
+```
+
+### 15.8 Rule ID体系の三重化
+
+現状:
+
+- code ID: `G01`, `M02`, `T05`
+- YAML ID: `GOOGLE_001`, `META_002`
+- new layer ID: `F-MF-01`, `F-LC-04`, `V-EC-01`, `P-EF-02`, `X-PI1`, `ANO_CPA_SPIKE`
+
+問題:
+
+- `id_mapper.py` が deprecated なのに残っている
+- 1 文字違いで rule_messaging 未定義になり、顧客通知から消える
+- 新規ルール追加時の正しい ID 体系が不明
+
+対応:
+
+- canonical ID を `rule_registry` で定義
+- alias は registry にだけ持つ
+- code 側は canonical ID だけを返す
+- `rule_messaging` 未定義は CI error に昇格。ただし `customer_visible: false` を明示した rule は除外
+
+### 15.9 Fallback禁止が silent missing を生む
+
+rule_messaging 未定義 rule は顧客向けに出さない方針はノイズ抑制として正しい。しかし 525+ ルール中、顧客向け messaging が未定義の rule が多いと、検出しても顧客価値にならない。
+
+対応:
+
+- `customer_visible` を rule registry に追加
+- `customer_visible: true` なのに messaging 未定義なら CI fail
+- `customer_visible: false` なら internal-only として明示
+- unmapped rule 件数を job_runs metrics に保存
+
+### 15.10 eval DSL is unsafe and operationally opaque
+
+`eval()` を `__builtins__` なしで実行しても、長期的な安全な sandbox とはみなさない。
+
+また、例外時に False を返すと「発火しなかった」のか「壊れて評価不能」なのか区別できない。
+
+対応:
+
+- ADR-017 の JSONLogic 移行を前倒し
+- `trigger_eval_status = pass / fail / error / missing_data` を保存
+- preflight で全ルールを representative context に対して評価
+- eval error は debug ではなく rule_evaluations に残す
+
+### 15.11 Cache consistency owner is missing
+
+複数箇所で `rule_messaging.yaml` や mapping YAML を別々に cache している。
+
+問題:
+
+- preview と production で違う cache を見る
+- reload 条件がない
+- テストで cache 汚染が起き得る
+
+対応:
+
+- `engine/config_registry.py` を作る
+- YAML loader / cache / reload / schema validation を一元化
+- config version hash を job_runs に保存
+
+### 15.12 State machine is implicit
+
+auto_proposal、ChatWork response、client_state が平面的なフラグ集合になっている。
+
+問題:
+
+- `not_started -> in_progress -> completed -> verified` の不変条件がない
+- completed から not_started へ巻き戻る事故を防げない
+- 手動/API/Claude の3経路更新が競合する
+
+対応:
+
+- `operational_cases.status` を正にする
+- state transition table を定義
+- invalid transition は例外
+- すべての遷移を `case_events` に記録
+
+### 15.13 Tests are module-heavy but flow-light
+
+単体テストは厚いが、全 525 ルール、rule_messaging、ID registry、notification、response ingestion、outcome までの end-to-end が薄い。
+
+対応:
+
+- `tests/test_rule_registry_integrity.py`
+- `tests/test_operational_case_lifecycle.py`
+- `tests/test_multiclient_isolation.py`
+- `tests/test_daily_job_e2e.py`
+- `tests/test_migration_state_to_db.py`
+
+### 15.14 CI green is not production confidence
+
+CI は通っても、本番で reply parsing / context / self alert が壊れた履歴がある。
+
+対応:
+
+- production-like fixture で daily job e2e
+- `--dry-run` と本番経路の差分を縮める
+- smoke test を CI ではなく deploy前 checklist に追加
+- GitHub Issues / Projects で運用バグを管理
+
+### 15.15 Phase A/B/C is overloaded
+
+`phase: A/B/C` が以下を兼任している。
+
+- 顧客導入フェーズ
+- プロダクト機能フェーズ
+- 通知運用フェーズ
+
+対応:
+
+```yaml
+client_lifecycle_stage: onboarding | active | mature | churn_risk
+feature_flags:
+  adtruth: phase_a
+  auto_proposal: phase_b
+notification_mode: test | production | paused
+```
+
+### 15.16 Template and logic are too tightly coupled
+
+顧客別文体、A/B test、返信率改善をしたい場合に、Jinja2 template を git release しないと変えられない。
+
+対応:
+
+- template registry を DB/config に分離
+- `template_variant` を client/case に持たせる
+- 顧客別 tone は template parameter にする
+- ChatWork 以外の channel でも同じ case payload から render できるようにする
+
+### 15.17 ChatWork lock-in
+
+ChatWork は Phase A の主チャネルだが、Slack / Teams / Email / LINE WORKS に拡張するには、送信だけでなく返信取り込み・冪等性・状態同期が必要。
+
+対応:
+
+- `notification_channels`
+- `notification_messages`
+- `reply_events`
+- channel adapter interface
+
+ChatWork 固有の parser は adapter 配下へ閉じ込める。
+
+### 15.18 Clock and timezone consistency
+
+`datetime.now()` が各モジュールに散在している。
+
+問題:
+
+- 深夜跨ぎで同一 job 内の日付がズレる
+- JST/UTC 混在で clean days が off-by-one
+
+対応:
+
+- job 開始時に `run_date_jst` を固定
+- 全関数へ context として渡す
+- DB は UTC timestamp + local business date を両方保存
+
+### 15.19 PDF/report generation scalability
+
+Playwright / Chromium PDF 生成は月次 20 社程度なら許容だが、日次添付や ad-hoc 再生成が増えると詰まる。
+
+対応:
+
+- report generation を job queue 化
+- HTML render と PDF export を分ける
+- artifact storage を導入
+- 同一月次レポートは cache
+
+### 15.20 Observability is local-file only
+
+構造化ログは良いが、集約・メトリクス・trace がない。
+
+対応:
+
+- OpenTelemetry の signals: traces / metrics / logs に寄せる
+- `trace_id`, `job_run_id`, `case_id`, `client_id`, `rule_id` を全ログに入れる
+- rule evaluation count / suppressed count / unmapped count / API latency を metrics 化
+
+### 15.21 Data provenance and AI output boundaries
+
+ベンチマーク、外部調査、Claude 生成、独自理論が混在すると、事実と推測の境界が曖昧になる。
+
+対応:
+
+- `source_type`: api / benchmark / customer_reply / human_override / llm_inference
+- `source_url` / `source_version` / `observed_at`
+- LLM 出力は `inference` として保存し、fact と混ぜない
+
+### 15.22 clients.yaml is a scaling bottleneck
+
+全社が 1 YAML に入ると、編集競合・アクセス制御・機密境界で破綻する。
+
+対応:
+
+- DB `clients` table へ移行
+- non-secret client profile は `config/clients/{client_id}.yaml` でもよい
+- secret と runtime state は git から外す
+
+### 15.23 Partial failure contract is not standardized
+
+`errors`, `skipped`, `dry_run`, `failed`, `attempted` などの戻り値が各関数でばらつく。
+
+対応:
+
+標準 result object:
+
+```python
+{
+  "ok": bool,
+  "status": "success" | "partial_failure" | "failed" | "skipped",
+  "attempted": int,
+  "succeeded": int,
+  "failed": int,
+  "errors": [...],
+  "side_effects": [...]
+}
+```
+
+dry-run は side effect adapter を差し替える形にし、本番コード内の `if not dry_run` を減らす。
+
+## 16. Revised Roadmap
+
+上記を踏まえ、ADR-017 の Phase B 計画を以下に上書きする。
+
+### Phase B0: Stabilize Current Production
+
+目的: 明日の運用を壊さない。
+
+- client_id / run_date を全ログに固定
+- ChatWork 誤通知・誤反映の regression test
+- `internal_unmapped_rule` を daily summary に出す
+- critical self alert の経路確認
+
+### Phase B1: Operational DB Minimum
+
+目的: 運用の真実を DB に残す。
+
+- SQLite schema
+- `job_runs`
+- `operational_cases`
+- `case_events`
+- `action_items`
+- JSON/YAML import
+- client health CLI
+
+### Phase B2: Rule Registry and Decision Trace
+
+目的: 525+ ルールを安全に運用する。
+
+- canonical rule registry
+- alias / deprecated ID の整理
+- customer_visible と messaging coverage check
+- decision_trace 保存
+- prerequisite graph validation
+- duplicate symptom bundling
+
+### Phase B3: Outcome and Feedback Loop
+
+目的: 顧客価値と moat を作る。
+
+- outcome measurements
+- before/after metrics
+- rule feedback
+- monthly rule quality report
+- case resolved と performance recovered を分離
+
+### Phase C: Multi-client Runtime
+
+目的: 10〜20社に耐える。
+
+- active clients iterator
+- per-client failure boundary
+- scheduler 移行
+- secret manager
+- notification channel abstraction
+- centralized observability
+
+## 17. Research Alignment
+
+本 ADR は以下の定石と整合させる。
+
+- Twelve-Factor App:
+  - config と code を分離する
+  - DB / queue / external API を backing service として扱い、付け替え可能にする
+  - logs を event stream として扱う
+- OpenTelemetry:
+  - logs / metrics / traces を相関させ、未知の問題に答えられるようにする
+  - `trace_id`, `job_run_id`, `client_id`, `case_id`, `rule_id` を関連づける
+- OWASP Secrets Management:
+  - secret を中央管理し、アクセス制御・監査・ローテーション・失効を持つ
+- SQLite:
+  - Phase B では WAL mode により atomic commit と reader/writer 並行性を得る
+  - Phase C では PostgreSQL へ移行可能な schema に保つ
