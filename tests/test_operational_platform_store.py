@@ -82,6 +82,42 @@ def test_migrate_is_idempotent(tmp_path):
         conn.close()
 
 
+def test_sync_imports_archived_indications_and_uses_sync_job_name(tmp_path):
+    root = _sample_root(tmp_path)
+    archive_dir = root / "outputs" / "chatwork_state" / "pilotton_indications.archive"
+    archive_dir.mkdir(parents=True)
+    archived = {
+        "indication_id": "pilotton:F-MF-02:meta:acct:2026-05-01",
+        "client_id": "pilotton",
+        "rule_id": "F-MF-02",
+        "platform": "meta",
+        "target_id": "acct",
+        "severity": "medium",
+        "status": "archived",
+        "first_detected_at": "2026-05-01T00:00:00+00:00",
+        "first_detected_date": "2026-05-01",
+        "resolved_at": "2026-05-04T00:00:00+00:00",
+        "resolved_date": "2026-05-04",
+        "payload": {"title": "Archived"},
+        "history": [{"at": "2026-05-04T00:00:00+00:00", "event": "archived"}],
+    }
+    (archive_dir / "2026-05.json").write_text(json.dumps([archived], ensure_ascii=False), encoding="utf-8")
+    db_path = tmp_path / "state" / "zynect.db"
+
+    summary = migrate(root=root, db_path=db_path, job_name="sync_operational_state")
+
+    conn = connect(db_path)
+    try:
+        assert summary["indications"] == 2
+        assert conn.execute("SELECT COUNT(*) AS n FROM operational_cases").fetchone()["n"] == 2
+        latest = conn.execute(
+            "SELECT job_name FROM job_runs WHERE client_id = 'pilotton' ORDER BY started_at DESC LIMIT 1"
+        ).fetchone()
+        assert latest["job_name"] == "sync_operational_state"
+    finally:
+        conn.close()
+
+
 def test_client_health_report_json_shape(tmp_path):
     root = _sample_root(tmp_path)
     db_path = tmp_path / "state" / "zynect.db"

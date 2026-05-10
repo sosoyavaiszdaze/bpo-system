@@ -23,7 +23,12 @@ from engine.stores.db import connect, json_dumps, utc_now
 from engine.stores.jobs import record_job
 
 
-def migrate(root: Path = ROOT, db_path: Path | None = None, dry_run: bool = False) -> dict:
+def migrate(
+    root: Path = ROOT,
+    db_path: Path | None = None,
+    dry_run: bool = False,
+    job_name: str = "migrate_state_to_db",
+) -> dict:
     conn = connect(db_path)
     summary = {
         "clients": 0,
@@ -44,10 +49,10 @@ def migrate(root: Path = ROOT, db_path: Path | None = None, dry_run: bool = Fals
         _import_auto_proposal_history(conn, root, summary)
         status = "success" if not summary["errors"] else "partial_failure"
         metrics = {k: v for k, v in summary.items() if isinstance(v, int)}
-        record_job(conn, "migrate_state_to_db", None, status, errors=summary["errors"], metrics=metrics)
+        record_job(conn, job_name, None, status, errors=summary["errors"], metrics=metrics)
         summary["job_runs"] += 1
         for client_id in list_client_ids(conn):
-            record_job(conn, "migrate_state_to_db", client_id, status, errors=summary["errors"], metrics=metrics)
+            record_job(conn, job_name, client_id, status, errors=summary["errors"], metrics=metrics)
             summary["job_runs"] += 1
         if dry_run:
             conn.rollback()
@@ -73,18 +78,49 @@ def _import_clients(conn, root: Path, summary: dict) -> None:
 
 
 def _import_indications(conn, root: Path, summary: dict) -> None:
-    for path in sorted((root / "outputs" / "chatwork_state").glob("*_indications.json")):
+    for path, record in _iter_indication_records(root, summary):
+        if not record.get("client_id"):
+            record["client_id"] = _client_id_from_indication_path(path)
+        try:
+            case_id = upsert_case_from_indication(conn, record)
+            summary["indications"] += 1
+            summary["case_events"] += len(record.get("history") or [])
+            if record.get("notified_at"):
+                _insert_notification_from_indication(conn, case_id, record)
+        except Exception as e:
+            summary["errors"].append(f"indication import failed {path}: {e}")
+
+
+def _iter_indication_records(root: Path, summary: dict):
+    state_dir = root / "outputs" / "chatwork_state"
+    for path in sorted(state_dir.glob("*_indications.json")):
         try:
             data = json.loads(path.read_text(encoding="utf-8")) or {}
         except (json.JSONDecodeError, OSError) as e:
             summary["errors"].append(f"indication load failed {path}: {e}")
             continue
         for record in (data.get("indications") or {}).values():
-            case_id = upsert_case_from_indication(conn, record)
-            summary["indications"] += 1
-            summary["case_events"] += len(record.get("history") or [])
-            if record.get("notified_at"):
-                _insert_notification_from_indication(conn, case_id, record)
+            yield path, record
+
+    for path in sorted(state_dir.glob("*_indications.archive/*.json")):
+        try:
+            records = json.loads(path.read_text(encoding="utf-8")) or []
+        except (json.JSONDecodeError, OSError) as e:
+            summary["errors"].append(f"indication archive load failed {path}: {e}")
+            continue
+        for record in records:
+            if isinstance(record, dict):
+                yield path, record
+
+
+def _client_id_from_indication_path(path: Path) -> str:
+    name = path.name
+    if name.endswith("_indications.json"):
+        return name[: -len("_indications.json")]
+    parent = path.parent.name
+    if parent.endswith("_indications.archive"):
+        return parent[: -len("_indications.archive")]
+    return ""
 
 
 def _insert_notification_from_indication(conn, case_id: str, record: dict) -> None:

@@ -81,6 +81,8 @@ def test_operations_console_context_is_read_only_shape(tmp_path):
     assert ctx["clients"][0]["open_cases_count"] == 1
     assert ctx["case_inbox"][0]["rule_id"] == "F-MF-01"
     assert ctx["recent_jobs"][0]["status"] == "success"
+    assert ctx["response_summary"]["total"] == 0
+    assert ctx["recent_responses"] == []
     assert ctx["outcomes"]["metrics"][0]["metric"] == "cpa_change_pct"
     assert ctx["outcomes"]["metrics"][0]["avg_change_pct"] == 20
     assert ctx["recent_outcomes"][0]["case_id"] == "case-1"

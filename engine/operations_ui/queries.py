@@ -29,6 +29,8 @@ def build_console_context(db_path: Path | str | None = None, root: Path | str | 
         return {
             "clients": health_rows,
             "case_inbox": _case_inbox(conn),
+            "response_summary": _response_summary(conn),
+            "recent_responses": _recent_responses(conn),
             "recent_jobs": _recent_jobs(conn),
             "outcomes": outcome_summary(conn),
             "recent_outcomes": list_outcomes(conn, limit=30),
@@ -88,6 +90,40 @@ def _recent_jobs(conn, limit: int = 20) -> list[dict[str, Any]]:
         data["metrics"] = json_loads(data.pop("metrics_json"), {})
         out.append(data)
     return out
+
+
+def _response_summary(conn) -> dict[str, Any]:
+    rows = conn.execute(
+        """
+        SELECT status, COUNT(*) AS n
+        FROM client_responses
+        GROUP BY status
+        ORDER BY status
+        """
+    ).fetchall()
+    counts = {row["status"]: row["n"] for row in rows}
+    return {
+        "total": sum(counts.values()),
+        "confirmed_done": counts.get("confirmed_done", 0),
+        "not_done": counts.get("not_done", 0),
+        "wants_help": counts.get("wants_help", 0),
+        "not_applicable": counts.get("not_applicable", 0),
+        "status_counts": counts,
+    }
+
+
+def _recent_responses(conn, limit: int = 20) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        """
+        SELECT response_id, client_id, rule_id, case_id, answer_code, answer_label,
+               status, answered_at, source
+        FROM client_responses
+        ORDER BY answered_at DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def _rule_registry_context(conn, root: Path | str | None) -> tuple[dict[str, Any], list[dict[str, Any]]]:

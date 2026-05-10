@@ -164,6 +164,29 @@
       </section>
 
       <section>
+        <h2>Response Loop</h2>
+        <div class="kpis">
+          <div class="kpi"><span class="muted">Total</span><strong>{{ response_summary.total }}</strong></div>
+          <div class="kpi"><span class="muted">Done</span><strong>{{ response_summary.confirmed_done }}</strong></div>
+          <div class="kpi"><span class="muted">Help</span><strong>{{ response_summary.wants_help }}</strong></div>
+          <div class="kpi"><span class="muted">Not Done</span><strong>{{ response_summary.not_done }}</strong></div>
+        </div>
+        <table>
+          <thead><tr><th>Client</th><th>Rule</th><th>Answer</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for r in recent_responses %}
+            <tr>
+              <td>{{ r.client_id }}</td>
+              <td>{{ r.rule_id }}<br><span class="muted">{{ r.answered_at or "-" }}</span></td>
+              <td>{{ r.answer_code or "-" }} {{ r.answer_label or "" }}</td>
+              <td>{{ r.status }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section>
         <h2>Recent Jobs</h2>
         <table>
           <thead>
