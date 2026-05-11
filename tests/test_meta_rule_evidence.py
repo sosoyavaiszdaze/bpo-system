@@ -28,6 +28,22 @@ def _meta_payload():
             "server_events": True,
             "event_match_quality": 7.2,
         },
+        "domain_verification": {
+            "status": "ok",
+            "business_id": "bm_1",
+            "verified_count": 1,
+            "domains": [{"domain": "example.com", "verification_status": "verified"}],
+        },
+        "capi_dedup": {
+            "status": "ok",
+            "matched_event_ids": 3,
+        },
+        "performance_diagnostics": {
+            "campaigns": [{"name": "Campaign A", "cpa": 1000, "conversions": 10}],
+            "adsets": [{"name": "Adset A", "cpa": 1500, "conversions": 4}],
+            "ads": [{"name": "Ad A", "cpa": 2000, "conversions": 1}],
+            "placements": [{"name": "Audience Network", "cpa": 2500, "conversions": 0}],
+        },
     }
 
 
@@ -42,8 +58,9 @@ def test_meta_connection_audit_covers_required_capabilities():
     assert audit["capi"]["status"] == "ok"
     assert audit["campaign_insights"]["campaign_count"] == 1
     assert audit["adset_insights"]["adset_count"] == 2
-    assert audit["domain_verification"]["status"] == "unknown"
+    assert audit["domain_verification"]["status"] == "ok"
     assert audit["account_quality"]["status"] == "unknown"
+    assert audit["capi_dedup"]["status"] == "ok"
 
 
 def test_meta_rule_evidence_maps_api_to_measurement_rules():
@@ -55,8 +72,10 @@ def test_meta_rule_evidence_maps_api_to_measurement_rules():
     assert evidence["M02"]["status"] == "resolved"
     assert evidence["P-EF-02"]["status"] == "resolved"
     assert evidence["M03"]["value"]["event_match_quality"] == 7.2
-    assert evidence["F-AH-04"]["status"] == "unknown"
-    assert evidence["PC-MS-01"]["status"] == "unknown"
+    assert evidence["F-AH-04"]["status"] == "resolved"
+    assert evidence["PC-MS-01"]["status"] == "resolved"
+    assert evidence["PC-MS-01"]["source"] == "capi_event_log"
+    assert evidence["ANO_CPA_SPIKE"]["value"]["performance_diagnostics"]["adsets"][0]["name"] == "Adset A"
 
 
 def test_meta_rule_group_index_unifies_duplicate_measurement_rules():

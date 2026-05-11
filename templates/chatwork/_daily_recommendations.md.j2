@@ -67,6 +67,33 @@
 
 　▼ 今日の確認アクション
 　　{{ item.today_action }}
+{% set hypothesis = item.hypothesis|default(none) %}
+{% if hypothesis %}
+
+　▼ 仮説と確認順（CVを落とさずCPAを改善するため）
+{% if hypothesis.summary %}
+　　{{ hypothesis.summary }}
+{% endif %}
+{% if hypothesis.check_order %}
+{% for step in hypothesis.check_order[:3] %}
+　　{{ loop.index }}. {{ step }}
+{% endfor %}
+{% endif %}
+{% if hypothesis.hypotheses %}
+　　主な仮説:
+{% for h in hypothesis.hypotheses[:2] %}
+　　　・{{ h.rule_id }}: {{ h.hypothesis }}
+　　　　根拠: {{ h.evidence }}
+　　　　次: {{ h.next_action }}
+{% endfor %}
+{% endif %}
+{% if hypothesis.do_not_do %}
+　　やらないこと:
+{% for x in hypothesis.do_not_do[:2] %}
+　　　・{{ x }}
+{% endfor %}
+{% endif %}
+{% endif %}
 
 　▼ ご回答（本スレッドへの返信で 1 文字でご回答ください）
 　　{{ item.yes_no_question }}

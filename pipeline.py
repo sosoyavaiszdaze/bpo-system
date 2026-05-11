@@ -130,19 +130,22 @@ def fetch_data(client_id, client_cfg):
         try:
             from adapters.meta_adapter import fetch_meta_ads
             data = fetch_meta_ads(meta_cfg)
-            if data and data.get("campaigns"):
-                sources.append("meta_api")
-                all_campaigns.extend(data["campaigns"])
+            if data:
+                campaigns = data.get("campaigns") or []
+                if campaigns:
+                    sources.append("meta_api")
+                    all_campaigns.extend(campaigns)
                 if data.get("pixel_status"):
                     pixel_statuses["meta"] = data["pixel_status"]
                 platform_diagnostics["meta"] = {
                     "connection_audit": data.get("meta_connection_audit") or {},
                     "rule_evidence": data.get("meta_rule_evidence") or {},
                     "rule_groups": data.get("meta_rule_groups") or {},
+                    "performance_diagnostics": data.get("performance_diagnostics") or {},
                     "account_id": data.get("account_id"),
                     "date_range": data.get("date_range") or {},
                 }
-                log.info(f"[{client_id}] Meta API: {len(data['campaigns'])}キャンペーン取得")
+                log.info(f"[{client_id}] Meta API: {len(campaigns)}キャンペーン取得")
         except Exception as e:
             log.warning(f"[{client_id}] Meta API失敗: {e}")
 

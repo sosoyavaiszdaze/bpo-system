@@ -37,7 +37,7 @@ def build_console_context(db_path: Path | str | None = None, root: Path | str | 
             "rule_registry": rule_registry,
             "rule_registry_issues": rule_registry_issues,
             "decision_trace_summary": trace_summary(conn),
-            "recent_decision_traces": list_traces(conn, limit=30),
+            "recent_decision_traces": _enriched_traces(conn),
         }
     finally:
         conn.close()
@@ -136,3 +136,25 @@ def _rule_registry_context(conn, root: Path | str | None) -> tuple[dict[str, Any
         return registry_summary(conn), list_registry_issues(conn, limit=30)
     records = load_rule_registry(root)
     return summarize_rule_registry(records), top_rule_registry_issues(records, limit=30)
+
+
+def _enriched_traces(conn, limit: int = 30) -> list[dict[str, Any]]:
+    rows = list_traces(conn, limit=limit)
+    for row in rows:
+        evidence = row.get("evidence") or {}
+        value = evidence.get("value") or {}
+        row["rule_group"] = evidence.get("rule_group")
+        row["duplicate_group_members"] = evidence.get("duplicate_group_members") or []
+        if value:
+            bits = []
+            for key in ("pixel_installed", "capi_enabled", "domain_verified", "event_match_quality", "cpa", "roas", "conversions"):
+                if key in value:
+                    bits.append(f"{key}={value.get(key)}")
+            for key in ("worst_campaigns", "worst_adsets", "worst_ads", "worst_placements"):
+                if value.get(key):
+                    first = value[key][0]
+                    bits.append(f"{key}={first.get('name') or first.get('id')}")
+            row["evidence_summary"] = " / ".join(bits) if bits else str(value)[:160]
+        else:
+            row["evidence_summary"] = "-"
+    return rows

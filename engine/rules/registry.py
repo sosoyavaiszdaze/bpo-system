@@ -64,7 +64,7 @@ def load_rule_registry(root: Path | str | None = None) -> list[RuleRecord]:
     for rel_dir in RULE_DIRS:
         for path in sorted((root_path / rel_dir).glob("*.yaml")):
             records.extend(_load_rule_file(root_path, path, messaging))
-    return records
+    return _with_cross_rule_issues(records)
 
 
 def summarize_rule_registry(records: list[RuleRecord]) -> dict[str, Any]:
@@ -237,6 +237,60 @@ def _issues_for(
     if _has_legacy_variant_suffix(str(rule.get("id") or "")):
         issues.append("id_variant_suffix")
     return issues
+
+
+def _with_cross_rule_issues(records: list[RuleRecord]) -> list[RuleRecord]:
+    """Add duplicate/dependency governance issues that need whole-registry context."""
+    by_id = {r.rule_id: r for r in records}
+    try:
+        from engine.meta_rule_evidence import RULE_TO_GROUP
+    except Exception:
+        RULE_TO_GROUP = {}
+
+    out = []
+    for record in records:
+        issues = list(record.issues)
+        group = RULE_TO_GROUP.get(record.rule_id)
+        if group:
+            siblings = [rid for rid, g in RULE_TO_GROUP.items() if g == group and rid != record.rule_id and rid in by_id]
+            if siblings and not (record.payload.get("replaces") or record.payload.get("extends") or record.payload.get("dedupe_group")):
+                issues.append("duplicate_group_missing_relationship")
+
+        refs = _dependency_refs(record.payload)
+        missing_refs = [rid for rid in refs if rid not in by_id]
+        if missing_refs:
+            issues.append("missing_dependency_reference")
+        if record.rule_id in _reachable_dependency_refs(record.rule_id, by_id, set()):
+            issues.append("dependency_cycle")
+
+        out.append(
+            RuleRecord(
+                **{**record.__dict__, "issues": tuple(dict.fromkeys(issues))}
+            )
+        )
+    return out
+
+
+def _dependency_refs(rule: dict) -> list[str]:
+    refs = []
+    for key in ("prerequisite", "dependencies", "conflicts", "replaces", "extends"):
+        val = rule.get(key)
+        if isinstance(val, str):
+            refs.append(val)
+        elif isinstance(val, list):
+            refs.extend(str(x) for x in val if x)
+    return [r for r in refs if re.match(r"^[A-Z][A-Z0-9_-]*\d", r)]
+
+
+def _reachable_dependency_refs(rule_id: str, by_id: dict[str, RuleRecord], seen: set[str]) -> set[str]:
+    if rule_id in seen or rule_id not in by_id:
+        return set()
+    seen.add(rule_id)
+    refs = set(_dependency_refs(by_id[rule_id].payload))
+    out = set(refs)
+    for ref in refs:
+        out |= _reachable_dependency_refs(ref, by_id, seen)
+    return out
 
 
 def _decision_axis(rule: dict) -> str | None:

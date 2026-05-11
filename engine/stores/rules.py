@@ -25,6 +25,9 @@ ISSUE_SEVERITY = {
     "draft_or_placeholder": "medium",
     "missing_lifecycle": "medium",
     "id_variant_suffix": "low",
+    "duplicate_group_missing_relationship": "high",
+    "missing_dependency_reference": "high",
+    "dependency_cycle": "high",
 }
 
 

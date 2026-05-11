@@ -40,6 +40,9 @@ def build_meta_connection_audit(meta_cfg: dict[str, Any] | None, meta_data: dict
     meta_data = meta_data or {}
     pixel = meta_data.get("pixel_status") or {}
     campaigns = meta_data.get("campaigns") or []
+    domain = meta_data.get("domain_verification") or {}
+    account = meta_data.get("account_status") or {}
+    capi_dedup = meta_data.get("capi_dedup") or {}
 
     account_id = meta_cfg.get("account_id") or meta_data.get("account_id")
     has_token = bool(meta_cfg.get("access_token") or meta_cfg.get("access_token_env"))
@@ -71,12 +74,22 @@ def build_meta_connection_audit(meta_cfg: dict[str, Any] | None, meta_data: dict
             "server_events": bool(pixel.get("server_events")),
         },
         "domain_verification": {
-            "status": "unknown",
-            "reason": "business_id/domain verification API is not connected yet",
+            "status": domain.get("status") or "unknown",
+            "business_id": domain.get("business_id"),
+            "verified_count": domain.get("verified_count", 0),
+            "expected_domains": domain.get("expected_domains") or [],
+            "reason": domain.get("reason") or domain.get("error"),
         },
         "account_quality": {
-            "status": "unknown",
-            "reason": "account_quality API is not connected yet",
+            "status": _account_quality_status(account),
+            "account_status": account.get("account_status"),
+            "disable_reason": account.get("disable_reason"),
+            "reason": account.get("error"),
+        },
+        "capi_dedup": {
+            "status": capi_dedup.get("status", "unknown"),
+            "matched_event_ids": capi_dedup.get("matched_event_ids", 0),
+            "reason": capi_dedup.get("reason"),
         },
     }
 
@@ -92,12 +105,19 @@ def build_meta_rule_evidence(meta_data: dict[str, Any] | None) -> dict[str, dict
     pixel = meta_data.get("pixel_status") or {}
     campaigns = meta_data.get("campaigns") or []
     totals = meta_data.get("totals") or _calc_totals_from_campaigns(campaigns)
+    domain = meta_data.get("domain_verification") or {}
+    capi_dedup = meta_data.get("capi_dedup") or {}
+    performance = meta_data.get("performance_diagnostics") or {}
 
     pixel_ok = bool(pixel.get("pixel_installed"))
     capi_ok = bool(pixel.get("capi_enabled") or pixel.get("server_events"))
     emq = _to_float(pixel.get("event_match_quality"))
     has_campaigns = bool(campaigns)
-    has_conversions = float(totals.get("conversions") or 0) > 0
+    total_spend = totals.get("cost") or totals.get("spend") or totals.get("total_cost")
+    total_conversions = totals.get("conversions") or totals.get("total_conversions")
+    total_cpa = totals.get("cpa") or totals.get("avg_cpa")
+    total_roas = totals.get("roas") or totals.get("total_roas") or totals.get("avg_roas")
+    has_conversions = float(total_conversions or 0) > 0
 
     evidence: dict[str, dict[str, Any]] = {}
 
@@ -123,25 +143,32 @@ def build_meta_rule_evidence(meta_data: dict[str, Any] | None) -> dict[str, dict
         value={"event_match_quality": emq},
         reason="Event Match Qualityが基準以上" if emq is not None and emq >= 6.0 else "Event Match Qualityの確認が必要",
     )
+    domain_status = domain.get("status")
+    domain_resolved = domain_status == "ok"
     _set_many(
         evidence,
         ["M04", "F-AH-04", "M05", "M56"],
-        status="unknown",
+        status="resolved" if domain_resolved else ("manual_required" if domain_status == "manual_required" else "unknown"),
         source="meta_api.domain",
-        value={"domain_verified": pixel.get("domain_verified")},
-        reason="Domain Verification/AEM API未接続のため自動確定不可",
+        value={
+            "domain_verified": domain_resolved,
+            "domain_status": domain_status,
+            "verified_count": domain.get("verified_count", 0),
+            "domains": domain.get("domains") or [],
+        },
+        reason="Meta Business APIでDomain Verificationを確認" if domain_resolved else "Domain Verificationは確認が必要",
     )
     evidence["M06"] = _ev(
-        status="unknown",
-        source="meta_api.pixel",
-        value={"dedup_key": None},
-        reason="Pixel/CAPI dedup_keyはMeta insightsだけでは確定不可",
+        status="resolved" if capi_dedup.get("status") == "ok" else ("manual_required" if capi_dedup.get("status") in {"manual_required", "missing_log"} else "unknown"),
+        source="capi_event_log",
+        value=capi_dedup,
+        reason="CAPIログでPixel/Serverのevent_id一致を確認" if capi_dedup.get("status") == "ok" else "dedup_keyはCAPIログまたは実装確認が必要",
     )
     evidence["PC-MS-01"] = _ev(
-        status="unknown",
-        source="meta_api.pixel",
-        value={"dedup_key": None},
-        reason="dedup_key整合はイベント実装またはCAPI payload確認が必要",
+        status="resolved" if capi_dedup.get("status") == "ok" else ("manual_required" if capi_dedup.get("status") in {"manual_required", "missing_log"} else "unknown"),
+        source="capi_event_log",
+        value=capi_dedup,
+        reason="CAPIログでdedup_key整合を確認" if capi_dedup.get("status") == "ok" else "dedup_key整合はイベント実装またはCAPI payload確認が必要",
     )
 
     performance_status = "resolved" if has_campaigns else "manual_required"
@@ -155,9 +182,13 @@ def build_meta_rule_evidence(meta_data: dict[str, Any] | None) -> dict[str, dict
             source="meta_api.insights",
             value={
                 "campaign_count": len(campaigns),
-                "spend": totals.get("cost") or totals.get("spend"),
-                "conversions": totals.get("conversions"),
+                "spend": total_spend,
+                "conversions": total_conversions,
                 "has_conversions": has_conversions,
+                "worst_campaigns": (performance.get("campaigns") or [])[:3],
+                "worst_adsets": (performance.get("adsets") or [])[:3],
+                "worst_ads": (performance.get("ads") or [])[:3],
+                "worst_placements": (performance.get("placements") or [])[:3],
             },
             reason="Meta Campaign/AdSet insights取得済み" if has_campaigns else "Meta insights未取得",
         )
@@ -168,9 +199,10 @@ def build_meta_rule_evidence(meta_data: dict[str, Any] | None) -> dict[str, dict
             source="meta_api.insights",
             value={
                 "campaign_count": len(campaigns),
-                "conversions": totals.get("conversions"),
-                "cpa": totals.get("cpa"),
-                "roas": totals.get("roas"),
+                "conversions": total_conversions,
+                "cpa": total_cpa,
+                "roas": total_roas,
+                "performance_diagnostics": performance,
             },
             reason="Meta insightsを異常検知の根拠として利用可能" if has_campaigns else "異常検知の根拠データ未取得",
         )
@@ -189,6 +221,18 @@ def build_rule_group_index() -> dict[str, Any]:
         "groups": MEASUREMENT_RULE_GROUPS,
         "rule_to_group": RULE_TO_GROUP,
     }
+
+
+def _account_quality_status(account: dict[str, Any]) -> str:
+    if not account:
+        return "unknown"
+    if account.get("status") == "error":
+        return "error"
+    if str(account.get("account_status")) == "1" and not account.get("disable_reason"):
+        return "ok"
+    if account.get("account_status") is not None or account.get("disable_reason") is not None:
+        return "manual_required"
+    return account.get("status") or "unknown"
 
 
 def _set_many(out: dict[str, dict[str, Any]], rule_ids: list[str], **kwargs: Any) -> None:

@@ -526,6 +526,20 @@ def build_daily_todo(
     # スコア小さい順、タイブレーク = rule_id 辞書順
     all_items.sort(key=lambda it: (it["sort_score"], it["rule_id"]))
 
+    # === 3b. Claude/fallback 仮説を顧客TODOへ接続 ===
+    try:
+        from engine.claude_hypothesis_engine import build_current_todo_hypotheses
+        hypotheses_by_rule = build_current_todo_hypotheses(
+            client_id,
+            audit_results or {},
+            [it["rule_id"] for it in all_items],
+        )
+        for it in all_items:
+            if it["rule_id"] in hypotheses_by_rule:
+                it["hypothesis"] = hypotheses_by_rule[it["rule_id"]]
+    except Exception as e:
+        log.debug(f"[{client_id}] current_todo_hypotheses failed (no-op): {e}")
+
     # === 4. items_today / items_this_week / items_legal_note に分割 ===
     # 「今日確認」: スコア順上位 DETAILED_TOP_N 件 (priority A だけに限定しない)
     # 「補足」:    legal_review 系で perf_impact が無いもの (= 法令・プライバシー)

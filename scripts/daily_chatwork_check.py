@@ -317,6 +317,22 @@ def _run_daily_check_impl(
             log.error(f"Meta API decision trace 記録失敗: {e}")
             errors.append(f"meta_decision_trace: {e}")
 
+        try:
+            from engine.stores.db import transaction
+            from engine.stores.outcomes import update_due_outcome_measurements
+            current_kpis = _extract_current_outcome_kpis(audit, platform="meta")
+            with transaction(db_path) as conn:
+                updated = update_due_outcome_measurements(
+                    conn,
+                    client_id=client_id,
+                    current_kpis=current_kpis,
+                    today=today_str,
+                )
+            log.info(f"outcome_tracker: due measurements updated={updated}")
+        except Exception as e:
+            log.error(f"outcome tracker 実測更新失敗: {e}")
+            errors.append(f"outcome_measure: {e}")
+
     # 5. 完了通知 (resolved_confirmed && completion_notified_at IS NULL)
     pending_completion = state.list_pending_completion_notification()
     if pending_completion:

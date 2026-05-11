@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from datetime import date
 from typing import Any, Optional
 
 from engine.stores.db import json_dumps, json_loads, row_to_dict
@@ -247,6 +248,68 @@ def list_outcomes(conn, client_id: str | None = None, limit: int = 100) -> list[
         params,
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def update_due_outcome_measurements(
+    conn,
+    *,
+    client_id: str,
+    current_kpis: dict[str, float | int | None],
+    today: str,
+    windows: tuple[int, ...] = (7, 14, 28),
+) -> int:
+    """Fill measured_value for baseline rows whose measurement window is due."""
+    today_date = date.fromisoformat(today)
+    rows = conn.execute(
+        """
+        SELECT outcome_id, case_id, metric, baseline_start, baseline_value, payload_json
+        FROM outcome_measurements
+        WHERE client_id = ?
+          AND measured_value IS NULL
+          AND baseline_value IS NOT NULL
+          AND baseline_start IS NOT NULL
+        """,
+        (client_id,),
+    ).fetchall()
+    updated = 0
+    for row in rows:
+        metric = row["metric"]
+        measured = current_kpis.get(metric)
+        if measured is None:
+            continue
+        baseline_start = date.fromisoformat(row["baseline_start"])
+        age_days = (today_date - baseline_start).days
+        due_window = next((w for w in windows if age_days >= w), None)
+        if due_window is None:
+            continue
+        payload = json_loads(row["payload_json"], {})
+        payload["measurement_window_days"] = due_window
+        payload["measurement_source"] = "daily_chatwork_check"
+        change_pct = improvement_pct(metric, row["baseline_value"], float(measured))
+        value_yen = estimate_value_yen(metric, row["baseline_value"], float(measured), payload)
+        conn.execute(
+            """
+            UPDATE outcome_measurements
+            SET measured_value = ?,
+                measurement_end = ?,
+                change_pct = ?,
+                estimated_value_yen = COALESCE(?, estimated_value_yen),
+                notes = ?,
+                payload_json = ?
+            WHERE outcome_id = ?
+            """,
+            (
+                float(measured),
+                today,
+                change_pct,
+                value_yen,
+                f"{due_window}d measured outcome",
+                json_dumps(payload),
+                row["outcome_id"],
+            ),
+        )
+        updated += 1
+    return updated
 
 
 def outcome_summary(conn, client_id: str | None = None) -> dict[str, Any]:

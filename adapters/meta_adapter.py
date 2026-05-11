@@ -4,7 +4,9 @@ import json
 import logging
 import urllib.request
 import urllib.parse
+import urllib.error
 from datetime import datetime, timedelta
+from pathlib import Path
 
 log = logging.getLogger("bpo")
 
@@ -37,12 +39,18 @@ def fetch_meta_ads(config):
     # 2. 広告セットレベルのインサイト取得
     adset_data = _fetch_adset_insights(account_id, access_token, since, today)
 
-    # 3. Pixel / CAPI ステータス取得
+    # 3. Ad / Placement レベルの切り分けデータ取得
+    ad_data = _fetch_ad_insights(account_id, access_token, since, today)
+    placement_data = _fetch_placement_insights(account_id, access_token, since, today)
+
+    # 4. Pixel / CAPI / domain / account health ステータス取得
     pixel_data = _fetch_pixel_status(account_id, access_token)
+    account_status = _fetch_account_status(account_id, access_token)
+    domain_verification = _fetch_domain_verification(config, access_token)
+    capi_dedup = _fetch_capi_dedup_status(config)
 
     if not campaigns:
-        log.warning("Meta: データが0件")
-        return None
+        log.warning("Meta: キャンペーンデータは0件。接続監査と設定系API結果のみ返します")
 
     # 広告セットデータをキャンペーンに統合
     _merge_adset_data(campaigns, adset_data)
@@ -56,6 +64,14 @@ def fetch_meta_ads(config):
         "campaigns": campaigns,
         "totals": totals,
         "pixel_status": pixel_data,
+        "ad_insights": ad_data,
+        "placement_insights": placement_data,
+        "account_status": account_status,
+        "domain_verification": domain_verification,
+        "capi_dedup": capi_dedup,
+        "performance_diagnostics": _build_performance_diagnostics(
+            campaigns, adset_data, ad_data, placement_data,
+        ),
     }
     try:
         from engine.meta_rule_evidence import (
@@ -71,6 +87,16 @@ def fetch_meta_ads(config):
 
     log.info(f"Meta API: {len(campaigns)}キャンペーン取得完了")
     return result
+
+
+def _api_get(path, access_token, params=None, timeout=30):
+    """Small Graph API GET wrapper used by optional Meta diagnostics."""
+    params = dict(params or {})
+    params["access_token"] = access_token
+    url = f"{META_API_BASE}/{path.lstrip('/')}?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read())
 
 
 def _fetch_campaign_insights(account_id, access_token, since, until):
@@ -168,6 +194,175 @@ def _fetch_adset_insights(account_id, access_token, since, until):
     except Exception as e:
         log.warning(f"Meta AdSet Insights Error: {e}")
         return {}
+
+
+def _fetch_ad_insights(account_id, access_token, since, until):
+    """広告レベルのCPA/CV悪化切り分け用 insights."""
+    fields = ",".join([
+        "ad_name", "ad_id", "adset_id", "campaign_id",
+        "impressions", "clicks", "spend", "actions", "action_values",
+        "ctr", "cpm", "frequency",
+    ])
+    params = {
+        "fields": fields,
+        "time_range": json.dumps({"since": since, "until": until}),
+        "level": "ad",
+        "limit": 500,
+    }
+    try:
+        data = _api_get(f"{account_id}/insights", access_token, params=params, timeout=30)
+        return [_parse_ad(row) for row in data.get("data", [])]
+    except Exception as e:
+        log.warning(f"Meta Ad Insights Error: {e}")
+        return []
+
+
+def _fetch_placement_insights(account_id, access_token, since, until):
+    """Placement breakdown for Audience Network / feed / story diagnosis."""
+    fields = ",".join([
+        "campaign_id", "campaign_name", "adset_id",
+        "impressions", "clicks", "spend", "actions", "action_values",
+        "ctr", "cpm", "frequency",
+    ])
+    params = {
+        "fields": fields,
+        "time_range": json.dumps({"since": since, "until": until}),
+        "level": "adset",
+        "breakdowns": "publisher_platform,platform_position",
+        "limit": 500,
+    }
+    try:
+        data = _api_get(f"{account_id}/insights", access_token, params=params, timeout=30)
+        rows = []
+        for row in data.get("data", []):
+            parsed = _parse_metric_row(row)
+            parsed.update({
+                "campaign_id": row.get("campaign_id", ""),
+                "campaign": row.get("campaign_name", ""),
+                "adset_id": row.get("adset_id", ""),
+                "publisher_platform": row.get("publisher_platform", ""),
+                "platform_position": row.get("platform_position", ""),
+            })
+            rows.append(parsed)
+        return rows
+    except Exception as e:
+        log.warning(f"Meta Placement Insights Error: {e}")
+        return []
+
+
+def _fetch_account_status(account_id, access_token):
+    """Ad account status / restrictions hints.
+
+    This is not a full Account Quality replacement, but it gives operators the
+    official account_status / disable_reason fields when available.
+    """
+    fields = ",".join([
+        "account_id", "name", "account_status", "disable_reason",
+        "currency", "timezone_name", "business",
+    ])
+    try:
+        data = _api_get(account_id, access_token, params={"fields": fields}, timeout=15)
+        return {
+            "status": "ok",
+            "account_id": data.get("account_id"),
+            "name": data.get("name"),
+            "account_status": data.get("account_status"),
+            "disable_reason": data.get("disable_reason"),
+            "currency": data.get("currency"),
+            "timezone_name": data.get("timezone_name"),
+            "business": data.get("business"),
+        }
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")[:500]
+        log.warning(f"Meta Account Status Error {e.code}: {body}")
+        return {"status": "error", "error": body, "http_status": e.code}
+    except Exception as e:
+        log.warning(f"Meta Account Status Error: {e}")
+        return {"status": "unknown", "error": str(e)}
+
+
+def _fetch_domain_verification(config, access_token):
+    """Fetch Business owned domains when business_id is configured."""
+    business_id = config.get("business_id") or config.get("meta_business_id")
+    expected_domains = config.get("domains") or config.get("verified_domains") or []
+    if not business_id:
+        return {
+            "status": "missing_config",
+            "business_id": None,
+            "expected_domains": expected_domains,
+            "domains": [],
+            "reason": "business_id 未設定のため domain verification API 未実行",
+        }
+    fields = "domain,verification_status"
+    try:
+        data = _api_get(f"{business_id}/owned_domains", access_token, params={"fields": fields, "limit": 100}, timeout=15)
+        domains = data.get("data", [])
+        verified = [
+            d for d in domains
+            if str(d.get("verification_status", "")).lower() in {"verified", "confirmed"}
+        ]
+        return {
+            "status": "ok" if verified else "manual_required",
+            "business_id": business_id,
+            "expected_domains": expected_domains,
+            "domains": domains,
+            "verified_count": len(verified),
+        }
+    except Exception as e:
+        log.warning(f"Meta Domain Verification Error: {e}")
+        return {
+            "status": "unknown",
+            "business_id": business_id,
+            "expected_domains": expected_domains,
+            "domains": [],
+            "error": str(e),
+        }
+
+
+def _fetch_capi_dedup_status(config):
+    """Inspect optional CAPI/Payload logs for event_id dedup readiness.
+
+    Expected JSON/JSONL shape is deliberately loose:
+      {"event_id": "...", "source": "browser"|"server", "event_name": "Purchase"}
+    or {"dedup_key": "...", "channel": "..."}.
+    """
+    path_value = config.get("capi_event_log_path") or config.get("capi_dedup_log_path")
+    if not path_value:
+        return {
+            "status": "missing_log",
+            "reason": "capi_event_log_path 未設定のため dedup_key はログ確認待ち",
+            "matched_event_ids": 0,
+        }
+    path = Path(path_value).expanduser()
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent.parent / path
+    if not path.exists():
+        return {"status": "missing_log", "path": str(path), "matched_event_ids": 0}
+
+    browser_ids, server_ids, total = set(), set(), 0
+    try:
+        for rec in _iter_json_records(path):
+            total += 1
+            event_id = rec.get("event_id") or rec.get("dedup_key")
+            if not event_id:
+                continue
+            source = str(rec.get("source") or rec.get("channel") or rec.get("event_source") or "").lower()
+            if source in {"browser", "pixel", "web"}:
+                browser_ids.add(str(event_id))
+            elif source in {"server", "capi", "conversions_api"}:
+                server_ids.add(str(event_id))
+        matched = browser_ids & server_ids
+        status = "ok" if matched else ("manual_required" if browser_ids or server_ids else "unknown")
+        return {
+            "status": status,
+            "path": str(path),
+            "records": total,
+            "browser_event_ids": len(browser_ids),
+            "server_event_ids": len(server_ids),
+            "matched_event_ids": len(matched),
+        }
+    except Exception as e:
+        return {"status": "error", "path": str(path), "error": str(e), "matched_event_ids": 0}
 
 
 def _fetch_pixel_status(account_id, access_token):
@@ -312,6 +507,114 @@ def _parse_campaign(row):
         camp["roas"] = round(camp["conversion_value"] / camp["cost"], 2)
 
     return camp
+
+
+def _parse_ad(row):
+    parsed = _parse_metric_row(row)
+    parsed.update({
+        "ad": row.get("ad_name", "unknown"),
+        "ad_id": row.get("ad_id", ""),
+        "adset_id": row.get("adset_id", ""),
+        "campaign_id": row.get("campaign_id", ""),
+        "platform": "meta",
+    })
+    return parsed
+
+
+def _parse_metric_row(row):
+    from engine.conversion_mapping import aggregate_actions, load_conversion_mapping
+
+    cm = load_conversion_mapping()
+    cv_aggregated = aggregate_actions("meta", "conversion", row.get("actions", []), mapping=cm)
+    rev_aggregated = aggregate_actions("meta", "revenue", row.get("action_values", []), mapping=cm)
+    conversions = sum(cv_aggregated.values())
+    revenue = rev_aggregated.get("purchase", 0.0)
+    cost = float(row.get("spend", 0) or 0)
+    impressions = float(row.get("impressions", 0) or 0)
+    clicks = float(row.get("clicks", 0) or 0)
+    return {
+        "impressions": impressions,
+        "clicks": clicks,
+        "cost": cost,
+        "ctr": float(row.get("ctr", 0) or 0),
+        "cpm": float(row.get("cpm", 0) or 0),
+        "frequency": float(row.get("frequency", 0) or 0),
+        "conversions": conversions,
+        "conversion_value": revenue,
+        "revenue": revenue,
+        "cpa": round(cost / conversions, 2) if conversions else 0,
+        "roas": round(revenue / cost, 2) if cost and revenue else 0,
+    }
+
+
+def _build_performance_diagnostics(campaigns, adsets_by_campaign, ads, placements):
+    """Rank where CPA is high or CV is weak without making stop/go decisions."""
+    return {
+        "campaigns": _rank_segments(campaigns, "campaign", "campaign_id"),
+        "adsets": _rank_segments(
+            [a | {"campaign_id": cid} for cid, rows in (adsets_by_campaign or {}).items() for a in rows],
+            "name",
+            "id",
+        ),
+        "ads": _rank_segments(ads, "ad", "ad_id"),
+        "placements": _rank_segments(placements, "platform_position", "adset_id"),
+    }
+
+
+def _rank_segments(rows, name_key, id_key, limit=10):
+    ranked = []
+    for row in rows or []:
+        cost = float(row.get("cost") or row.get("spend") or 0)
+        cv = float(row.get("conversions") or 0)
+        impressions = float(row.get("impressions") or 0)
+        cpa = float(row.get("cpa") or (cost / cv if cv else 0) or 0)
+        if cost <= 0 and impressions <= 0:
+            continue
+        risk_score = (cpa if cv else cost * 2) + max(0, 1000 - impressions) / 100
+        ranked.append({
+            "name": row.get(name_key) or row.get("campaign") or row.get("publisher_platform") or "unknown",
+            "id": row.get(id_key) or "",
+            "campaign_id": row.get("campaign_id", ""),
+            "cost": round(cost),
+            "conversions": cv,
+            "cpa": round(cpa, 2) if cpa else None,
+            "roas": row.get("roas"),
+            "impressions": round(impressions),
+            "frequency": row.get("frequency"),
+            "publisher_platform": row.get("publisher_platform"),
+            "platform_position": row.get("platform_position"),
+            "risk_score": round(risk_score, 2),
+            "diagnosis_hint": _diagnosis_hint(cost, cv, cpa),
+        })
+    ranked.sort(key=lambda r: r["risk_score"], reverse=True)
+    return ranked[:limit]
+
+
+def _diagnosis_hint(cost, conversions, cpa):
+    if cost > 0 and conversions == 0:
+        return "spend_without_cv"
+    if cpa and cpa > 0:
+        return "high_cpa_segment"
+    return "monitor"
+
+
+def _iter_json_records(path):
+    text = path.read_text(encoding="utf-8")
+    stripped = text.strip()
+    if not stripped:
+        return
+    if stripped.startswith("["):
+        for rec in json.loads(stripped):
+            if isinstance(rec, dict):
+                yield rec
+        return
+    for line in stripped.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        rec = json.loads(line)
+        if isinstance(rec, dict):
+            yield rec
 
 
 def _map_objective(objective):

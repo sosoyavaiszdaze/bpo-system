@@ -60,3 +60,43 @@ def test_build_anomaly_followup_returns_yaml_rule_hypotheses(tmp_path, monkeypat
     assert "M68" in rule_ids
     assert out["customer_question"]
 
+
+def test_build_current_todo_hypotheses_uses_meta_diagnostics_without_claude(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    from engine.claude_hypothesis_engine import build_current_todo_hypotheses
+
+    out = build_current_todo_hypotheses(
+        "pilotton",
+        {
+            "platform_diagnostics": {
+                "meta": {
+                    "performance_diagnostics": {
+                        "placements": [
+                            {
+                                "name": "Audience Network",
+                                "cost": 50000,
+                                "conversions": 0,
+                                "cpa": None,
+                            }
+                        ],
+                        "adsets": [
+                            {
+                                "name": "Broad Adset",
+                                "cost": 120000,
+                                "conversions": 5,
+                                "cpa": 24000,
+                            }
+                        ],
+                    }
+                }
+            }
+        },
+        ["ANO_CPA_SPIKE", "F-MF-02"],
+    )
+
+    assert set(out) == {"ANO_CPA_SPIKE", "F-MF-02"}
+    assert out["ANO_CPA_SPIKE"]["source"] == "fallback"
+    assert "CV" in out["ANO_CPA_SPIKE"]["summary"]
+    assert out["ANO_CPA_SPIKE"]["hypotheses"][0]["rule_id"] == "M39"
+    assert "停止しない" in " ".join(out["ANO_CPA_SPIKE"]["do_not_do"])

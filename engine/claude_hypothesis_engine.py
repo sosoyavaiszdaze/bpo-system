@@ -120,6 +120,69 @@ def build_anomaly_followup(
     return result
 
 
+def build_current_todo_hypotheses(
+    client_id: str,
+    audit_results: dict,
+    rule_ids: list[str],
+) -> dict[str, dict]:
+    """Build hypotheses for today's TODO items from current Meta diagnostics.
+
+    This is used before completion, not only after an anomaly clears. It keeps
+    the product promise explicit: improve CPA while preserving CV volume.
+    """
+    if not audit_results or not rule_ids:
+        return {}
+
+    diagnostics = (
+        (audit_results.get("platform_diagnostics") or {})
+        .get("meta", {})
+        .get("performance_diagnostics", {})
+    )
+    if not diagnostics:
+        evidence = (
+            (audit_results.get("platform_diagnostics") or {})
+            .get("meta", {})
+            .get("rule_evidence", {})
+        )
+        for ev in evidence.values():
+            val = ev.get("value") if isinstance(ev, dict) else {}
+            if isinstance(val, dict) and val.get("performance_diagnostics"):
+                diagnostics = val.get("performance_diagnostics") or {}
+                break
+    if not diagnostics:
+        return {}
+
+    rule_defs = _load_rule_defs([rid for rid in rule_ids if rid.startswith("M")])
+    payload = {
+        "client_id": client_id,
+        "goal": "CV数を落とさずCPAを改善する",
+        "constraints": [
+            "キャンペーン停止だけを結論にしない",
+            "CVが出ている配信単位は根拠なく止めない",
+            "まず計測・学習・配信制約・配置品質を切り分ける",
+        ],
+        "rule_ids": rule_ids,
+        "candidate_yaml_rules": rule_defs,
+        "performance_diagnostics": diagnostics,
+        "anomaly_summary": audit_results.get("anomalies") or {},
+    }
+
+    claude_result = _ask_claude_current(client_id, payload)
+    if not claude_result:
+        claude_result = _fallback_current_hypotheses(payload)
+
+    by_rule = {}
+    for rid in rule_ids:
+        by_rule[rid] = {
+            "summary": claude_result.get("summary"),
+            "check_order": claude_result.get("check_order") or [],
+            "hypotheses": claude_result.get("hypotheses") or [],
+            "do_not_do": claude_result.get("do_not_do") or [],
+            "source": claude_result.get("source", "fallback"),
+        }
+    return by_rule
+
+
 def _metric_type(rule_id: str, payload: dict) -> str:
     metric = str(payload.get("metric") or "").lower()
     if "cpa" in metric or rule_id == "ANO_CPA_SPIKE":
@@ -366,6 +429,108 @@ def _ask_claude(client_id: str, payload: dict) -> Optional[dict]:
     if not result or not isinstance(result.get("hypotheses"), list):
         return None
     return result
+
+
+def _ask_claude_current(client_id: str, payload: dict) -> Optional[dict]:
+    insights = ClaudeInsights(client_id)
+    if not insights.api_available:
+        return None
+    prompt = f"""広告運用TODOの補足仮説を、YAMLルールとMeta実データに基づいて生成してください。
+
+目的:
+- CV数を落とさずCPAを改善する
+- キャンペーン停止や予算削減だけを提案しない
+- 顧客向けには、確認順・根拠・やってはいけないことを短く出す
+
+制約:
+- 候補にない rule_id を作らない
+- CPA改善だけでCV減少を招く施策は避ける
+- 出力はJSONのみ
+
+入力:
+{json.dumps(payload, ensure_ascii=False, indent=2)}
+
+出力:
+{{
+  "summary": "80字以内",
+  "check_order": ["最初に確認すること", "次に確認すること"],
+  "hypotheses": [
+    {{
+      "rule_id": "M68",
+      "hypothesis": "仮説",
+      "evidence": "Meta実データに基づく根拠",
+      "next_action": "次に見ること"
+    }}
+  ],
+  "do_not_do": ["CVが出ているキャンペーンを根拠なく停止しない"]
+}}"""
+    result = insights._invoke("current_todo_hypotheses", prompt, max_tokens=1400)
+    if not result or not isinstance(result.get("hypotheses"), list):
+        return None
+    result["source"] = "claude"
+    return result
+
+
+def _fallback_current_hypotheses(payload: dict) -> dict:
+    diagnostics = payload.get("performance_diagnostics") or {}
+    worst_campaigns = diagnostics.get("campaigns") or []
+    worst_adsets = diagnostics.get("adsets") or []
+    worst_ads = diagnostics.get("ads") or []
+    worst_placements = diagnostics.get("placements") or []
+    top = (worst_campaigns or worst_adsets or worst_ads or worst_placements or [{}])[0]
+
+    hypotheses = []
+    if worst_placements:
+        hypotheses.append({
+            "rule_id": "M39",
+            "hypothesis": "配置品質の低い面にコストが寄っている可能性があります。",
+            "evidence": _segment_evidence(worst_placements[0]),
+            "next_action": "Audience Network等の配置別CPA/CVを確認し、CVが弱い面だけ除外候補にしてください。",
+        })
+    if worst_adsets:
+        hypotheses.append({
+            "rule_id": "M52",
+            "hypothesis": "広告セット単位で配信制約またはターゲット偏りが起きている可能性があります。",
+            "evidence": _segment_evidence(worst_adsets[0]),
+            "next_action": "広告セット別にCV数・CPA・frequencyを比較してください。",
+        })
+    if worst_ads:
+        hypotheses.append({
+            "rule_id": "M57",
+            "hypothesis": "一部広告の反応低下がCPAを押し上げている可能性があります。",
+            "evidence": _segment_evidence(worst_ads[0]),
+            "next_action": "CVが出ていない広告のみ差し替え候補にし、CVが出ている広告は維持してください。",
+        })
+    if not hypotheses and top:
+        hypotheses.append({
+            "rule_id": "M68",
+            "hypothesis": "学習リセットや設定変更で効率が不安定になっている可能性があります。",
+            "evidence": _segment_evidence(top),
+            "next_action": "直近7日以内の予算・入札・CVイベント・ターゲット変更履歴を確認してください。",
+        })
+
+    return {
+        "summary": "CPA改善は、停止ではなく計測・配置・広告セット単位でCVを守りながら切り分けます。",
+        "check_order": [
+            "計測/CAPI/dedupが正常か確認",
+            "CPAが高い配信単位でもCVが出ているか確認",
+            "CVが弱い配置・広告だけを見直し候補にする",
+        ],
+        "hypotheses": hypotheses[:3],
+        "do_not_do": [
+            "CVが出ているキャンペーンをCPAだけで停止しない",
+            "計測不備が残る状態で配信判断を確定しない",
+        ],
+        "source": "fallback",
+    }
+
+
+def _segment_evidence(row: dict) -> str:
+    name = row.get("name") or row.get("campaign") or row.get("id") or "対象配信単位"
+    cpa = row.get("cpa")
+    cv = row.get("conversions")
+    cost = row.get("cost")
+    return f"{name}: cost={cost}, CV={cv}, CPA={cpa}"
 
 
 def _fallback_hypotheses(payload: dict) -> dict:

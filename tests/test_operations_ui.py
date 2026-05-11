@@ -16,6 +16,7 @@ from engine.stores.outcomes import (
     outcome_summary,
     record_completion_outcome,
     record_outcome,
+    update_due_outcome_measurements,
 )
 from engine.stores.rules import registry_summary, sync_rule_registry
 
@@ -240,6 +241,42 @@ def test_outcome_tracker_computes_directional_improvement_and_value(tmp_path):
     assert ops["estimated_value_yen"] == 24000
     assert summary["total_estimated_value_yen"] == 324000
     assert len(rows) == 3
+
+
+def test_outcome_tracker_updates_due_baseline_measurements(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    baseline = record_outcome(
+        conn,
+        case_id="case-cpa",
+        client_id="pilotton",
+        metric="cpa",
+        baseline_value=10000,
+        measured_value=None,
+        baseline_start="2026-05-01",
+        measurement_start="2026-05-01",
+        payload={"conversions": 40},
+    )
+    conn.commit()
+
+    updated = update_due_outcome_measurements(
+        conn,
+        client_id="pilotton",
+        current_kpis={"cpa": 8000, "cv_count": 45},
+        today="2026-05-08",
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT measured_value, measurement_end, change_pct, estimated_value_yen, payload_json "
+        "FROM outcome_measurements WHERE outcome_id = ?",
+        (baseline["outcome_id"],),
+    ).fetchone()
+
+    assert updated == 1
+    assert row["measured_value"] == 8000
+    assert row["measurement_end"] == "2026-05-08"
+    assert row["change_pct"] == 20
+    assert row["estimated_value_yen"] == 80000
+    assert '"measurement_window_days": 7' in row["payload_json"]
 
 
 def test_improvement_pct_handles_metric_direction_and_zero_baseline():

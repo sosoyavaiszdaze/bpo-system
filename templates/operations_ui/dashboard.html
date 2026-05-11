@@ -222,7 +222,8 @@
               <th>Rule</th>
               <th>Stage</th>
               <th>Status</th>
-              <th>Reason</th>
+              <th>Reason / Evidence</th>
+              <th>Group</th>
             </tr>
           </thead>
           <tbody>
@@ -232,7 +233,13 @@
               <td>{{ trace.rule_id }}</td>
               <td>{{ trace.stage }}</td>
               <td>{{ trace.status }}</td>
-              <td class="muted">{{ trace.reason or "-" }}</td>
+              <td class="muted">{{ trace.reason or "-" }}<br>{{ trace.evidence_summary or "-" }}</td>
+              <td>
+                {{ trace.rule_group or "-" }}
+                {% if trace.duplicate_group_members %}
+                  <br><span class="muted">{{ trace.duplicate_group_members|join(", ") }}</span>
+                {% endif %}
+              </td>
             </tr>
             {% endfor %}
           </tbody>
