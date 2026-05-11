@@ -119,7 +119,17 @@
             {% for c in clients %}
             <tr>
               <td><strong>{{ c.display_name }}</strong><br><span class="muted">{{ c.client_id }}</span></td>
-              <td>{{ c.vertical or "-" }}<br><span class="muted">{{ c.ec_platform or "-" }}</span></td>
+              <td>
+                {{ c.kpi_readiness.display_name or c.vertical or "-" }}<br>
+                <span class="muted">{{ c.vertical or "-" }} / {{ c.ec_platform or "-" }}</span><br>
+                {% if c.kpi_readiness.required_missing %}
+                  <span class="status-failed">Missing: {{ c.kpi_readiness.required_missing|join(", ") }}</span>
+                {% elif c.kpi_readiness.recommended_missing %}
+                  <span class="status-partial_failure">Recommended: {{ c.kpi_readiness.recommended_missing|join(", ") }}</span>
+                {% else %}
+                  <span class="status-success">KPI sources ready</span>
+                {% endif %}
+              </td>
               <td>
                 {% if c.latest_job %}
                   <span class="status-{{ c.latest_job.status }}">{{ c.latest_job.status }}</span><br>

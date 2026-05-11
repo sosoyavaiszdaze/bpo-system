@@ -11,6 +11,7 @@ from engine.stores.decision_traces import list_traces, trace_summary
 from engine.stores.jobs import client_health
 from engine.stores.outcomes import list_outcomes, outcome_summary
 from engine.stores.rules import list_registry_issues, registry_summary
+from engine.vertical_kpi_registry import build_client_kpi_readiness
 
 
 def build_console_context(db_path: Path | str | None = None, root: Path | str | None = None) -> dict[str, Any]:
@@ -23,6 +24,7 @@ def build_console_context(db_path: Path | str | None = None, root: Path | str | 
             row["display_name"] = client["display_name"]
             row["vertical"] = client["vertical"]
             row["ec_platform"] = client["ec_platform"]
+            row["kpi_readiness"] = build_client_kpi_readiness(client["client_id"], client)
             health_rows.append(row)
 
         rule_registry, rule_registry_issues = _rule_registry_context(conn, root)

@@ -1,0 +1,219 @@
+version: 1
+metadata:
+  description: "Industry-specific KPI, conversion event, quality-axis, and data-source registry."
+  last_updated: "2026-05-11"
+  design_note: |
+    Rule YAML decides what can be checked. This registry decides what each
+    industry should care about, which events are first-class outcomes, and
+    which data sources are needed before Zynect can make high-confidence
+    recommendations.
+
+profiles:
+  default:
+    display_name: "General performance marketing"
+    primary_goal: "Improve CPA/ROAS while preserving conversion volume."
+    funnel_events:
+      primary_cv:
+        label: "Primary conversion"
+        canonical: primary_cv
+        synonyms: [purchase, lead, complete_registration, conversion]
+        required: true
+        source_preference: [ad_platform_api, analytics, client_csv]
+    economic_metrics:
+      cpa:
+        label: "CPA"
+        direction: lower_is_better
+      cv_count:
+        label: "CV count"
+        direction: higher_is_better
+      roas:
+        label: "ROAS"
+        direction: higher_is_better
+    quality_dimensions: []
+    data_sources:
+      ad_platform_api:
+        required: true
+        accepted: [meta, google, tiktok, csv]
+      conversion_source:
+        required: true
+        accepted: [ad_platform_api, analytics, client_csv]
+    notification_focus:
+      - "CV数を落とさずCPA/ROASを改善する"
+      - "計測の信頼性と配信の悪化箇所を分けて確認する"
+
+  matching_app:
+    display_name: "Matching app / Dating app"
+    primary_goal: "Improve paid-user CPA/LTV without reducing qualified registrations."
+    aliases: [dating_app, matchmaking_app, app_subscription, social_matching]
+    funnel_events:
+      app_install:
+        label: "アプリインストール"
+        canonical: app_install
+        synonyms: [mobile_app_install, app_install, install]
+        required: true
+        source_preference: [mmp, skan, meta_api, sdk, client_csv]
+      registration_cv:
+        label: "登録CV"
+        canonical: registration_cv
+        synonyms: [complete_registration, registration, sign_up, signup, account_created]
+        required: true
+        source_preference: [mmp, sdk, meta_api, client_csv]
+      identity_verification_cv:
+        label: "本人確認CV"
+        canonical: identity_verification_cv
+        synonyms: [identity_verified, kyc_completed, age_verified, verification_completed]
+        required: true
+        source_preference: [sdk, mmp, backend_event_log, client_csv]
+      first_match:
+        label: "初回マッチ"
+        canonical: first_match
+        synonyms: [first_match, match_created]
+        required: false
+        source_preference: [sdk, backend_event_log, client_csv]
+      first_message:
+        label: "初回メッセージ"
+        canonical: first_message
+        synonyms: [first_message, message_sent, first_chat]
+        required: false
+        source_preference: [sdk, backend_event_log, client_csv]
+      paid_conversion_cv:
+        label: "課金CV"
+        canonical: paid_conversion_cv
+        synonyms: [subscribe, subscription_start, purchase, start_trial, first_purchase]
+        required: true
+        source_preference: [mmp, sdk, meta_api, app_store_server, client_csv]
+      renewal_cv:
+        label: "継続課金CV"
+        canonical: renewal_cv
+        synonyms: [subscription_renewal, renewal, repeat_purchase]
+        required: false
+        source_preference: [app_store_server, backend_event_log, client_csv]
+    economic_metrics:
+      registration_cpa:
+        label: "登録CPA"
+        direction: lower_is_better
+        numerator: spend
+        denominator: registration_cv
+      verification_cpa:
+        label: "本人確認CPA"
+        direction: lower_is_better
+        numerator: spend
+        denominator: identity_verification_cv
+      paid_cpa:
+        label: "課金CPA"
+        direction: lower_is_better
+        numerator: spend
+        denominator: paid_conversion_cv
+      ltv_30d:
+        label: "30日LTV"
+        direction: higher_is_better
+      ltv_90d:
+        label: "90日LTV"
+        direction: higher_is_better
+      pay_rate:
+        label: "課金率"
+        direction: higher_is_better
+        numerator: paid_conversion_cv
+        denominator: registration_cv
+    quality_dimensions:
+      - id: gender_balance
+        label: "男女比"
+        source_preference: [backend_event_log, product_analytics, client_csv]
+        use_in_recommendations: true
+      - id: age_distribution
+        label: "年齢構成"
+        source_preference: [backend_event_log, product_analytics, client_csv]
+        use_in_recommendations: true
+      - id: region_distribution
+        label: "地域構成"
+        source_preference: [backend_event_log, product_analytics, client_csv]
+        use_in_recommendations: true
+      - id: safety_quality
+        label: "通報/ブロック/不正率"
+        source_preference: [backend_event_log, moderation_tool, client_csv]
+        use_in_recommendations: true
+      - id: retention
+        label: "D1/D7継続率"
+        source_preference: [mmp, product_analytics, client_csv]
+        use_in_recommendations: true
+    data_sources:
+      meta_api:
+        required: true
+        accepted: [campaign, adset, ad, placement, pixel, domain, account_status]
+      mmp:
+        required: false
+        strongly_recommended: true
+        accepted: [adjust, appsflyer, branch, singular, kochava]
+      sdk_or_backend_events:
+        required: true
+        accepted: [sdk_event_log, backend_event_log, product_analytics, client_csv]
+      skan:
+        required: false
+        strongly_recommended: true
+        accepted: [skan_4, skadnetwork_postback, mmp_skan]
+      app_store_revenue:
+        required: false
+        strongly_recommended: true
+        accepted: [app_store_server, google_play_billing, revenuecat, client_csv]
+    rule_focus:
+      measurement_foundation: [M01, X-PI1, F-MF-02, M02, P-EF-02, PC-MS-01]
+      paid_efficiency: [ANO_CPA_SPIKE, M09, M10, M12, M13, M45, M68]
+      delivery_quality: [ANO_IMPRESSION_DROP, M14, M16, M18, M20, M44]
+      audience_quality: [M52, M69, M70]
+      creative_fatigue: [M57, M58, M59]
+    notification_focus:
+      - "登録CPAではなく、本人確認CPA・課金CPA・LTVまで分けて見る"
+      - "CV数を落とさず、質の低いセグメントだけを切り分ける"
+      - "男女比・年齢・地域・安全性の偏りを広告判断に混ぜる"
+      - "MMP/SDK/SKANが未接続なら、広告媒体CVだけで断定しない"
+
+  ec_d2c:
+    display_name: "EC / D2C"
+    primary_goal: "Improve purchase CPA/ROAS while protecting revenue and repeat purchase."
+    aliases: [beauty_d2c, ec_retail, cosmetics_health]
+    funnel_events:
+      purchase_cv:
+        label: "購入CV"
+        canonical: purchase
+        synonyms: [purchase, offsite_conversion.fb_pixel_purchase, onsite_web_app_purchase]
+        required: true
+        source_preference: [meta_api, ec_platform, analytics, client_csv]
+      repeat_purchase_cv:
+        label: "リピート購入CV"
+        canonical: repeat_purchase
+        synonyms: [repeat_purchase, subscription_renewal]
+        required: false
+        source_preference: [ec_platform, crm, client_csv]
+    economic_metrics:
+      purchase_cpa:
+        label: "購入CPA"
+        direction: lower_is_better
+      roas:
+        label: "ROAS"
+        direction: higher_is_better
+      ltv:
+        label: "LTV"
+        direction: higher_is_better
+    quality_dimensions:
+      - id: repeat_rate
+        label: "リピート率"
+        source_preference: [ec_platform, crm, client_csv]
+        use_in_recommendations: true
+      - id: gross_margin
+        label: "粗利率"
+        source_preference: [ec_platform, client_csv]
+        use_in_recommendations: true
+    data_sources:
+      meta_api:
+        required: true
+        accepted: [campaign, adset, ad, placement, pixel]
+      ec_platform:
+        required: true
+        accepted: [ecforce, shopify, makeshop, futureshop, base, custom]
+      crm:
+        required: false
+        strongly_recommended: true
+        accepted: [customer_list, repeat_purchase, ltv]
+    notification_focus:
+      - "購入CV・ROAS・リピート率を分けて見る"
+      - "計測不備と広告配信悪化を分けて確認する"
