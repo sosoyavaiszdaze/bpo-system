@@ -11,7 +11,8 @@ from engine.stores.decision_traces import list_traces, trace_summary
 from engine.stores.jobs import client_health
 from engine.stores.monitoring import incident_summary, list_open_incidents
 from engine.stores.outcomes import list_outcomes, list_rule_outcome_rollups, outcome_summary
-from engine.stores.rules import list_registry_issues, meta_rule_operations_summary, registry_summary
+from engine.stores.rule_drafts import list_rule_drafts
+from engine.stores.rules import family_operations_matrix, list_registry_issues, meta_rule_operations_summary, registry_summary
 from engine.stores.connections import connection_summary, list_client_connections
 from engine.vertical_kpi_registry import build_client_kpi_readiness
 
@@ -46,6 +47,8 @@ def build_console_context(db_path: Path | str | None = None, root: Path | str | 
             "rule_registry": rule_registry,
             "rule_registry_issues": rule_registry_issues,
             "meta_rule_operations": _safe_meta_rule_ops(conn),
+            "rule_family_operations": _safe_rule_family_ops(conn),
+            "rule_change_drafts": _safe_rule_drafts(conn),
             "decision_trace_summary": trace_summary(conn),
             "recent_decision_traces": _enriched_traces(conn),
         }
@@ -153,6 +156,20 @@ def _safe_meta_rule_ops(conn) -> dict[str, Any]:
         return meta_rule_operations_summary(conn)
     except Exception:
         return {}
+
+
+def _safe_rule_family_ops(conn) -> list[dict[str, Any]]:
+    try:
+        return family_operations_matrix(conn)
+    except Exception:
+        return []
+
+
+def _safe_rule_drafts(conn) -> list[dict[str, Any]]:
+    try:
+        return list_rule_drafts(conn, status="review_required", limit=20)
+    except Exception:
+        return []
 
 
 def _enriched_traces(conn, limit: int = 30) -> list[dict[str, Any]]:

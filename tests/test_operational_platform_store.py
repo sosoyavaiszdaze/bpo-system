@@ -8,6 +8,7 @@ from engine.stores.connections import connection_summary, list_client_connection
 from engine.stores.db import connect
 from engine.stores.jobs import client_health, record_job
 from engine.stores.monitoring import incident_summary, list_open_incidents, open_incident, record_health_check
+from engine.stores.responses import upsert_client_response
 from scripts.client_health import build_health_report
 from scripts.migrate_state_to_db import migrate
 
@@ -73,6 +74,40 @@ def test_case_transition_records_state_machine_and_event(tmp_path):
     assert event["event_type"] == "transition:open->waiting_zynect"
 
 
+def test_client_response_updates_case_status(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    case_id = upsert_case_from_indication(conn, {
+        "indication_id": "case-1",
+        "client_id": "pilotton",
+        "rule_id": "F-MF-01",
+        "status": "open",
+        "first_detected_at": "2026-05-09T00:00:00+00:00",
+        "payload": {"title": "CVイベント確認"},
+    })
+
+    upsert_client_response(conn, client_id="pilotton", record={
+        "rule_id": "F-MF-01",
+        "answer_code": "C",
+        "answer_label": "確認したい",
+        "status": "wants_help",
+        "raw_message": "C",
+        "chatwork_message_id": "210",
+        "answered_at": "2026-05-09T10:00:00+09:00",
+        "source": "chatwork_reply",
+    }, case_id=case_id)
+    conn.commit()
+
+    case = get_case(conn, case_id)
+    event_types = [
+        row["event_type"]
+        for row in conn.execute("SELECT event_type FROM case_events WHERE case_id = ? ORDER BY event_at", (case_id,))
+    ]
+
+    assert case["status"] == "waiting_zynect"
+    assert "client_response" in event_types
+    assert "transition:open->waiting_zynect" in event_types
+
+
 def test_migrate_state_to_db_imports_clients_cases_and_responses(tmp_path):
     root = _sample_root(tmp_path)
     db_path = tmp_path / "state" / "zynect.db"
@@ -90,6 +125,7 @@ def test_migrate_state_to_db_imports_clients_cases_and_responses(tmp_path):
     try:
         case = conn.execute("SELECT * FROM operational_cases WHERE client_id = 'pilotton'").fetchone()
         assert case["rule_id"] == "F-MF-01"
+        assert case["status"] == "waiting_zynect"
         response = conn.execute("SELECT * FROM client_responses WHERE client_id = 'pilotton'").fetchone()
         assert response["case_id"] == case["case_id"]
         assert response["status"] == "wants_help"

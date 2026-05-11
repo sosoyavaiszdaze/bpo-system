@@ -59,7 +59,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 log = logging.getLogger("ingest")
 
 
-def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
+def ingest(client_id: str, dry_run: bool = False, since_id: str = "", db_path: Path | str | None = None) -> dict:
     """1 client 分の ChatWork 回答取り込み
 
     Returns:
@@ -193,6 +193,8 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
         if not dry_run:
             try:
                 save_response(client_id, record)
+                if db_path is not None:
+                    _save_response_to_db(client_id, record, db_path=db_path)
                 summary["saved_responses"] += 1
                 saved_records.append(record)
             except Exception as e:
@@ -220,6 +222,15 @@ def ingest(client_id: str, dry_run: bool = False, since_id: str = "") -> dict:
         f"errors={len(summary['errors'])} ack_errors={len(summary['ack_errors'])}"
     )
     return summary
+
+
+def _save_response_to_db(client_id: str, record: dict, db_path: Path | str | None = None) -> None:
+    """Mirror a parsed response into the operational DB."""
+    from engine.stores.db import transaction
+    from engine.stores.responses import upsert_client_response
+
+    with transaction(db_path) as conn:
+        upsert_client_response(conn, client_id=client_id, record=record)
 
 
 def _post_ack_for_new_responses(
@@ -297,9 +308,10 @@ def main() -> int:
                         help="パース結果のみ表示、yaml に書き込まない")
     parser.add_argument("--since-id", default="",
                         help="指定 message_id より新しいメッセージのみ取込")
+    parser.add_argument("--db", default=str(ROOT / "state" / "zynect.db"), help="SQLite DB path")
     args = parser.parse_args()
 
-    summary = ingest(args.client, dry_run=args.dry_run, since_id=args.since_id)
+    summary = ingest(args.client, dry_run=args.dry_run, since_id=args.since_id, db_path=args.db)
 
     print("=== ingestion summary ===")
     import json

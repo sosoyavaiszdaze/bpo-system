@@ -20,7 +20,9 @@ from engine.stores.outcomes import (
     refresh_rule_outcome_rollups,
     update_due_outcome_measurements,
 )
-from engine.stores.rules import meta_rule_operations_summary, registry_summary, sync_rule_registry
+from engine.stores.rule_drafts import create_rule_draft_from_text, list_rule_drafts, review_rule_draft
+from engine.stores.rules import family_operations_matrix, meta_rule_operations_summary, registry_summary, sync_rule_registry
+from scripts.update_outcome_measurements import update_outcomes
 
 
 def test_rule_registry_summarizes_axis_and_mapping_coverage(tmp_path):
@@ -98,6 +100,8 @@ def test_operations_console_context_is_read_only_shape(tmp_path):
     assert ctx["rule_registry"]["total_rules"] == 2
     assert "connections" in ctx
     assert "incidents" in ctx
+    assert "rule_family_operations" in ctx
+    assert "rule_change_drafts" in ctx
 
 
 def test_sync_rule_registry_persists_yaml_connectivity_audit(tmp_path):
@@ -196,6 +200,58 @@ def test_meta_rule_operations_summary_counts_meta_readiness(tmp_path):
 
     assert summary["meta_total"] >= 1
     assert summary["meta_high_critical"] >= 1
+
+
+def test_rule_family_operations_matrix_includes_non_meta(tmp_path):
+    root = _rule_root(tmp_path)
+    (root / "config" / "rules" / "google_rules.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "rules": [
+                    {
+                        "id": "G01",
+                        "name": "Google CV確認",
+                        "severity": "high",
+                        "enabled": True,
+                        "root_cause_group": "measurement_foundation",
+                        "axis_position": "TO-02",
+                        "data_source": [{"source": "google_ads_api", "fields": ["conversions"]}],
+                    }
+                ]
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    conn = connect(tmp_path / "zynect.db")
+    sync_rule_registry(conn, load_rule_registry(root))
+    conn.commit()
+
+    matrix = {row["family"]: row for row in family_operations_matrix(conn)}
+
+    assert matrix["google"]["total"] == 1
+    assert matrix["google"]["high_critical"] == 1
+    assert matrix["google"]["required_data_sources"] == 1
+
+
+def test_rule_draft_from_natural_language_is_reviewable(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+
+    draft = create_rule_draft_from_text(
+        conn,
+        source_text="Metaで本人確認CVのCPAが悪化したら、登録CPAではなく本人確認CPAで判断したい",
+        target_family="meta",
+        created_by="ops",
+    )
+    review_rule_draft(conn, draft_id=draft["draft_id"], status="needs_revision", reviewer_user_id="reviewer-1")
+    conn.commit()
+
+    rows = list_rule_drafts(conn)
+    reviewed = conn.execute("SELECT status FROM rule_change_drafts WHERE draft_id = ?", (draft["draft_id"],)).fetchone()
+
+    assert rows[0]["proposed_rule_id"].startswith("M-DRAFT-")
+    assert "本人確認CV" in rows[0]["proposed_yaml"]
+    assert reviewed["status"] == "needs_revision"
 
 
 def test_decision_trace_store_and_ui_context(tmp_path):
@@ -345,6 +401,53 @@ def test_rule_outcome_rollups_accumulate_win_rate(tmp_path):
     assert result["rules_updated"] == 1
     assert rows[0]["rule_id"] == "M02"
     assert rows[0]["win_rate"] == 1.0
+
+
+def test_update_outcome_measurements_job_updates_due_rows(tmp_path):
+    db_path = tmp_path / "zynect.db"
+    conn = connect(db_path)
+    upsert_client(conn, "pilotton", {"display_name": "株式会社パイロットン", "vertical": "ec_d2c"})
+    upsert_case_from_indication(conn, {
+        "indication_id": "case-1",
+        "client_id": "pilotton",
+        "rule_id": "M02",
+        "status": "open",
+        "severity": "high",
+        "first_detected_at": "2026-05-01T00:00:00+00:00",
+        "payload": {"title": "CAPI"},
+    })
+    record_outcome(
+        conn,
+        case_id="case-1",
+        client_id="pilotton",
+        metric="cpa",
+        baseline_value=10000,
+        measured_value=None,
+        baseline_start="2026-05-01",
+        measurement_start="2026-05-01",
+        payload={"conversions": 10},
+    )
+    conn.commit()
+    conn.close()
+
+    result = update_outcomes(
+        db_path=db_path,
+        client_id="pilotton",
+        today="2026-05-08",
+        kpi_json='{"pilotton":{"cpa":8000,"cv_count":12,"roas":2.1}}',
+    )
+
+    conn = connect(db_path)
+    try:
+        outcome = conn.execute("SELECT measured_value, change_pct FROM outcome_measurements WHERE case_id = 'case-1'").fetchone()
+        job = conn.execute("SELECT status FROM job_runs WHERE job_name = 'update_outcome_measurements'").fetchone()
+    finally:
+        conn.close()
+
+    assert result["updated_measurements"] == 1
+    assert outcome["measured_value"] == 8000
+    assert outcome["change_pct"] == 20
+    assert job["status"] == "success"
 
 
 def test_improvement_pct_handles_metric_direction_and_zero_baseline():

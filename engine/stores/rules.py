@@ -196,14 +196,39 @@ def list_registry_issues(conn, limit: int = 50) -> list[dict[str, Any]]:
 
 def meta_rule_operations_summary(conn) -> dict[str, Any]:
     """Meta-first rule operations readiness summary."""
-    rows = conn.execute(
+    summary = rule_operations_summary(conn, family="meta")
+    return {
+        "meta_total": summary["total"],
+        "meta_customer_visible": summary["customer_visible"],
+        "meta_high_critical": summary["high_critical"],
+        "meta_high_critical_unmapped": summary["high_critical_unmapped"],
+        "meta_required_data_sources": summary["required_data_sources"],
+        "meta_duplicate_group_defined": summary["duplicate_group_defined"],
+    }
+
+
+def rule_operations_summary(conn, family: str | None = None) -> dict[str, Any]:
+    """Operational readiness summary for one rule family or the whole registry."""
+    where = ""
+    params: list[Any] = []
+    if family:
+        where = """
+        WHERE r.source_path LIKE ?
+           OR r.rule_id LIKE ?
+           OR o.rule_family = ?
+           OR r.category = ?
         """
+        prefix = _family_prefix(family)
+        params.extend([f"%{family}_rules.yaml", f"{prefix}%", family, family])
+    rows = conn.execute(
+        f"""
         SELECT r.rule_id, r.severity, r.messaging_mapped, r.customer_visible,
                o.lifecycle, o.duplicate_group, o.required_data_sources_json
         FROM rule_registry r
         LEFT JOIN rule_registry_operations o ON o.rule_id = r.rule_id
-        WHERE r.source_path LIKE '%meta_rules.yaml' OR r.rule_id LIKE 'M%'
-        """
+        {where}
+        """,
+        params,
     ).fetchall()
     total = len(rows)
     high_critical = [
@@ -214,13 +239,20 @@ def meta_rule_operations_summary(conn) -> dict[str, Any]:
     with_sources = [r for r in rows if r["required_data_sources_json"] not in (None, "", "[]")]
     with_duplicate_group = [r for r in rows if r["duplicate_group"]]
     return {
-        "meta_total": total,
-        "meta_customer_visible": len(visible),
-        "meta_high_critical": len(high_critical),
-        "meta_high_critical_unmapped": len([r for r in high_critical if not r["messaging_mapped"]]),
-        "meta_required_data_sources": len(with_sources),
-        "meta_duplicate_group_defined": len(with_duplicate_group),
+        "family": family or "all",
+        "total": total,
+        "customer_visible": len(visible),
+        "high_critical": len(high_critical),
+        "high_critical_unmapped": len([r for r in high_critical if not r["messaging_mapped"]]),
+        "required_data_sources": len(with_sources),
+        "duplicate_group_defined": len(with_duplicate_group),
     }
+
+
+def family_operations_matrix(conn) -> list[dict[str, Any]]:
+    """Readiness matrix across major rule families."""
+    families = ["meta", "google", "tiktok", "seo", "adtruth", "legal", "ec_platform"]
+    return [rule_operations_summary(conn, family=f) for f in families]
 
 
 def canonical_rule_id(rule_id: str) -> str:
@@ -254,3 +286,15 @@ def _rule_refs(rule: dict, *keys: str) -> list[str]:
         elif isinstance(val, list):
             refs.extend(str(x) for x in val if x)
     return sorted(set(refs))
+
+
+def _family_prefix(family: str) -> str:
+    return {
+        "meta": "M",
+        "google": "G",
+        "tiktok": "T",
+        "seo": "S",
+        "adtruth": "F",
+        "legal": "F-LC",
+        "ec_platform": "V-EC",
+    }.get(family, family.upper())

@@ -24,6 +24,12 @@ CASE_STATUS_FROM_INDICATION = {
     "resolved_confirmed": "resolved",
     "archived": "resolved",
 }
+CASE_STATUS_FROM_RESPONSE = {
+    "confirmed_done": "monitoring",
+    "not_done": "waiting_client",
+    "wants_help": "waiting_zynect",
+    "not_applicable": "closed",
+}
 
 
 def case_id_for_indication(record: dict) -> str:
@@ -195,6 +201,62 @@ def transition_case(
         payload=payload or {},
     )
     return transition_id
+
+
+def apply_client_response_to_case(
+    conn,
+    *,
+    case_id: str | None,
+    response: dict,
+    actor_type: str = "client",
+) -> str | None:
+    """Attach a client response to a case and move the case state.
+
+    ChatWork/file ingestion and future UI/API ingestion should converge here so
+    "the client answered" always has the same operational meaning.
+    """
+    if not case_id:
+        return None
+    row = conn.execute(
+        "SELECT client_id, status FROM operational_cases WHERE case_id = ?",
+        (case_id,),
+    ).fetchone()
+    if not row:
+        return None
+
+    answered_at = response.get("answered_at") or utc_now()
+    actor_id = str(response.get("chatwork_message_id") or response.get("source") or "")
+    add_case_event(
+        conn,
+        case_id=case_id,
+        client_id=row["client_id"],
+        event_type="client_response",
+        actor_type=actor_type,
+        actor_id=actor_id,
+        event_at=answered_at,
+        message=response.get("raw_message"),
+        payload=response,
+    )
+
+    target_status = CASE_STATUS_FROM_RESPONSE.get(str(response.get("status") or ""))
+    if not target_status or target_status == row["status"]:
+        return None
+    return transition_case(
+        conn,
+        case_id=case_id,
+        to_status=target_status,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        reason=f"client_response:{response.get('status')}",
+        transitioned_at=answered_at,
+        payload={
+            "rule_id": response.get("rule_id"),
+            "answer_code": response.get("answer_code"),
+            "answer_label": response.get("answer_label"),
+            "source": response.get("source"),
+        },
+        allow_any=True,
+    )
 
 
 def get_case(conn, case_id: str) -> Optional[dict]:

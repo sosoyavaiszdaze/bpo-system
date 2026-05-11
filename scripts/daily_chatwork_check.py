@@ -245,7 +245,13 @@ def _run_daily_check_impl(
     # dry_run 時は ingest も dry-run で実行し、yaml への保存も行わない (副作用ゼロ原則)。
     try:
         from scripts.ingest_chatwork_responses import ingest as _ingest_responses
-        ingest_summary = _ingest_responses(client_id, dry_run=dry_run)
+        try:
+            from engine.stores.db import DEFAULT_DB_PATH
+            ingest_db_path = db_path or DEFAULT_DB_PATH
+            ingest_summary = _ingest_responses(client_id, dry_run=dry_run, db_path=ingest_db_path)
+        except TypeError:
+            # Test doubles and older callers may not accept db_path yet.
+            ingest_summary = _ingest_responses(client_id, dry_run=dry_run)
         log.info(
             f"ingest: fetched={ingest_summary.get('fetched_messages', 0)} "
             f"parsed={ingest_summary.get('parsed_answers', 0)} "

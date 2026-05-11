@@ -21,6 +21,7 @@ from engine.stores.cases import add_case_event, upsert_case_from_indication
 from engine.stores.clients import list_client_ids, upsert_client
 from engine.stores.db import connect, json_dumps, utc_now
 from engine.stores.jobs import record_job
+from engine.stores.responses import latest_case_id_for_rule, upsert_client_response
 
 
 def migrate(
@@ -148,43 +149,8 @@ def _import_responses(conn, root: Path, summary: dict) -> None:
             summary["errors"].append(f"response load failed {path}: {e}")
             continue
         for rule_id, rec in (data.get("responses") or {}).items():
-            response_id = _hash("response", client_id, rule_id, rec.get("chatwork_message_id") or rec.get("answered_at") or "")
             case_id = _latest_case_id_for_rule(conn, client_id, rule_id)
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO client_responses (
-                  response_id, client_id, rule_id, case_id, answer_code, answer_label,
-                  status, raw_message, chatwork_message_id, answered_at, source, expires_at, payload_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    response_id,
-                    client_id,
-                    rule_id,
-                    case_id,
-                    rec.get("answer_code"),
-                    rec.get("answer_label"),
-                    rec.get("status") or "unknown",
-                    rec.get("raw_message"),
-                    str(rec.get("chatwork_message_id")) if rec.get("chatwork_message_id") else None,
-                    rec.get("answered_at"),
-                    rec.get("source") or "chatwork_reply",
-                    rec.get("expires_at"),
-                    json_dumps(rec),
-                ),
-            )
-            if case_id:
-                add_case_event(
-                    conn,
-                    case_id=case_id,
-                    client_id=client_id,
-                    event_type="client_response",
-                    actor_type="client",
-                    actor_id=str(rec.get("chatwork_message_id") or ""),
-                    event_at=rec.get("answered_at") or utc_now(),
-                    message=rec.get("raw_message"),
-                    payload=rec,
-                )
+            upsert_client_response(conn, client_id=client_id, record={**rec, "rule_id": rule_id}, case_id=case_id)
             summary["responses"] += 1
 
 
@@ -247,16 +213,7 @@ def _import_auto_proposal_history(conn, root: Path, summary: dict) -> None:
 
 
 def _latest_case_id_for_rule(conn, client_id: str, rule_id: str) -> str | None:
-    row = conn.execute(
-        """
-        SELECT case_id FROM operational_cases
-        WHERE client_id = ? AND rule_id = ?
-        ORDER BY first_detected_at DESC
-        LIMIT 1
-        """,
-        (client_id, rule_id),
-    ).fetchone()
-    return row["case_id"] if row else None
+    return latest_case_id_for_rule(conn, client_id, rule_id)
 
 
 def _hash(*parts: Any) -> str:
