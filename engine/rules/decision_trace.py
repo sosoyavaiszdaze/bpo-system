@@ -55,6 +55,48 @@ def build_selection_traces(
     return traces
 
 
+def build_meta_api_evidence_traces(
+    *,
+    client_id: str,
+    evaluation_date: str,
+    audit_results: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Build traces that explain what Meta API evidence was available.
+
+    These traces answer questions like:
+      - why M02 fired or was suppressed
+      - which numeric/API evidence was used
+      - whether the source was API, validator, or manual reply
+    """
+    diagnostics = (audit_results or {}).get("platform_diagnostics") or {}
+    meta = diagnostics.get("meta") or {}
+    evidence_map = (
+        (audit_results or {}).get("meta_rule_evidence")
+        or meta.get("rule_evidence")
+        or {}
+    )
+    connection_audit = meta.get("connection_audit") or {}
+    group_index = meta.get("rule_groups") or {}
+    traces = []
+    for rid, evidence in sorted(evidence_map.items()):
+        if not isinstance(evidence, dict):
+            continue
+        status = evidence.get("status") or "unknown"
+        reason = evidence.get("reason")
+        trace_evidence = {
+            "source": evidence.get("source"),
+            "value": evidence.get("value") or {},
+            "rule_group": evidence.get("rule_group"),
+            "connection_audit": connection_audit,
+            "duplicate_group_members": (
+                (group_index.get("groups") or {}).get(evidence.get("rule_group"))
+                if evidence.get("rule_group") else None
+            ),
+        }
+        traces.append(_trace(client_id, rid, evaluation_date, "meta_api_evidence", status, reason, trace_evidence))
+    return traces
+
+
 def _trace(
     client_id: str,
     rule_id: str,

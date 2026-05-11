@@ -97,6 +97,12 @@ def fetch_audit_results(client_id: str) -> dict:
 
     return {
         "data_available": True,
+        "platform_diagnostics": data.get("platform_diagnostics") or {},
+        "meta_rule_evidence": (
+            (data.get("platform_diagnostics") or {})
+            .get("meta", {})
+            .get("rule_evidence", {})
+        ),
         "ads_audit": run_ads_audit(client_id, data, thr),
         "anomalies": run_anomaly_detection(client_id, data, thr),
         "fraud_audit": run_fraud_audit(client_id, data, thr),
@@ -174,6 +180,7 @@ def run_daily_check(
     dry_run: bool = False,
     test_prefix: str = "",
     today: Optional[str] = None,
+    db_path: Optional[Path] = None,
 ) -> dict:
     """日次チェックの本処理
 
@@ -184,15 +191,40 @@ def run_daily_check(
         {"posted_indications": int, "posted_completions": int, "errors": [...]}
     """
     run_id = new_run_id()
+    job_run_id = None
+    db_start_error = None
+    if not dry_run:
+        try:
+            from engine.stores.db import transaction
+            from engine.stores.jobs import start_job
+            with transaction(db_path) as conn:
+                job_run_id = start_job(conn, "daily_chatwork_check", client_id)
+        except Exception as e:
+            db_start_error = f"operational_job_start: {e}"
+            log.error(f"operational DB job start failed: {e}")
+
     with StructuredLogContext(run_id=run_id, client_id=client_id, step="run_daily_check"):
-        return _run_daily_check_impl(
-            client_id, dry_run, test_prefix, today, run_id,
-        )
+        try:
+            result = _run_daily_check_impl(
+                client_id, dry_run, test_prefix, today, run_id, db_path,
+            )
+        except Exception as e:
+            if job_run_id and not dry_run:
+                _finish_operational_job(db_path, job_run_id, "failed", [str(e)], {})
+            raise
+
+    if db_start_error:
+        result.setdefault("errors", []).append(db_start_error)
+    if job_run_id and not dry_run:
+        status = "success" if not result.get("errors") else "partial_failure"
+        metrics = {k: v for k, v in result.items() if isinstance(v, (int, float))}
+        _finish_operational_job(db_path, job_run_id, status, result.get("errors") or [], metrics)
+    return result
 
 
 def _run_daily_check_impl(
     client_id: str, dry_run: bool, test_prefix: str,
-    today: Optional[str], run_id: str,
+    today: Optional[str], run_id: str, db_path: Optional[Path] = None,
 ) -> dict:
     """run_daily_check の実装本体 (StructuredLogContext 内で呼ばれる)"""
     today_str = today or datetime.now().strftime("%Y-%m-%d")
@@ -264,6 +296,26 @@ def _run_daily_check_impl(
     posted_indications = 0
     posted_completions = 0
     errors: list[str] = []
+
+    # Meta APIで何が見えたかをDecision Traceに保存する。
+    # 通知本文に出た/出ないに関係なく、M02等の発火根拠を後から追えるようにする。
+    if not dry_run and audit.get("data_available"):
+        try:
+            from engine.rules.decision_trace import build_meta_api_evidence_traces
+            from engine.stores.db import transaction
+            from engine.stores.decision_traces import record_trace
+            traces = build_meta_api_evidence_traces(
+                client_id=client_id,
+                evaluation_date=today_str,
+                audit_results=audit,
+            )
+            with transaction(db_path) as conn:
+                for trace in traces:
+                    record_trace(conn, **trace)
+            log.info(f"decision_trace: meta_api_evidence recorded={len(traces)}")
+        except Exception as e:
+            log.error(f"Meta API decision trace 記録失敗: {e}")
+            errors.append(f"meta_decision_trace: {e}")
 
     # 5. 完了通知 (resolved_confirmed && completion_notified_at IS NULL)
     pending_completion = state.list_pending_completion_notification()
@@ -396,8 +448,134 @@ def _run_daily_check_impl(
         "adtruth_posted": adtruth_summary.get("posted_count", 0),
         "errors": errors,
     }
+    if not dry_run:
+        try:
+            summary["operational_cases_synced"] = _persist_operational_cases(
+                client_id=client_id,
+                state=state,
+                today_str=today_str,
+                audit_results=audit,
+                db_path=db_path,
+            )
+        except Exception as e:
+            log.error(f"operational case sync failed: {e}")
+            errors.append(f"operational_case_sync: {e}")
+            summary["operational_cases_synced"] = 0
     log.info(f"日次チェック完了: {summary}")
     return summary
+
+
+def _finish_operational_job(db_path: Optional[Path], job_run_id: str, status: str, errors: list, metrics: dict) -> None:
+    try:
+        from engine.stores.db import transaction
+        from engine.stores.jobs import finish_job
+        with transaction(db_path) as conn:
+            finish_job(conn, job_run_id, status, errors=errors, metrics=metrics)
+    except Exception as e:
+        log.error(f"operational DB job finish failed: {e}")
+
+
+def _persist_operational_cases(
+    client_id: str,
+    state: IndicationState,
+    today_str: str,
+    audit_results: Optional[dict] = None,
+    db_path: Optional[Path] = None,
+) -> int:
+    """Persist current indication state into operational_cases.
+
+    The JSON state remains the runtime source of truth for now. This write makes
+    the operations UI and PDCA loop observe the same state immediately after the
+    production job runs, without waiting for a separate sync command.
+    """
+    from engine.stores.cases import upsert_case_from_indication
+    from engine.stores.db import transaction
+
+    records = list(state.all_indications().values())
+    with transaction(db_path) as conn:
+        for record in records:
+            case_id = upsert_case_from_indication(conn, record)
+            if record.get("notified_date") == today_str:
+                _insert_operational_notification(conn, case_id, record, "daily_todo")
+                _insert_outcome_baselines(conn, case_id, record, audit_results or {}, today_str)
+            if record.get("completion_notified_date") == today_str:
+                _insert_operational_notification(conn, case_id, record, "completion_notice")
+        return len(records)
+
+
+def _insert_operational_notification(conn, case_id: str, record: dict, notification_type: str) -> None:
+    import hashlib
+    from engine.stores.db import json_dumps
+
+    event_date = record.get("completion_notified_date") if notification_type == "completion_notice" else record.get("notified_date")
+    event_at = record.get("completion_notified_at") if notification_type == "completion_notice" else record.get("notified_at")
+    raw = f"{case_id}|{notification_type}|{event_date or event_at or ''}"
+    notification_id = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+    payload = {
+        "rule_id": record.get("rule_id"),
+        "notification_type": notification_type,
+        "source": "daily_chatwork_check",
+    }
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO notification_messages (
+          notification_id, client_id, case_id, channel, status, sent_at, payload_json
+        ) VALUES (?, ?, ?, 'chatwork', 'sent', ?, ?)
+        """,
+        (
+            notification_id,
+            record.get("client_id", ""),
+            case_id,
+            event_at,
+            json_dumps(payload),
+        ),
+    )
+
+
+def _insert_outcome_baselines(conn, case_id: str, record: dict, audit_results: dict, today_str: str) -> int:
+    """Record CPA/CV/ROAS at notification time for later before/after checks."""
+    from engine.stores.outcomes import record_outcome
+
+    kpis = _extract_current_outcome_kpis(audit_results, platform="meta")
+    if not kpis:
+        return 0
+
+    recorded = 0
+    for metric, value in kpis.items():
+        if value is None:
+            continue
+        record_outcome(
+            conn,
+            case_id=case_id,
+            client_id=record.get("client_id", ""),
+            metric=metric,
+            baseline_value=float(value),
+            measured_value=None,
+            baseline_start=today_str,
+            baseline_end=today_str,
+            measurement_start=today_str,
+            confidence="medium",
+            notes="daily_todo notification baseline",
+            payload={
+                "rule_id": record.get("rule_id"),
+                "source": "daily_todo_baseline",
+                "platform": "meta",
+            },
+        )
+        recorded += 1
+    return recorded
+
+
+def _extract_current_outcome_kpis(audit_results: dict, platform: str = "meta") -> dict:
+    ads = (audit_results or {}).get("ads_audit") or {}
+    summary = (ads.get("platform_summary") or {}).get(platform) or {}
+    if not summary:
+        return {}
+    return {
+        "cpa": summary.get("avg_cpa"),
+        "cv_count": summary.get("conversions"),
+        "roas": summary.get("avg_roas"),
+    }
 
 
 # ---------- 自己監視 ----------

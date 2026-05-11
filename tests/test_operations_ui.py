@@ -30,9 +30,15 @@ def test_rule_registry_summarizes_axis_and_mapping_coverage(tmp_path):
     assert summary["messaging_mapped"] == 1
     assert summary["expected_impact_rules"] == 1
     assert summary["root_cause_group_rules"] == 1
+    assert summary["enabled_rules"] == 2
+    assert summary["customer_visible_rules"] == 1
+    assert summary["high_critical_unmapped_rules"] == 0
     missing = next(r for r in records if r.rule_id == "F-MF-02")
     assert "missing_root_cause_group" in missing.issues
     assert "messaging_unmapped" in missing.issues
+    connected = next(r for r in records if r.rule_id == "F-MF-01")
+    assert "incomplete_customer_message_schema" in connected.issues
+    assert "unsafe_eval_trigger" in connected.issues
 
 
 def test_operations_console_context_is_read_only_shape(tmp_path):
@@ -110,9 +116,47 @@ def test_sync_rule_registry_persists_yaml_connectivity_audit(tmp_path):
         "messaging_unmapped",
         "missing_applies_to",
         "missing_expected_impact",
+        "missing_lifecycle",
         "missing_root_cause_group",
+        "unsafe_eval_trigger",
         "weak_or_missing_decision_axis",
     ]
+
+
+def test_rule_registry_flags_high_severity_customer_visibility_gap(tmp_path):
+    root = _rule_root(tmp_path)
+    path = root / "config" / "rules" / "meta_rules.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "rules": [
+                    {
+                        "id": "M01",
+                        "name": "High priority Meta gap",
+                        "severity": "critical",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "M02",
+                        "name": "Disabled Meta gap",
+                        "severity": "critical",
+                        "enabled": False,
+                    },
+                ]
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+
+    records = load_rule_registry(root)
+    summary = summarize_rule_registry(records)
+    critical = next(r for r in records if r.rule_id == "M01")
+    disabled = next(r for r in records if r.rule_id == "M02")
+
+    assert "high_severity_unmapped" in critical.issues
+    assert "high_severity_unmapped" not in disabled.issues
+    assert summary["high_critical_unmapped_rules"] == 1
 
 
 def test_decision_trace_store_and_ui_context(tmp_path):

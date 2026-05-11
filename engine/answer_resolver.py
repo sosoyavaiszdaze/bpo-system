@@ -47,6 +47,7 @@ TECH_STACK_VERIFY_DIR = ROOT / "outputs"
 def resolve_rule_answer(
     client_id: str, rule_id: str, msg_def: dict,
     today: Optional[datetime] = None,
+    api_context: Optional[dict] = None,
 ) -> dict:
     """rule の answer_source_preference に従って答えを解決試行
 
@@ -68,7 +69,7 @@ def resolve_rule_answer(
 
     for source in pref:
         if source == "api":
-            r = _try_api(client_id, rule_id)
+            r = _try_api(client_id, rule_id, api_context=api_context)
         elif source == "validator":
             r = _try_validator(client_id, rule_id)
         elif source == "chatwork_reply":
@@ -97,6 +98,7 @@ def resolve_rule_answer(
 def should_suppress_question(
     client_id: str, rule_id: str, msg_def: dict,
     today: Optional[datetime] = None,
+    api_context: Optional[dict] = None,
 ) -> tuple:
     """本文から除外すべきか + 理由を返す
 
@@ -105,7 +107,7 @@ def should_suppress_question(
         should_suppress=True なら本文に出さない (api/validator で解決済 or
                                   chatwork_reply で confirmed_done/not_applicable)
     """
-    result = resolve_rule_answer(client_id, rule_id, msg_def, today=today)
+    result = resolve_rule_answer(client_id, rule_id, msg_def, today=today, api_context=api_context)
     if result["status"] == "resolved":
         return (True, f"resolved via {result['source']}: {result['reason']}")
     return (False, result["reason"])
@@ -113,21 +115,49 @@ def should_suppress_question(
 
 # ========== Source: api (Phase B 接続予定、現状 stub) ==========
 
-def _try_api(client_id: str, rule_id: str) -> dict:
+def _try_api(client_id: str, rule_id: str, api_context: Optional[dict] = None) -> dict:
     """媒体公式 API で答えを取得試行
 
-    Phase B Week 2-3 で実 API 接続予定。現状は未実装 stub:
-      Meta Business Manager API / Pixel API で取得可能な rule (X-PI1, F-AH-04,
-      F-MF-02 等) の場合、status を "unimplemented" で返す。
+    fetch_audit_results が Meta API evidence を渡している場合はそれを使う。
+    API が「設定済み/正常」を証明できたときだけ resolved=True にする。
+    API が問題または未確認を示した場合は顧客質問を残す。
 
     Returns:
         {"resolved": False, "value": None, "reason": "..."}
     """
+    evidence_map = _extract_api_evidence(api_context)
+    evidence = evidence_map.get(rule_id) if evidence_map else None
+    if not evidence:
+        return {
+            "resolved": False,
+            "value":    None,
+            "reason":   f"api evidence unavailable for {rule_id}",
+        }
+
+    status = evidence.get("status")
+    if status == "resolved":
+        return {
+            "resolved": True,
+            "value": evidence.get("value"),
+            "reason": evidence.get("reason") or f"api resolved {rule_id}",
+        }
     return {
         "resolved": False,
-        "value":    None,
-        "reason":   f"api source unimplemented for {rule_id} (Phase B 予定)",
+        "value": evidence.get("value"),
+        "reason": evidence.get("reason") or f"api status={status}",
     }
+
+
+def _extract_api_evidence(api_context: Optional[dict]) -> dict:
+    if not api_context:
+        return {}
+    if api_context.get("meta_rule_evidence"):
+        return api_context.get("meta_rule_evidence") or {}
+    return (
+        (api_context.get("platform_diagnostics") or {})
+        .get("meta", {})
+        .get("rule_evidence", {})
+    )
 
 
 # ========== Source: validator (tech_stack_verification.yaml) ==========

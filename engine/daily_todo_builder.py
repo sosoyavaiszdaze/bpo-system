@@ -376,6 +376,7 @@ def build_daily_todo(
     today_str: Optional[str] = None,
     already_notified_ids: Optional[set] = None,
     actual_monthly_spend: Optional[float] = None,   # 5/7 P1: 実績月額広告費連動の動的算出
+    audit_results: Optional[dict] = None,           # Meta API evidence / answer resolver context
 ) -> dict:
     """統合 TODO の context を構築 (テンプレ render 直前まで)
 
@@ -442,7 +443,9 @@ def build_daily_todo(
         for rid, msg_def in (messaging.get("rules") or {}).items():
             if not (msg_def or {}).get("answer_source_preference"):
                 continue
-            should_suppress, reason = should_suppress_question(client_id, rid, msg_def)
+            should_suppress, reason = should_suppress_question(
+                client_id, rid, msg_def, api_context=audit_results,
+            )
             if should_suppress:
                 suppressed_by_resolver.add(rid)
                 resolver_reasons[rid] = reason
@@ -674,6 +677,7 @@ def post_daily_todo(
         anomaly_summary=anomaly_summary,
         today_str=today_str,
         actual_monthly_spend=actual_monthly_spend,
+        audit_results=audit_results,
     )
 
     summary = {

@@ -9,12 +9,22 @@ from engine.rules.registry import RuleRecord
 from engine.stores.db import json_dumps, utc_now
 
 ISSUE_SEVERITY = {
+    "high_severity_unmapped": "high",
     "messaging_unmapped": "high",
+    "placeholder_marked_active": "high",
     "missing_expected_impact": "medium",
+    "missing_impact_estimate": "medium",
+    "missing_measurement_window": "medium",
+    "missing_answer_source_preference": "medium",
+    "incomplete_customer_message_schema": "medium",
     "missing_root_cause_group": "high",
     "weak_or_missing_decision_axis": "medium",
     "missing_applies_to": "medium",
     "missing_trigger": "high",
+    "unsafe_eval_trigger": "medium",
+    "draft_or_placeholder": "medium",
+    "missing_lifecycle": "medium",
+    "id_variant_suffix": "low",
 }
 
 

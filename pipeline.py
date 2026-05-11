@@ -109,6 +109,7 @@ def fetch_data(client_id, client_cfg):
     all_campaigns = []
     sources = []
     pixel_statuses = {}
+    platform_diagnostics = {}
 
     # Google Ads API
     google_cfg = ads_cfg.get("google", {})
@@ -134,6 +135,13 @@ def fetch_data(client_id, client_cfg):
                 all_campaigns.extend(data["campaigns"])
                 if data.get("pixel_status"):
                     pixel_statuses["meta"] = data["pixel_status"]
+                platform_diagnostics["meta"] = {
+                    "connection_audit": data.get("meta_connection_audit") or {},
+                    "rule_evidence": data.get("meta_rule_evidence") or {},
+                    "rule_groups": data.get("meta_rule_groups") or {},
+                    "account_id": data.get("account_id"),
+                    "date_range": data.get("date_range") or {},
+                }
                 log.info(f"[{client_id}] Meta API: {len(data['campaigns'])}キャンペーン取得")
         except Exception as e:
             log.warning(f"[{client_id}] Meta API失敗: {e}")
@@ -159,6 +167,7 @@ def fetch_data(client_id, client_cfg):
             "source": "+".join(sources),
             "campaigns": all_campaigns,
             "pixel_statuses": pixel_statuses,
+            "platform_diagnostics": platform_diagnostics,
         }
         return _validate(merged)
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Any
 
 import yaml
@@ -20,6 +21,16 @@ RULE_DIRS = (
     "config/ec_platforms",
     "config/precision_categories",
 )
+HIGH_SEVERITIES = {"critical", "high"}
+REQUIRED_MESSAGING_FIELDS = (
+    "customer_title",
+    "priority",
+    "goal_stage",
+    "today_action",
+    "yes_no_question",
+    "action_options",
+)
+LEGACY_VARIANT_RE = re.compile(r"^[A-Z]\d+(?:[A-Za-z]|-.+)$")
 
 
 @dataclass(frozen=True)
@@ -37,18 +48,22 @@ class RuleRecord:
     expected_impact: dict[str, Any] | None
     has_expected_impact: bool
     messaging_mapped: bool
+    enabled: bool
+    lifecycle: str
+    customer_visible: bool
     prerequisite: Any = None
+    messaging_payload: dict[str, Any] = field(default_factory=dict)
     payload: dict[str, Any] = field(default_factory=dict)
     issues: tuple[str, ...] = field(default_factory=tuple)
 
 
 def load_rule_registry(root: Path | str | None = None) -> list[RuleRecord]:
     root_path = Path(root) if root else ROOT
-    messaging_ids = _load_messaging_ids(root_path)
+    messaging = _load_messaging(root_path)
     records: list[RuleRecord] = []
     for rel_dir in RULE_DIRS:
         for path in sorted((root_path / rel_dir).glob("*.yaml")):
-            records.extend(_load_rule_file(root_path, path, messaging_ids))
+            records.extend(_load_rule_file(root_path, path, messaging))
     return records
 
 
@@ -65,8 +80,17 @@ def summarize_rule_registry(records: list[RuleRecord]) -> dict[str, Any]:
     with_impact = sum(1 for r in records if r.has_expected_impact)
     with_root = sum(1 for r in records if r.root_cause_group)
     with_axis = sum(1 for r in records if r.decision_axis and r.decision_axis not in {"neutral", "null"})
+    enabled = sum(1 for r in records if r.enabled)
+    high_critical = sum(1 for r in records if _severity(r.severity) in HIGH_SEVERITIES and r.enabled)
+    high_critical_unmapped = sum(1 for r in records if "high_severity_unmapped" in r.issues)
+    customer_visible = sum(1 for r in records if r.customer_visible)
     return {
         "total_rules": total,
+        "enabled_rules": enabled,
+        "disabled_rules": total - enabled,
+        "customer_visible_rules": customer_visible,
+        "high_critical_rules": high_critical,
+        "high_critical_unmapped_rules": high_critical_unmapped,
         "messaging_mapped": mapped,
         "messaging_coverage_pct": _pct(mapped, total),
         "expected_impact_rules": with_impact,
@@ -90,13 +114,16 @@ def top_rule_registry_issues(records: list[RuleRecord], limit: int = 50) -> list
             "name": record.name,
             "layer": record.layer,
             "category": record.category,
+            "severity": record.severity,
+            "lifecycle": record.lifecycle,
             "issues": list(record.issues),
             "source_path": record.source_path,
         })
+    rows.sort(key=lambda row: (_issue_rank(row["issues"]), _severity_rank(row.get("severity")), row["rule_id"]))
     return rows[:limit]
 
 
-def _load_rule_file(root: Path, path: Path, messaging_ids: set[str]) -> list[RuleRecord]:
+def _load_rule_file(root: Path, path: Path, messaging: dict[str, dict[str, Any]]) -> list[RuleRecord]:
     raw = _read_yaml(path)
     if not isinstance(raw, dict):
         return []
@@ -117,7 +144,23 @@ def _load_rule_file(root: Path, path: Path, messaging_ids: set[str]) -> list[Rul
         category = str(rule.get("category") or rule.get("category_type") or default_category)
         applies_to = rule.get("applies_to") if isinstance(rule.get("applies_to"), dict) else {}
         decision_axis = _decision_axis(rule)
-        issues = _issues_for(rule, layer, decision_axis, rid in messaging_ids)
+        messaging_payload = messaging.get(rid, {})
+        expected_impact = _expected_impact(rule, messaging_payload)
+        has_expected_impact = expected_impact is not None
+        lifecycle = _lifecycle(rule)
+        enabled = rule.get("enabled", True) is not False
+        messaging_mapped = rid in messaging
+        customer_visible = enabled and lifecycle == "active" and messaging_mapped
+        issues = _issues_for(
+            rule,
+            layer,
+            decision_axis,
+            messaging_mapped,
+            messaging_payload,
+            expected_impact,
+            lifecycle,
+            enabled,
+        )
         records.append(
             RuleRecord(
                 rule_id=rid,
@@ -130,10 +173,14 @@ def _load_rule_file(root: Path, path: Path, messaging_ids: set[str]) -> list[Rul
                 decision_axis=decision_axis,
                 applies_to_keys=tuple(sorted(str(k) for k in applies_to.keys())),
                 applies_to=applies_to,
-                expected_impact=rule.get("expected_impact") if isinstance(rule.get("expected_impact"), dict) else None,
-                has_expected_impact=isinstance(rule.get("expected_impact"), dict),
-                messaging_mapped=rid in messaging_ids,
+                expected_impact=expected_impact,
+                has_expected_impact=has_expected_impact,
+                messaging_mapped=messaging_mapped,
+                enabled=enabled,
+                lifecycle=lifecycle,
+                customer_visible=customer_visible,
                 prerequisite=rule.get("prerequisite") or rule.get("dependencies"),
+                messaging_payload=messaging_payload,
                 payload=rule,
                 issues=tuple(issues),
             )
@@ -141,20 +188,54 @@ def _load_rule_file(root: Path, path: Path, messaging_ids: set[str]) -> list[Rul
     return records
 
 
-def _issues_for(rule: dict, layer: str, decision_axis: str | None, messaging_mapped: bool) -> list[str]:
+def _issues_for(
+    rule: dict,
+    layer: str,
+    decision_axis: str | None,
+    messaging_mapped: bool,
+    messaging_payload: dict[str, Any],
+    expected_impact: dict[str, Any] | None,
+    lifecycle: str,
+    enabled: bool,
+) -> list[str]:
     issues = []
+    severity = _severity(rule.get("severity"))
     if not rule.get("root_cause_group"):
         issues.append("missing_root_cause_group")
     if not decision_axis or decision_axis in {"neutral", "null"}:
         issues.append("weak_or_missing_decision_axis")
-    if not isinstance(rule.get("expected_impact"), dict):
+    if expected_impact is None:
         issues.append("missing_expected_impact")
     if not messaging_mapped:
         issues.append("messaging_unmapped")
+    if enabled and severity in HIGH_SEVERITIES and not messaging_mapped:
+        issues.append("high_severity_unmapped")
+    if messaging_mapped:
+        missing = [field for field in REQUIRED_MESSAGING_FIELDS if not messaging_payload.get(field)]
+        if missing:
+            issues.append("incomplete_customer_message_schema")
+        if not messaging_payload.get("answer_source_preference"):
+            issues.append("missing_answer_source_preference")
+        impact = messaging_payload.get("impact_estimate") if isinstance(messaging_payload, dict) else None
+        if not isinstance(impact, dict):
+            issues.append("missing_impact_estimate")
+        elif not isinstance(impact.get("measurement_window"), dict):
+            issues.append("missing_measurement_window")
     if layer != "rules" and not isinstance(rule.get("applies_to"), dict):
         issues.append("missing_applies_to")
     if not rule.get("trigger"):
         issues.append("missing_trigger")
+    trigger = rule.get("trigger") if isinstance(rule.get("trigger"), dict) else {}
+    if isinstance(trigger.get("condition"), str):
+        issues.append("unsafe_eval_trigger")
+    if _looks_like_placeholder(rule):
+        issues.append("draft_or_placeholder")
+    if lifecycle == "active" and _looks_like_placeholder(rule):
+        issues.append("placeholder_marked_active")
+    if not rule.get("lifecycle") and not rule.get("status"):
+        issues.append("missing_lifecycle")
+    if _has_legacy_variant_suffix(str(rule.get("id") or "")):
+        issues.append("id_variant_suffix")
     return issues
 
 
@@ -166,10 +247,15 @@ def _decision_axis(rule: dict) -> str | None:
     return None
 
 
-def _load_messaging_ids(root: Path) -> set[str]:
+def _load_messaging(root: Path) -> dict[str, dict[str, Any]]:
     raw = _read_yaml(root / "config" / "rule_messaging.yaml")
     rules = raw.get("rules") if isinstance(raw, dict) else {}
-    return {str(k) for k in rules.keys()} if isinstance(rules, dict) else set()
+    if not isinstance(rules, dict):
+        return {}
+    return {
+        str(k): v if isinstance(v, dict) else {}
+        for k, v in rules.items()
+    }
 
 
 def _read_yaml(path: Path) -> dict:
@@ -191,3 +277,54 @@ def _infer_layer(path: Path) -> str:
 
 def _pct(value: int, total: int) -> float:
     return round((value / total * 100), 1) if total else 0.0
+
+
+def _expected_impact(rule: dict, messaging_payload: dict[str, Any]) -> dict[str, Any] | None:
+    if isinstance(rule.get("expected_impact"), dict):
+        return rule["expected_impact"]
+    if isinstance(messaging_payload.get("impact_estimate"), dict):
+        return messaging_payload["impact_estimate"]
+    return None
+
+
+def _lifecycle(rule: dict) -> str:
+    raw = rule.get("lifecycle") or rule.get("status")
+    if raw:
+        return str(raw).strip().lower()
+    if rule.get("enabled", True) is False:
+        return "disabled"
+    if _looks_like_placeholder(rule):
+        return "draft"
+    return "active"
+
+
+def _looks_like_placeholder(rule: dict) -> bool:
+    text = " ".join(str(rule.get(k) or "") for k in ("name", "rationale", "description", "note"))
+    return any(marker in text for marker in ("Phase B", "詳細記述", "詳細実装", "予定"))
+
+
+def _has_legacy_variant_suffix(rule_id: str) -> bool:
+    if "-" in rule_id:
+        return bool(re.match(r"^[GMTSC]\d+-", rule_id))
+    return bool(LEGACY_VARIANT_RE.match(rule_id))
+
+
+def _severity(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _severity_rank(value: Any) -> int:
+    return {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(_severity(value), 4)
+
+
+def _issue_rank(issues: list[str]) -> int:
+    priority = {
+        "high_severity_unmapped": 0,
+        "placeholder_marked_active": 1,
+        "messaging_unmapped": 2,
+        "incomplete_customer_message_schema": 3,
+        "missing_impact_estimate": 4,
+        "missing_answer_source_preference": 5,
+        "unsafe_eval_trigger": 6,
+    }
+    return min((priority.get(issue, 50) for issue in issues), default=50)

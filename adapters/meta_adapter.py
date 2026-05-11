@@ -57,6 +57,17 @@ def fetch_meta_ads(config):
         "totals": totals,
         "pixel_status": pixel_data,
     }
+    try:
+        from engine.meta_rule_evidence import (
+            build_meta_connection_audit,
+            build_meta_rule_evidence,
+            build_rule_group_index,
+        )
+        result["meta_connection_audit"] = build_meta_connection_audit(config, result)
+        result["meta_rule_evidence"] = build_meta_rule_evidence(result)
+        result["meta_rule_groups"] = build_rule_group_index()
+    except Exception as e:
+        log.warning(f"Meta rule evidence build failed: {e}")
 
     log.info(f"Meta API: {len(campaigns)}キャンペーン取得完了")
     return result
@@ -171,10 +182,16 @@ def _fetch_pixel_status(account_id, access_token):
 
     pixel_data = {
         "pixel_installed": False,
+        "pixel_count": 0,
+        "pixels": [],
+        "primary_pixel_id": None,
+        "last_fired_time": None,
         "capi_enabled": False,
         "event_match_quality": None,
         "server_events": False,
-        "domain_verified": False,
+        # 未接続の確認項目を False にすると「未完了」と誤検知する。
+        # Business/domain verification API を接続するまでは unknown(None) として扱う。
+        "domain_verified": None,
     }
 
     try:
@@ -183,9 +200,20 @@ def _fetch_pixel_status(account_id, access_token):
             data = json.loads(resp.read())
 
         pixels = data.get("data", [])
+        pixel_data["pixel_count"] = len(pixels)
+        pixel_data["pixels"] = [
+            {
+                "id": p.get("id"),
+                "name": p.get("name"),
+                "is_unavailable": p.get("is_unavailable"),
+                "automatic_matching_fields": p.get("automatic_matching_fields"),
+            }
+            for p in pixels
+        ]
         if pixels:
             pixel_data["pixel_installed"] = True
             pixel_id = pixels[0].get("id", "")
+            pixel_data["primary_pixel_id"] = pixel_id
 
             # Pixel の詳細ステータスを取得
             if pixel_id:
@@ -199,7 +227,9 @@ def _fetch_pixel_status(account_id, access_token):
                     with urllib.request.urlopen(req2, timeout=15) as resp2:
                         detail = json.loads(resp2.read())
                         if detail.get("last_fired_time"):
+                            pixel_data["last_fired_time"] = detail.get("last_fired_time")
                             pixel_data["server_events"] = True
+                        pixel_data["primary_pixel_name"] = detail.get("name")
                 except Exception:
                     pass
 

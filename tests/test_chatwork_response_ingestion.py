@@ -515,6 +515,56 @@ class TestAnswerSourcePreferenceResolver:
         assert result["status"] == "manual_required"
         assert "未解決" in result["reason"]
 
+    def test_resolve_api_evidence_suppresses_when_api_proves_done(self, isolated_responses_dir):
+        """Meta API evidence が resolved なら ChatWork 質問前に除外できる"""
+        from engine.answer_resolver import should_suppress_question
+
+        msg_def = {"answer_source_preference": ["api", "chatwork_reply"]}
+        suppress, reason = should_suppress_question(
+            "test_client",
+            "M01",
+            msg_def,
+            api_context={
+                "meta_rule_evidence": {
+                    "M01": {
+                        "status": "resolved",
+                        "source": "meta_api.pixel",
+                        "value": {"pixel_installed": True},
+                        "reason": "Meta APIでPixel接続を確認",
+                    }
+                }
+            },
+        )
+        assert suppress is True
+        assert "resolved via api" in reason
+
+    def test_resolve_api_evidence_keeps_question_when_manual_required(self, isolated_responses_dir):
+        """APIで問題/未確認が見えた場合は質問を残す"""
+        from engine.answer_resolver import should_suppress_question
+
+        msg_def = {"answer_source_preference": ["api", "chatwork_reply"]}
+        suppress, reason = should_suppress_question(
+            "test_client",
+            "M02",
+            msg_def,
+            api_context={
+                "platform_diagnostics": {
+                    "meta": {
+                        "rule_evidence": {
+                            "M02": {
+                                "status": "manual_required",
+                                "source": "meta_api.pixel",
+                                "value": {"capi_enabled": False},
+                                "reason": "Meta APIでCAPIを確認できない",
+                            }
+                        }
+                    }
+                }
+            },
+        )
+        assert suppress is False
+        assert "未解決" in reason
+
     def test_resolve_no_preference_returns_unknown(self, isolated_responses_dir):
         """answer_source_preference 未宣言なら unknown"""
         from engine.answer_resolver import resolve_rule_answer
@@ -562,6 +612,40 @@ class TestAnswerSourcePreferenceResolver:
         assert "F-AH-04" in ctx.get("suppressed_by_resolver_ids", []) \
             or "F-AH-04" in ctx.get("suppressed_by_response_ids", []), \
             f"suppressed source が記録されていない: {ctx.get('suppressed_by_resolver_ids')}"
+
+    def test_daily_todo_uses_meta_api_evidence_before_question(self, isolated_responses_dir, reset_messaging_cache):
+        """Meta API evidence で確認済みの rule は顧客質問から外す"""
+        from engine.daily_todo_builder import build_daily_todo
+
+        ctx = build_daily_todo(
+            client_id="test_client", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=[],
+            eligible_rules=[
+                {"id": "M01", "daily_cap_group": "default", "severity": "critical"},
+                {"id": "M02", "daily_cap_group": "default", "severity": "critical"},
+            ],
+            today_str="2026-05-08",
+            already_notified_ids=set(),
+            audit_results={
+                "meta_rule_evidence": {
+                    "M01": {
+                        "status": "resolved",
+                        "source": "meta_api.pixel",
+                        "value": {"pixel_installed": True},
+                        "reason": "Meta APIでPixel接続を確認",
+                    },
+                    "M02": {
+                        "status": "manual_required",
+                        "source": "meta_api.pixel",
+                        "value": {"capi_enabled": False},
+                        "reason": "Meta APIでCAPIを確認できない",
+                    },
+                }
+            },
+        )
+        assert "M01" not in ctx["displayed_rule_ids"]
+        assert "M02" in ctx["displayed_rule_ids"]
+        assert "M01" in ctx.get("suppressed_by_resolver_ids", [])
 
 
 class TestAnswerSourcePreference:
@@ -1150,3 +1234,109 @@ class TestSelfAlertOnErrors:
         assert rc == 0
         assert called["alert"] == [], \
             f"errors 空なのに self_alert が呼ばれた: {called['alert']}"
+
+
+class TestDailyCheckOperationalCaseConnection:
+    """daily_chatwork_check が本番経路で operational DB を更新する"""
+
+    def test_non_dry_run_persists_case_notification_and_job(self, monkeypatch, tmp_path):
+        from scripts import daily_chatwork_check as daily
+        from engine.indication_state import IndicationState as RealIndicationState
+        from engine.stores.db import connect, json_loads
+        import engine.daily_todo_builder as daily_todo_builder
+        import engine.adtruth_runner as adtruth_runner
+
+        db_path = tmp_path / "zynect.db"
+        state_dir = tmp_path / "chatwork_state"
+
+        def fake_ingest(client_id, dry_run=False, since_id=""):
+            return {
+                "ok": True, "client_id": client_id,
+                "fetched_messages": 0, "parsed_answers": 0, "saved_responses": 0,
+                "skipped_by_since_id": 0, "errors": [], "answers_summary": [],
+            }
+
+        def fake_fetch(client_id):
+            return {
+                "data_available": True,
+                "ads_audit": {
+                    "platform_summary": {
+                        "meta": {"avg_cpa": 12000, "conversions": 25, "avg_roas": 2.4}
+                    }
+                },
+                "anomalies": {},
+                "fraud_audit": {},
+            }
+
+        def fake_detect(audit, state, today=None):
+            rec = state.upsert_detected(
+                rule_id="F-MF-01",
+                platform="meta",
+                target_id="account",
+                severity="high",
+                payload={"title": "CVイベント確認"},
+                today=today,
+            )
+            return [rec], []
+
+        def fake_post_daily_todo(client_id, layer_a_notify_records, audit_results, state, today_str, dry_run=False):
+            for rec in layer_a_notify_records:
+                state.mark_indication_notified(rec["indication_id"], today=today_str)
+            return {
+                "posted_indications": len(layer_a_notify_records),
+                "auto_proposal_attempted": 0,
+                "auto_proposal_sent": 0,
+                "auto_proposal_skipped": 0,
+                "auto_proposal_dry_run": 0,
+                "auto_proposal_failed": 0,
+                "internal_unmapped_rules": [],
+                "total_count": len(layer_a_notify_records),
+                "errors": [],
+            }
+
+        from scripts import ingest_chatwork_responses
+        monkeypatch.setattr(ingest_chatwork_responses, "ingest", fake_ingest)
+        monkeypatch.setattr(daily, "fetch_audit_results", fake_fetch)
+        monkeypatch.setattr(daily, "detect_and_upsert", fake_detect)
+        monkeypatch.setattr(daily, "reconcile_clean", lambda clean, state, today=None, data_available=True: [])
+        monkeypatch.setattr(daily, "filter_indications", lambda upserted, state, today=None: upserted)
+        monkeypatch.setattr(daily, "IndicationState", lambda client_id: RealIndicationState(client_id, state_dir=str(state_dir)))
+        monkeypatch.setattr(daily_todo_builder, "post_daily_todo", fake_post_daily_todo)
+        monkeypatch.setattr(adtruth_runner, "run_adtruth_check", lambda client_id, dry_run=False, today=None: {
+            "samples_count": 0, "gray_count": 0, "black_count": 0, "posted_count": 0,
+        })
+
+        result = daily.run_daily_check(
+            client_id="pilotton",
+            dry_run=False,
+            today="2026-05-10",
+            db_path=db_path,
+        )
+
+        assert result["errors"] == []
+        assert result["operational_cases_synced"] == 1
+
+        conn = connect(db_path)
+        try:
+            case = conn.execute("SELECT * FROM operational_cases WHERE client_id = 'pilotton'").fetchone()
+            assert case["rule_id"] == "F-MF-01"
+            assert case["notified_at"] is not None
+            notification = conn.execute("SELECT * FROM notification_messages WHERE case_id = ?", (case["case_id"],)).fetchone()
+            assert notification["status"] == "sent"
+            payload = json_loads(notification["payload_json"], {})
+            assert payload["notification_type"] == "daily_todo"
+            outcomes = conn.execute(
+                "SELECT metric, baseline_value, measured_value FROM outcome_measurements WHERE case_id = ? ORDER BY metric",
+                (case["case_id"],),
+            ).fetchall()
+            assert [(r["metric"], r["baseline_value"], r["measured_value"]) for r in outcomes] == [
+                ("cpa", 12000.0, None),
+                ("cv_count", 25.0, None),
+                ("roas", 2.4, None),
+            ]
+            job = conn.execute("SELECT * FROM job_runs WHERE client_id = 'pilotton' ORDER BY started_at DESC LIMIT 1").fetchone()
+            metrics = json_loads(job["metrics_json"], {})
+            assert job["status"] == "success"
+            assert metrics["operational_cases_synced"] == 1
+        finally:
+            conn.close()

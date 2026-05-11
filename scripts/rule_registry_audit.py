@@ -34,6 +34,12 @@ def main() -> int:
     print("Rule Registry Audit")
     print("===================")
     print(f"rules: {summary['total_rules']}")
+    print(f"enabled rules: {summary['enabled_rules']} / disabled: {summary['disabled_rules']}")
+    print(f"customer-visible rules: {summary['customer_visible_rules']}")
+    print(
+        "high/critical unmapped: "
+        f"{summary['high_critical_unmapped_rules']} / {summary['high_critical_rules']}"
+    )
     print(f"messaging coverage: {summary['messaging_coverage_pct']}% ({summary['messaging_mapped']})")
     print(f"expected impact coverage: {summary['expected_impact_coverage_pct']}% ({summary['expected_impact_rules']})")
     print(f"root cause coverage: {summary['root_cause_group_coverage_pct']}% ({summary['root_cause_group_rules']})")

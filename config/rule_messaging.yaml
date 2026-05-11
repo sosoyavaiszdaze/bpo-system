@@ -469,6 +469,876 @@ rules:
       C: "確認したい"
     legal_note: null
 
+  # ============================================================
+  # Production migration batch 2026-05-10:
+  # Meta / AdTruth / CPA-CV high-critical rules
+  # Goal: CV を落とさず CPA を改善するため、全件に impact + guardrail を付与
+  # ============================================================
+  M01:
+    customer_title: "Meta Pixel 発火状態の確認"
+    performance_category: [measurement_quality, learning_stability]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.015, realistic: 0.050, upper: 0.120 }
+      source_basis: "Pixel 発火の復旧は CV 欠損と学習不安定を同時に改善するため、月額広告費に対する保守的な改善率で算定。"
+      measurement_window: { signal: "1-3日", verdict: "2-4週" }
+    expected_effect:
+      - "CV 計測欠損の早期発見"
+      - "Meta 学習シグナルの正常化"
+    today_action: "Meta Events Manager で主要CVイベントの直近受信を確認してください。"
+    yes_no_question: "主要CVイベントは直近24時間で受信されていますか?"
+    action_options: { A: "受信あり", B: "受信なし", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["計測確認前にCV獲得キャンペーンを停止しない"]
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M02:
+    customer_title: "Meta CAPI 実装状況の確認"
+    performance_category: [measurement_quality, learning_stability]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.020, realistic: 0.070, upper: 0.160 }
+      source_basis: "CAPI はブラウザ計測欠損を補完し、CVデータ品質と配信学習の安定化に寄与するため広告費連動で算定。"
+      measurement_window: { signal: "1-2週", verdict: "4-6週" }
+    expected_effect:
+      - "iOS / ブラウザ制限による CV 欠損の補完"
+      - "学習データ品質の改善"
+    today_action: "Meta Events Manager でサーバーイベント受信と重複排除状況を確認してください。"
+    yes_no_question: "CAPI のサーバーイベント受信は確認できていますか?"
+    action_options: { A: "確認済み", B: "未実装", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["CAPI未確認のままCV減少を媒体成果悪化と断定しない"]
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 42 }
+    legal_note: null
+
+  M03:
+    customer_title: "イベントマッチ品質 (EMQ) の確認"
+    performance_category: [measurement_quality, first_party_data]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.008, realistic: 0.030, upper: 0.080 }
+      source_basis: "EMQ 改善は CV 帰属と学習対象の品質改善に効くため、保守的な改善率で算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "CV帰属の安定化"
+      - "類似配信 / 学習データ品質の改善"
+    today_action: "Events Manager で主要イベントのイベントマッチ品質を確認してください。"
+    yes_no_question: "主要イベントのEMQは運用上問題ない水準ですか?"
+    action_options: { A: "問題なし", B: "低い", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: low, do_not_do: ["EMQ低下だけで配信停止判断をしない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M04:
+    customer_title: "Meta ドメイン検証の確認"
+    performance_category: [measurement_quality, learning_stability]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.015, realistic: 0.050, upper: 0.120 }
+      source_basis: "ドメイン検証はAEM/iOS最適化の前提であり、計測と学習の安定化効果として算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "AEM と CV イベント優先順位設定の土台整備"
+      - "iOS 配信最適化の安定化"
+    today_action: "Business Manager で対象ドメインが認証済みか確認してください。"
+    yes_no_question: "対象ドメインは Meta Business Manager で認証済みですか?"
+    action_options: { A: "認証済み", B: "未認証", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: low, do_not_do: ["ドメイン未検証を放置したままCV計測の良否を判断しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M05:
+    customer_title: "優先度イベント設定の確認"
+    performance_category: [measurement_quality, learning_stability]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.010, realistic: 0.040, upper: 0.100 }
+      source_basis: "最重要CVイベントが優先設定されていない場合、最適化対象がぶれるため改善率で算定。"
+      measurement_window: { signal: "1週", verdict: "4週" }
+    expected_effect:
+      - "最適化対象CVの明確化"
+      - "学習フェーズの安定化"
+    today_action: "AEM/イベント優先順位で Purchase など主要CVが上位に設定されているか確認してください。"
+    yes_no_question: "主要CVイベントは優先度上位に設定されていますか?"
+    action_options: { A: "設定済み", B: "未設定", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: low, do_not_do: ["最適化イベントを頻繁に変更しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M06:
+    customer_title: "重複イベント排除の確認"
+    performance_category: [measurement_quality]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.025, upper: 0.070 }
+      source_basis: "重複CVはCPAを過小表示し予算配分を誤らせるため、成果の正常化効果として算定。"
+      measurement_window: { signal: "1週", verdict: "2-4週" }
+    expected_effect:
+      - "CV二重計上の抑制"
+      - "CPA判断の信頼性改善"
+    today_action: "Pixel と CAPI の event_id による重複排除が機能しているか確認してください。"
+    yes_no_question: "Pixel/CAPI の重複排除は確認できていますか?"
+    action_options: { A: "確認済み", B: "未確認", C: "重複疑いあり" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: low, do_not_do: ["重複疑いの状態でキャンペーン停止判断をしない"] }
+    outcome: { primary_metric: cpa_accuracy, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M08:
+    customer_title: "iOS14+ 影響の計測確認"
+    performance_category: [measurement_quality, learning_stability]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.008, realistic: 0.030, upper: 0.090 }
+      source_basis: "iOS影響でCV欠損が大きい場合、CAPI/AEM整備の効果が出やすいため広告費連動で算定。"
+      measurement_window: { signal: "2週", verdict: "4-6週" }
+    expected_effect:
+      - "iOS由来の計測欠損把握"
+      - "CAPI/AEM対策の優先度判断"
+    today_action: "iOS比率とCV欠損傾向を確認してください。"
+    yes_no_question: "iOS由来のCV欠損傾向は確認できていますか?"
+    action_options: { A: "確認済み", B: "未確認", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: low, do_not_do: ["iOS欠損を媒体悪化と誤認して予算を切らない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 42 }
+    legal_note: null
+
+  M09:
+    customer_title: "学習フェーズ脱出率の確認"
+    performance_category: [learning_stability, cpa_diagnosis]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.010, realistic: 0.040, upper: 0.120 }
+      source_basis: "学習未完了が続く広告セットはCPAが不安定化しやすく、構造改善の効果として算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "CPA変動の安定化"
+      - "広告セット構造の改善判断"
+    today_action: "学習中/学習制限の広告セット比率とCV数を確認してください。"
+    yes_no_question: "主要広告セットは学習フェーズを脱出できていますか?"
+    action_options: { A: "脱出済み", B: "学習中/制限あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["学習中の高CV広告セットを即停止しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M10:
+    customer_title: "広告セット別CV数の確認"
+    performance_category: [learning_stability, cpa_diagnosis]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.008, realistic: 0.030, upper: 0.090 }
+      source_basis: "CV数不足の広告セットは学習が不安定なため、統合・再配分による改善余地として算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "学習データ不足の特定"
+      - "CVを守った予算再配分"
+    today_action: "広告セットごとの直近CV数とCPAを確認してください。"
+    yes_no_question: "CV数が不足している広告セットを特定できましたか?"
+    action_options: { A: "特定済み", B: "未特定", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["CV供給源の広告セットをCPAだけで停止しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M12:
+    customer_title: "目標費用設定の確認"
+    performance_category: [cpa_diagnosis, budget_allocation]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.025, upper: 0.070 }
+      source_basis: "目標CPAが実勢から乖離すると配信量とCVが毀損するため、調整余地として算定。"
+      measurement_window: { signal: "3-7日", verdict: "2-4週" }
+    expected_effect:
+      - "入札制約によるCV減少の回避"
+      - "CPAとCV量のバランス改善"
+    today_action: "目標CPA/入札上限が直近実績に対して厳しすぎないか確認してください。"
+    yes_no_question: "目標費用設定は直近実績と整合していますか?"
+    action_options: { A: "整合済み", B: "厳しすぎる可能性", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: high, do_not_do: ["CV量を見ずに目標CPAを急に下げない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M13:
+    customer_title: "予算変更頻度の確認"
+    performance_category: [learning_stability, budget_allocation]
+    priority: A
+    goal_stage: delivery_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.005, realistic: 0.020, upper: 0.060 }
+      source_basis: "頻繁な予算変更は学習リセット要因となるため、安定化による改善余地として算定。"
+      measurement_window: { signal: "1週", verdict: "3-4週" }
+    expected_effect:
+      - "学習リセットの抑制"
+      - "CPA変動の低減"
+    today_action: "直近7日間の予算変更履歴と学習リセット有無を確認してください。"
+    yes_no_question: "予算変更は学習を乱さない頻度に抑えられていますか?"
+    action_options: { A: "抑制済み", B: "頻繁に変更あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["短期間に大幅な増減額を繰り返さない"] }
+    outcome: { primary_metric: cpa_volatility, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M14:
+    customer_title: "キャンペーン目的の確認"
+    performance_category: [learning_stability, conversion_rate]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.008, realistic: 0.030, upper: 0.080 }
+      source_basis: "CV目的と実際のKPIがずれると学習対象がずれるため、目的修正による改善余地として算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "最適化イベントと目的の整合"
+      - "CV獲得効率の改善"
+    today_action: "主要キャンペーンの目的が現在のCV目標と一致しているか確認してください。"
+    yes_no_question: "キャンペーン目的は現在のCV目標と一致していますか?"
+    action_options: { A: "一致", B: "不一致の可能性", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["既存CV獲得キャンペーンの目的を急に変更しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M16:
+    customer_title: "広告不承認・ポリシー警告の確認"
+    performance_category: [delivery_diagnosis, review_risk]
+    priority: A
+    goal_stage: delivery_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.005, realistic: 0.020, upper: 0.070 }
+      source_basis: "不承認や警告は配信量低下と学習停止に直結するため、復旧余地として算定。"
+      measurement_window: { signal: "1-7日", verdict: "2-4週" }
+    expected_effect:
+      - "配信停止リスクの低減"
+      - "CV供給量の回復"
+    today_action: "Ads Manager で不承認広告・ポリシー警告の有無を確認してください。"
+    yes_no_question: "不承認広告やポリシー警告はありませんか?"
+    action_options: { A: "なし", B: "あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: high, do_not_do: ["配信停止理由を確認せず予算移管しない"] }
+    outcome: { primary_metric: delivery_recovery, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M18:
+    customer_title: "広告アカウント制限リスクの確認"
+    performance_category: [delivery_diagnosis, review_risk]
+    priority: A
+    goal_stage: delivery_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.010, realistic: 0.040, upper: 0.120 }
+      source_basis: "アカウント制限はCV供給を止める最大リスクのため、予防価値として算定。"
+      measurement_window: { signal: "即日", verdict: "2-4週" }
+    expected_effect:
+      - "突然の配信停止リスク低減"
+      - "安定したCV供給の維持"
+    today_action: "Account Quality で制限・警告・本人確認未完了がないか確認してください。"
+    yes_no_question: "広告アカウントに制限・警告はありませんか?"
+    action_options: { A: "なし", B: "あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: high, do_not_do: ["警告を放置したまま配信拡大しない"] }
+    outcome: { primary_metric: delivery_stability, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M20:
+    customer_title: "カタログ連携状態の確認"
+    performance_category: [conversion_rate, learning_stability]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.025, upper: 0.080 }
+      source_basis: "商品カタログ連携の品質はDPA/Advantage+の配信精度に影響するため算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "商品単位の配信最適化"
+      - "CVR改善余地の特定"
+    today_action: "Commerce Manager でカタログ同期エラーと商品数を確認してください。"
+    yes_no_question: "カタログ連携に同期エラーはありませんか?"
+    action_options: { A: "エラーなし", B: "エラーあり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["カタログ不整合のままDPA予算を拡大しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M44:
+    customer_title: "Advantage+ カタログ整合の確認"
+    performance_category: [conversion_rate, learning_stability]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.008, realistic: 0.035, upper: 0.100 }
+      source_basis: "Advantage+ とカタログの不整合は配信対象と商品訴求のずれを生むため改善余地として算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "商品訴求と配信対象の整合"
+      - "CVR/CPAの安定化"
+    today_action: "Advantage+ キャンペーンと商品カタログの対象商品・在庫・価格を確認してください。"
+    yes_no_question: "Advantage+ とカタログ内容は整合していますか?"
+    action_options: { A: "整合済み", B: "不整合あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["CVが出ている商品セットを一括除外しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M45:
+    customer_title: "入札上限の確認"
+    performance_category: [budget_allocation, delivery_diagnosis]
+    priority: A
+    goal_stage: delivery_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.025, upper: 0.070 }
+      source_basis: "入札上限が厳しすぎるとCV量を落とすため、CV維持を前提にした調整余地として算定。"
+      measurement_window: { signal: "3-7日", verdict: "2-4週" }
+    expected_effect:
+      - "配信量不足の解消"
+      - "CVを守ったCPA調整"
+    today_action: "入札上限が直近CPA・競争環境に対して厳しすぎないか確認してください。"
+    yes_no_question: "入札上限は配信量を阻害していませんか?"
+    action_options: { A: "問題なし", B: "阻害の可能性", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: high, do_not_do: ["CV量確認なしに入札上限を引き下げない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M47:
+    customer_title: "クリエイティブバリエーションの確認"
+    performance_category: [conversion_rate, cpa_diagnosis]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.005, realistic: 0.025, upper: 0.080 }
+      source_basis: "訴求バリエーション不足は疲弊とCPA悪化につながるため、改善余地として算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "疲弊クリエイティブの切り分け"
+      - "CVR改善余地の探索"
+    today_action: "CV獲得中の広告セットで訴求・フォーマットのバリエーション数を確認してください。"
+    yes_no_question: "主要広告セットに十分なクリエイティブバリエーションがありますか?"
+    action_options: { A: "十分", B: "不足", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["勝ちクリエイティブを根拠なく停止しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M49:
+    customer_title: "オーディエンスオーバーラップの確認"
+    performance_category: [cpa_diagnosis, budget_allocation]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.025, upper: 0.075 }
+      source_basis: "オーディエンス重複は自社競合と頻度上昇を招くため、予算効率改善として算定。"
+      measurement_window: { signal: "1週", verdict: "3-4週" }
+    expected_effect:
+      - "自社競合の抑制"
+      - "CVを守った予算配分"
+    today_action: "主要広告セット間でターゲット重複とFrequencyを確認してください。"
+    yes_no_question: "主要広告セット間で大きなオーディエンス重複はありませんか?"
+    action_options: { A: "大きな重複なし", B: "重複あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: high, do_not_do: ["重複解消のために高CV配信面を一括停止しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M52:
+    customer_title: "ターゲティング範囲の確認"
+    performance_category: [cpa_diagnosis, budget_allocation]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.005, realistic: 0.020, upper: 0.060 }
+      source_basis: "広すぎ/狭すぎる設定はCV量とCPAの両方に影響するため、範囲調整余地として算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "配信母数とCV品質のバランス改善"
+      - "学習の安定化"
+    today_action: "主要広告セットの推定オーディエンスサイズとCV数を確認してください。"
+    yes_no_question: "ターゲティング範囲はCV量に対して適切ですか?"
+    action_options: { A: "適切", B: "広すぎ/狭すぎの可能性", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["CV量を見ずにターゲットを急激に狭めない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M57:
+    customer_title: "フリークエンシー疲弊の確認"
+    performance_category: [cpa_diagnosis, conversion_rate]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.030, upper: 0.090 }
+      source_basis: "Frequency上昇はCTR/CVR低下とCPA悪化につながるため、疲弊解消余地として算定。"
+      measurement_window: { signal: "3-7日", verdict: "2-4週" }
+    expected_effect:
+      - "広告疲弊の早期発見"
+      - "CVを維持した訴求差し替え"
+    today_action: "Frequency と CPA/CVR の同時悪化がないか確認してください。"
+    yes_no_question: "Frequency上昇による疲弊が見られますか?"
+    action_options: { A: "見られない", B: "見られる", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["疲弊疑いだけで勝ち広告を全停止しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M58:
+    customer_title: "クリエイティブ入替サイクルの確認"
+    performance_category: [cpa_diagnosis, conversion_rate]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.004, realistic: 0.020, upper: 0.070 }
+      source_basis: "入替サイクル停滞は疲弊を招くため、CVR回復余地として算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "広告疲弊の予防"
+      - "CVR低下の抑制"
+    today_action: "主要クリエイティブの最終入替日とCPA推移を確認してください。"
+    yes_no_question: "主要クリエイティブは適切な周期で入れ替えられていますか?"
+    action_options: { A: "入替済み", B: "停滞気味", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["新規素材だけに急激に予算を寄せない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M59:
+    customer_title: "Dynamic Creative Optimization の確認"
+    performance_category: [conversion_rate, learning_stability]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.004, realistic: 0.020, upper: 0.060 }
+      source_basis: "素材・文言の組み合わせ最適化によりCVR改善余地があるため算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "訴求組み合わせの探索効率改善"
+      - "CVR改善余地の発見"
+    today_action: "DCO/Advantage+ Creative の利用状況と成果差を確認してください。"
+    yes_no_question: "DCO または Advantage+ Creative の活用状況は確認済みですか?"
+    action_options: { A: "確認済み", B: "未活用", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["既存勝ち訴求を消さずに検証枠で試す"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M61:
+    customer_title: "1st Party Data 活用状況の確認"
+    performance_category: [first_party_data, cpa_diagnosis]
+    priority: B
+    goal_stage: first_party_data
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.025, upper: 0.090 }
+      source_basis: "購入者/会員データの除外・類似配信はCV品質とCPA改善に寄与するため算定。"
+      measurement_window: { signal: "2-3週", verdict: "4-8週" }
+    expected_effect:
+      - "類似配信精度の改善"
+      - "既存顧客除外による無駄配信抑制"
+    today_action: "購入者/会員データの広告活用・除外配信の有無を確認してください。"
+    yes_no_question: "1st Party Data は広告運用に活用されていますか?"
+    action_options: { A: "活用中", B: "未活用", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["除外条件を広げすぎて新規CV供給を削らない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 56 }
+    legal_note: "個人情報の取り扱いと同意取得範囲を確認してください。"
+
+  M62:
+    customer_title: "アトリビューション設定の確認"
+    performance_category: [measurement_quality, cpa_diagnosis]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.004, realistic: 0.015, upper: 0.050 }
+      source_basis: "アトリビューション設定不整合はCPA比較を歪めるため、判断精度改善として算定。"
+      measurement_window: { signal: "即日", verdict: "2-4週" }
+    expected_effect:
+      - "CPA/CV比較の前提統一"
+      - "媒体判断の誤差低減"
+    today_action: "クリック後/ビュー後のアトリビューション設定が運用方針と一致しているか確認してください。"
+    yes_no_question: "アトリビューション設定は運用方針と整合していますか?"
+    action_options: { A: "整合済み", B: "見直したい", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: low, do_not_do: ["設定変更前後のCPAを同列比較しない"] }
+    outcome: { primary_metric: cpa_accuracy, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M66:
+    customer_title: "広告とLPメッセージ整合の確認"
+    performance_category: [conversion_rate, cpa_diagnosis]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.030, upper: 0.100 }
+      source_basis: "広告訴求とLP訴求のずれはCVR低下に直結するため、CVR改善余地として算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "LP離脱の抑制"
+      - "CVR改善によるCPA低下"
+    today_action: "主要広告の訴求とLPファーストビューの訴求が一致しているか確認してください。"
+    yes_no_question: "広告とLPの訴求は一致していますか?"
+    action_options: { A: "一致", B: "不一致あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: low, do_not_do: ["広告側だけを変更してLPとの整合を崩さない"] }
+    outcome: { primary_metric: cvr, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M68:
+    customer_title: "学習リセット要因の確認"
+    performance_category: [learning_stability, cpa_diagnosis]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.030, upper: 0.080 }
+      source_basis: "学習リセットはCPA急騰やCV減少の直前要因になりやすいため、安定化効果として算定。"
+      measurement_window: { signal: "3-7日", verdict: "2-4週" }
+    expected_effect:
+      - "CPA急騰要因の切り分け"
+      - "CV供給の安定化"
+    today_action: "直近の大幅編集・予算変更・イベント変更の履歴を確認してください。"
+    yes_no_question: "直近で学習リセットにつながる変更はありましたか?"
+    action_options: { A: "なし", B: "あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: high, do_not_do: ["学習中の構成を短期間で何度も変更しない"] }
+    outcome: { primary_metric: cpa_volatility, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  F01:
+    customer_title: "クリック不正疑いの確認"
+    performance_category: [ad_fraud, cpa_diagnosis]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.004, realistic: 0.020, upper: 0.080 }
+      source_basis: "不正/低品質クリックはCVなしコストを増やすため、除外・配信面調整の改善余地として算定。"
+      measurement_window: { signal: "3-7日", verdict: "2-4週" }
+    expected_effect:
+      - "低品質クリックによる無駄コスト抑制"
+      - "CVを守った配信面の見直し"
+    today_action: "クリック急増・CVなし・特定面集中がないか確認してください。"
+    yes_no_question: "クリック急増に対してCVが伴わない配信面はありますか?"
+    action_options: { A: "なし", B: "あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["CVが出ている面を不正疑いだけで除外しない"] }
+    outcome: { primary_metric: wasted_spend, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  F02:
+    customer_title: "Bot流入疑いの確認"
+    performance_category: [ad_fraud, cpa_diagnosis]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.004, realistic: 0.020, upper: 0.070 }
+      source_basis: "Bot流入はCVR低下とCPA悪化につながるため、低品質流入除外の改善余地として算定。"
+      measurement_window: { signal: "3-7日", verdict: "2-4週" }
+    expected_effect:
+      - "低品質流入の抑制"
+      - "CVR/CPAの改善"
+    today_action: "異常に短い滞在・高直帰・CVなし流入が特定面に集中していないか確認してください。"
+    yes_no_question: "Bot疑いの流入元は確認できていますか?"
+    action_options: { A: "問題なし", B: "疑いあり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["証拠なしに広範囲の配信面を除外しない"] }
+    outcome: { primary_metric: cvr, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  F03:
+    customer_title: "コンバージョン不正疑いの確認"
+    performance_category: [ad_fraud, measurement_quality]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.003, realistic: 0.015, upper: 0.060 }
+      source_basis: "不正CVや質の低いCVは学習を歪めるため、CV品質改善として算定。"
+      measurement_window: { signal: "1週", verdict: "4週" }
+    expected_effect:
+      - "学習データ汚染の抑制"
+      - "実CV品質の改善"
+    today_action: "CV後の重複・異常ドメイン・短時間多発がないか確認してください。"
+    yes_no_question: "CVデータに不正/異常パターンはありませんか?"
+    action_options: { A: "なし", B: "疑いあり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: high, do_not_do: ["正規CVを除外しないよう証拠単位で確認する"] }
+    outcome: { primary_metric: qualified_conversions, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  F04:
+    customer_title: "インプレッション不正疑いの確認"
+    performance_category: [ad_fraud, delivery_diagnosis]
+    priority: B
+    goal_stage: delivery_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.002, realistic: 0.012, upper: 0.050 }
+      source_basis: "低品質impはCTR/CVRを悪化させるため、配信面改善余地として算定。"
+      measurement_window: { signal: "1週", verdict: "4週" }
+    expected_effect:
+      - "低品質配信面の把握"
+      - "CVR低下要因の切り分け"
+    today_action: "impが急増しているのにクリック/CVが伴わない面がないか確認してください。"
+    yes_no_question: "imp急増に対して成果が伴わない配信面はありますか?"
+    action_options: { A: "なし", B: "あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["impだけを理由にCV獲得面を除外しない"] }
+    outcome: { primary_metric: cvr, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  F05:
+    customer_title: "地域不整合流入の確認"
+    performance_category: [ad_fraud, cpa_diagnosis]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.002, realistic: 0.012, upper: 0.050 }
+      source_basis: "商圏外/対象外地域の流入はCV効率を下げるため、地域除外の改善余地として算定。"
+      measurement_window: { signal: "1週", verdict: "3-4週" }
+    expected_effect:
+      - "対象外地域への無駄配信抑制"
+      - "CV効率の改善"
+    today_action: "CVが出ていない地域に予算が偏っていないか確認してください。"
+    yes_no_question: "対象外地域への配信偏りはありませんか?"
+    action_options: { A: "なし", B: "あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["CVが出ている地域を除外しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  F06:
+    customer_title: "デバイス異常流入の確認"
+    performance_category: [ad_fraud, cpa_diagnosis]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.002, realistic: 0.012, upper: 0.050 }
+      source_basis: "特定デバイス/環境に低品質流入が偏る場合、除外・調整でCPA改善余地があるため算定。"
+      measurement_window: { signal: "1週", verdict: "3-4週" }
+    expected_effect:
+      - "低品質デバイス流入の把握"
+      - "CV効率の改善"
+    today_action: "デバイス別のCVR/CPAに異常な偏りがないか確認してください。"
+    yes_no_question: "特定デバイスに低品質流入の偏りはありますか?"
+    action_options: { A: "なし", B: "あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["CVが出ているデバイスを一括除外しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  F15:
+    customer_title: "予算保護アラートの確認"
+    performance_category: [ad_fraud, budget_allocation]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.005, realistic: 0.025, upper: 0.080 }
+      source_basis: "CVなしコストの増加を早期に止めることで、CVを守った予算保護効果を算定。"
+      measurement_window: { signal: "即日-3日", verdict: "2-4週" }
+    expected_effect:
+      - "無駄消化の抑制"
+      - "CVが出る面への予算保護"
+    today_action: "CVなしで消化が増えているキャンペーン/広告セットを確認してください。"
+    yes_no_question: "CVなし消化が増えている配信単位はありますか?"
+    action_options: { A: "なし", B: "あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: high, do_not_do: ["CVが出ている配信単位まで一括停止しない"] }
+    outcome: { primary_metric: wasted_spend, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  C02:
+    customer_title: "ゼロCV + コスト超過の確認"
+    performance_category: [cpa_diagnosis, budget_allocation]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.030, upper: 0.100 }
+      source_basis: "CVなし消化は直接CPA悪化につながるため、予算再配分余地として算定。"
+      measurement_window: { signal: "即日-3日", verdict: "2-4週" }
+    expected_effect:
+      - "無駄コストの抑制"
+      - "CV獲得面への予算再配分"
+    today_action: "直近でCVが0のまま消化している配信単位を確認してください。"
+    yes_no_question: "CVなしで一定額以上消化している配信単位はありますか?"
+    action_options: { A: "なし", B: "あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["短期データだけで検証中キャンペーンを停止しない"] }
+    outcome: { primary_metric: wasted_spend, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  C03:
+    customer_title: "ROAS最低基準の確認"
+    performance_category: [cpa_diagnosis, budget_allocation]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.004, realistic: 0.020, upper: 0.070 }
+      source_basis: "ROAS低下はCPAだけで見えない収益性悪化を示すため、予算配分改善余地として算定。"
+      measurement_window: { signal: "1週", verdict: "4週" }
+    expected_effect:
+      - "収益性の低い配信の特定"
+      - "CV数と売上の両立"
+    today_action: "ROASが最低基準を下回る配信単位のCV数と売上を確認してください。"
+    yes_no_question: "ROAS最低基準を下回る配信単位はありますか?"
+    action_options: { A: "なし", B: "あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: improve_roas }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["ROASだけで新規獲得用キャンペーンを停止しない"] }
+    outcome: { primary_metric: roas, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  C05:
+    customer_title: "CPAスパイクの確認"
+    performance_category: [cpa_diagnosis]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.030, upper: 0.090 }
+      source_basis: "CPA急騰の原因を計測/配信/LP/素材に分解し、CVを守った改善余地として算定。"
+      measurement_window: { signal: "即日-1週", verdict: "2-4週" }
+    expected_effect:
+      - "CPA急騰要因の切り分け"
+      - "CVを守った改善アクション化"
+    today_action: "CPA急騰した配信単位でCV数・CTR・CVR・CPMのどこが悪化したか確認してください。"
+    yes_no_question: "CPA急騰の主因指標は特定できましたか?"
+    action_options: { A: "特定済み", B: "未特定", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: high, do_not_do: ["CPA高騰だけでCV供給源を止めない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  C14:
+    customer_title: "CVR極端低下の確認"
+    performance_category: [conversion_rate, cpa_diagnosis]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.030, upper: 0.100 }
+      source_basis: "CVR低下はLP/計測/流入品質の問題を示し、CV数を守る上で優先度が高いため算定。"
+      measurement_window: { signal: "1週", verdict: "4週" }
+    expected_effect:
+      - "LPまたは流入品質の悪化検知"
+      - "CV数維持とCPA改善"
+    today_action: "CVRが極端に低い配信単位のLP・流入元・計測状態を確認してください。"
+    yes_no_question: "CVR低下の原因候補は確認できましたか?"
+    action_options: { A: "確認済み", B: "未確認", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["LP/計測確認前に配信を止め切らない"] }
+    outcome: { primary_metric: cvr, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  F-AF-03:
+    customer_title: "不正CVパターンの確認"
+    performance_category: [ad_fraud, measurement_quality]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.003, realistic: 0.015, upper: 0.060 }
+      source_basis: "不正CVや低品質CVは学習データを汚染するため、CV品質改善余地として算定。"
+      measurement_window: { signal: "1週", verdict: "4週" }
+    expected_effect:
+      - "CV品質の担保"
+      - "学習データ汚染の抑制"
+    today_action: "短時間多発・重複・不自然なCV属性がないか確認してください。"
+    yes_no_question: "不正CVを疑うパターンはありますか?"
+    action_options: { A: "なし", B: "疑いあり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: high, do_not_do: ["正規CVを誤って除外しない"] }
+    outcome: { primary_metric: qualified_conversions, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  PC-MS-01:
+    customer_title: "Pixel/CAPI dedup_key 整合の確認"
+    performance_category: [measurement_quality, learning_stability]
+    priority: A
+    goal_stage: measurement_recovery
+    answer_source_preference: [api, validator, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.025, upper: 0.080 }
+      source_basis: "dedup_key不整合はCV重複または欠損を招くため、計測正常化効果として算定。"
+      measurement_window: { signal: "1週", verdict: "2-4週" }
+    expected_effect:
+      - "CV重複/欠損の抑制"
+      - "CPA判断の信頼性向上"
+    today_action: "Pixel と CAPI の event_id / dedup_key が同一CVで一致しているか確認してください。"
+    yes_no_question: "Pixel/CAPI の dedup_key は整合していますか?"
+    action_options: { A: "整合済み", B: "不整合あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: low, do_not_do: ["dedup不整合のままCPA改善判断をしない"] }
+    outcome: { primary_metric: cpa_accuracy, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  M39:
+    customer_title: "Audience Network 配置品質の確認"
+    performance_category: [budget_allocation, cpa_diagnosis]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.004, realistic: 0.020, upper: 0.060 }
+      source_basis: "Audience Networkの低品質配置は誤クリックやCV品質低下を招きやすく、CVを守りながらCPAを改善する余地として算定。"
+      measurement_window: { signal: "1週", verdict: "2-4週" }
+    expected_effect:
+      - "低品質配置による広告費浪費の抑制"
+      - "CV品質を落とさないCPA改善"
+    today_action: "Audience Network配信のCPA・CV品質・除外設定を確認してください。"
+    yes_no_question: "Audience Network配信のCPA/CV品質は許容範囲ですか?"
+    action_options: { A: "許容範囲", B: "見直したい", C: "確認したい" }
+    optimization_goal: { primary: reduce_cpa, secondary: preserve_cv }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["CVが取れている配置を根拠なく一括停止しない"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
 
 # ============================================================
 # performance_category ラベル (人間向け表示文字列)
@@ -482,6 +1352,8 @@ category_labels:
   operational_foundation: "運用基盤整備"
   cpa_diagnosis:          "CPA 悪化の切り分け"
   delivery_diagnosis:     "配信量低下の切り分け"
+  budget_allocation:      "予算配分改善"
+  ad_fraud:               "不正/低品質流入対策"
 
 
 # ============================================================
