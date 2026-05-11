@@ -35,6 +35,7 @@ def sync_rule_registry(conn, records: list[RuleRecord]) -> dict[str, Any]:
     """Replace DB registry rows with the current YAML-derived registry."""
     synced_at = utc_now()
     conn.execute("DELETE FROM rule_registry_issues")
+    conn.execute("DELETE FROM rule_registry_operations")
     conn.execute("DELETE FROM rule_registry")
     for record in records:
         conn.execute(
@@ -59,9 +60,34 @@ def sync_rule_registry(conn, records: list[RuleRecord]) -> dict[str, Any]:
                 json.dumps(record.prerequisite, ensure_ascii=False, sort_keys=True),
                 json.dumps(record.expected_impact, ensure_ascii=False, sort_keys=True),
                 1 if record.messaging_mapped else 0,
-                1 if record.messaging_mapped else 0,
+                1 if record.customer_visible else 0,
                 record.source_path,
                 json_dumps(record.payload),
+                synced_at,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO rule_registry_operations (
+              rule_id, lifecycle, owner, required_data_sources_json,
+              duplicate_group, prerequisite_rule_ids_json, conflict_rule_ids_json,
+              rule_family, payload_json, synced_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record.rule_id,
+                record.lifecycle,
+                record.payload.get("owner"),
+                json_dumps(_required_data_sources(record.payload)),
+                record.payload.get("dedupe_group") or record.payload.get("duplicate_group"),
+                json_dumps(_rule_refs(record.payload, "prerequisite", "dependencies", "extends", "replaces")),
+                json_dumps(_rule_refs(record.payload, "conflicts")),
+                record.root_cause_group or record.category,
+                json_dumps({
+                    "source_path": record.source_path,
+                    "issues": list(record.issues),
+                    "customer_visible": record.customer_visible,
+                }),
                 synced_at,
             ),
         )
@@ -168,6 +194,35 @@ def list_registry_issues(conn, limit: int = 50) -> list[dict[str, Any]]:
     ]
 
 
+def meta_rule_operations_summary(conn) -> dict[str, Any]:
+    """Meta-first rule operations readiness summary."""
+    rows = conn.execute(
+        """
+        SELECT r.rule_id, r.severity, r.messaging_mapped, r.customer_visible,
+               o.lifecycle, o.duplicate_group, o.required_data_sources_json
+        FROM rule_registry r
+        LEFT JOIN rule_registry_operations o ON o.rule_id = r.rule_id
+        WHERE r.source_path LIKE '%meta_rules.yaml' OR r.rule_id LIKE 'M%'
+        """
+    ).fetchall()
+    total = len(rows)
+    high_critical = [
+        r for r in rows
+        if r["severity"] in {"critical", "high"} and (r["lifecycle"] or "active") == "active"
+    ]
+    visible = [r for r in rows if r["customer_visible"]]
+    with_sources = [r for r in rows if r["required_data_sources_json"] not in (None, "", "[]")]
+    with_duplicate_group = [r for r in rows if r["duplicate_group"]]
+    return {
+        "meta_total": total,
+        "meta_customer_visible": len(visible),
+        "meta_high_critical": len(high_critical),
+        "meta_high_critical_unmapped": len([r for r in high_critical if not r["messaging_mapped"]]),
+        "meta_required_data_sources": len(with_sources),
+        "meta_duplicate_group_defined": len(with_duplicate_group),
+    }
+
+
 def canonical_rule_id(rule_id: str) -> str:
     return rule_id.strip().replace("_", "-").upper()
 
@@ -178,3 +233,24 @@ def issue_id_for(rule_id: str, issue_type: str) -> str:
 
 def _pct(value: int | float, total: int) -> float:
     return round((float(value) / total * 100), 1) if total else 0.0
+
+
+def _required_data_sources(rule: dict) -> list[str]:
+    out = []
+    for item in rule.get("data_source") or rule.get("data_sources") or []:
+        if isinstance(item, dict) and item.get("source"):
+            out.append(str(item["source"]))
+        elif isinstance(item, str):
+            out.append(item)
+    return sorted(set(out))
+
+
+def _rule_refs(rule: dict, *keys: str) -> list[str]:
+    refs = []
+    for key in keys:
+        val = rule.get(key)
+        if isinstance(val, str):
+            refs.append(val)
+        elif isinstance(val, list):
+            refs.extend(str(x) for x in val if x)
+    return sorted(set(refs))

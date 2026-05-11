@@ -36,6 +36,13 @@ def upsert_client(conn, client_id: str, config: dict) -> None:
             now,
         ),
     )
+    try:
+        from engine.stores.connections import sync_client_connections_from_config
+        sync_client_connections_from_config(conn, client_id, config)
+    except Exception:
+        # Client profile must remain importable even when optional connection
+        # registry config is not ready. Job/health checks will surface details.
+        pass
 
 
 def list_client_ids(conn) -> list[str]:

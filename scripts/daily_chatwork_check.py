@@ -319,7 +319,7 @@ def _run_daily_check_impl(
 
         try:
             from engine.stores.db import transaction
-            from engine.stores.outcomes import update_due_outcome_measurements
+            from engine.stores.outcomes import refresh_rule_outcome_rollups, update_due_outcome_measurements
             current_kpis = _extract_current_outcome_kpis(audit, platform="meta")
             with transaction(db_path) as conn:
                 updated = update_due_outcome_measurements(
@@ -328,7 +328,9 @@ def _run_daily_check_impl(
                     current_kpis=current_kpis,
                     today=today_str,
                 )
+                rollups = refresh_rule_outcome_rollups(conn)
             log.info(f"outcome_tracker: due measurements updated={updated}")
+            log.info(f"outcome_tracker: rule rollups updated={rollups.get('rules_updated', 0)}")
         except Exception as e:
             log.error(f"outcome tracker 実測更新失敗: {e}")
             errors.append(f"outcome_measure: {e}")

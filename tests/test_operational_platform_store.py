@@ -3,9 +3,11 @@ from pathlib import Path
 
 import yaml
 
-from engine.stores.cases import get_case, upsert_case_from_indication
+from engine.stores.cases import get_case, transition_case, upsert_case_from_indication
+from engine.stores.connections import connection_summary, list_client_connections
 from engine.stores.db import connect
 from engine.stores.jobs import client_health, record_job
+from engine.stores.monitoring import incident_summary, list_open_incidents, open_incident, record_health_check
 from scripts.client_health import build_health_report
 from scripts.migrate_state_to_db import migrate
 
@@ -39,6 +41,38 @@ def test_schema_initializes_and_case_upsert(tmp_path):
     assert [e["event_type"] for e in events] == ["detected"]
 
 
+def test_case_transition_records_state_machine_and_event(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    case_id = upsert_case_from_indication(conn, {
+        "indication_id": "case-1",
+        "client_id": "pilotton",
+        "rule_id": "M02",
+        "status": "open",
+        "first_detected_at": "2026-05-09T00:00:00+00:00",
+        "payload": {"title": "CAPI確認"},
+    })
+
+    transition_id = transition_case(
+        conn,
+        case_id=case_id,
+        to_status="waiting_zynect",
+        actor_type="operator",
+        actor_id="ops-1",
+        reason="顧客回答を受領",
+        transitioned_at="2026-05-09T10:00:00+00:00",
+    )
+    conn.commit()
+
+    case = get_case(conn, case_id)
+    transition = conn.execute("SELECT * FROM case_transitions WHERE transition_id = ?", (transition_id,)).fetchone()
+    event = conn.execute("SELECT event_type FROM case_events WHERE case_id = ? ORDER BY event_at DESC LIMIT 1", (case_id,)).fetchone()
+
+    assert case["status"] == "waiting_zynect"
+    assert transition["from_status"] == "open"
+    assert transition["to_status"] == "waiting_zynect"
+    assert event["event_type"] == "transition:open->waiting_zynect"
+
+
 def test_migrate_state_to_db_imports_clients_cases_and_responses(tmp_path):
     root = _sample_root(tmp_path)
     db_path = tmp_path / "state" / "zynect.db"
@@ -62,6 +96,9 @@ def test_migrate_state_to_db_imports_clients_cases_and_responses(tmp_path):
         health = client_health(conn, "pilotton")
         assert health["open_cases_count"] == 1
         assert health["latest_job"]["job_name"] == "migrate_state_to_db"
+        connections = list_client_connections(conn, "pilotton")
+        assert any(c["provider"] == "meta_api" for c in connections)
+        assert connection_summary(conn, "pilotton")["missing_required"] >= 0
     finally:
         conn.close()
 
@@ -145,6 +182,22 @@ def test_job_store_records_success_and_failure(tmp_path):
     assert h1["last_successful_run_at"]
     assert h2["latest_job"]["status"] == "failed"
     assert h2["latest_job"]["errors"] == ["token missing"]
+    incidents = list_open_incidents(conn, "yamamoto_demo")
+    assert incidents[0]["component"] == "job:daily_chatwork_check"
+    assert incident_summary(conn, "yamamoto_demo")["open_incidents"] == 1
+
+
+def test_monitoring_store_records_health_and_incidents(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    record_health_check(conn, component="meta_api", client_id="pilotton", status="failed", detail="401")
+    open_incident(conn, component="meta_api", client_id="pilotton", title="Meta token expired", severity="critical")
+    conn.commit()
+
+    health = conn.execute("SELECT * FROM health_checks WHERE client_id = 'pilotton'").fetchone()
+    incidents = list_open_incidents(conn, "pilotton")
+
+    assert health["status"] == "failed"
+    assert incidents[0]["title"] == "Meta token expired"
 
 
 def _sample_root(tmp_path: Path) -> Path:
@@ -162,6 +215,13 @@ def _sample_root(tmp_path: Path) -> Path:
                     "display_name": "株式会社パイロットン",
                     "vertical": "ec_d2c",
                     "ec_platform": "ecforce",
+                    "ads": {
+                        "meta": {
+                            "enabled": True,
+                            "account_id": "act_123",
+                            "access_token_env": "META_ACCESS_TOKEN_PILOTTON",
+                        }
+                    },
                     "chatwork_rooms": {"main": "12345"},
                 }
             }

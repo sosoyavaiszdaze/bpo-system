@@ -312,6 +312,85 @@ def update_due_outcome_measurements(
     return updated
 
 
+def refresh_rule_outcome_rollups(conn) -> dict[str, Any]:
+    """Aggregate measured outcomes into per-rule win rates."""
+    rows = conn.execute(
+        """
+        SELECT c.rule_id,
+               COUNT(DISTINCT o.case_id) AS cases_count,
+               SUM(CASE WHEN o.measured_value IS NOT NULL THEN 1 ELSE 0 END) AS measured_count,
+               SUM(CASE WHEN o.change_pct > 0 THEN 1 ELSE 0 END) AS improved_count,
+               SUM(CASE WHEN o.change_pct < 0 THEN 1 ELSE 0 END) AS worsened_count,
+               SUM(CASE WHEN o.measured_value IS NULL OR o.change_pct IS NULL THEN 1 ELSE 0 END) AS unknown_count,
+               AVG(o.change_pct) AS avg_change_pct,
+               SUM(COALESCE(o.estimated_value_yen, 0)) AS estimated_value_yen,
+               MAX(COALESCE(o.measurement_end, o.created_at)) AS last_measured_at
+        FROM outcome_measurements o
+        LEFT JOIN operational_cases c ON c.case_id = o.case_id
+        WHERE c.rule_id IS NOT NULL
+        GROUP BY c.rule_id
+        """
+    ).fetchall()
+    updated = 0
+    for row in rows:
+        measured_count = int(row["measured_count"] or 0)
+        improved_count = int(row["improved_count"] or 0)
+        win_rate = round(improved_count / measured_count, 4) if measured_count else None
+        conn.execute(
+            """
+            INSERT INTO rule_outcome_rollups (
+              rule_id, cases_count, measured_count, improved_count, worsened_count,
+              unknown_count, avg_change_pct, estimated_value_yen, win_rate,
+              last_measured_at, payload_json, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(rule_id) DO UPDATE SET
+              cases_count=excluded.cases_count,
+              measured_count=excluded.measured_count,
+              improved_count=excluded.improved_count,
+              worsened_count=excluded.worsened_count,
+              unknown_count=excluded.unknown_count,
+              avg_change_pct=excluded.avg_change_pct,
+              estimated_value_yen=excluded.estimated_value_yen,
+              win_rate=excluded.win_rate,
+              last_measured_at=excluded.last_measured_at,
+              payload_json=excluded.payload_json,
+              updated_at=excluded.updated_at
+            """,
+            (
+                row["rule_id"],
+                row["cases_count"] or 0,
+                measured_count,
+                improved_count,
+                row["worsened_count"] or 0,
+                row["unknown_count"] or 0,
+                row["avg_change_pct"],
+                row["estimated_value_yen"] or 0,
+                win_rate,
+                row["last_measured_at"],
+                json_dumps({"source": "outcome_measurements"}),
+            ),
+        )
+        updated += 1
+    return {"rules_updated": updated}
+
+
+def list_rule_outcome_rollups(conn, limit: int = 50) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        """
+        SELECT * FROM rule_outcome_rollups
+        ORDER BY measured_count DESC, win_rate DESC, estimated_value_yen DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    out = []
+    for row in rows:
+        data = dict(row)
+        data["payload"] = json_loads(data.pop("payload_json"), {})
+        out.append(data)
+    return out
+
+
 def outcome_summary(conn, client_id: str | None = None) -> dict[str, Any]:
     params: list[Any] = []
     where = ""

@@ -9,8 +9,10 @@ from engine.stores.clients import list_client_ids
 from engine.stores.db import connect, json_loads
 from engine.stores.decision_traces import list_traces, trace_summary
 from engine.stores.jobs import client_health
-from engine.stores.outcomes import list_outcomes, outcome_summary
-from engine.stores.rules import list_registry_issues, registry_summary
+from engine.stores.monitoring import incident_summary, list_open_incidents
+from engine.stores.outcomes import list_outcomes, list_rule_outcome_rollups, outcome_summary
+from engine.stores.rules import list_registry_issues, meta_rule_operations_summary, registry_summary
+from engine.stores.connections import connection_summary, list_client_connections
 from engine.vertical_kpi_registry import build_client_kpi_readiness
 
 
@@ -36,8 +38,14 @@ def build_console_context(db_path: Path | str | None = None, root: Path | str | 
             "recent_jobs": _recent_jobs(conn),
             "outcomes": outcome_summary(conn),
             "recent_outcomes": list_outcomes(conn, limit=30),
+            "rule_outcome_rollups": list_rule_outcome_rollups(conn, limit=30),
+            "connections": connection_summary(conn),
+            "recent_connections": list_client_connections(conn)[:30],
+            "incidents": incident_summary(conn),
+            "open_incidents": list_open_incidents(conn, limit=30),
             "rule_registry": rule_registry,
             "rule_registry_issues": rule_registry_issues,
+            "meta_rule_operations": _safe_meta_rule_ops(conn),
             "decision_trace_summary": trace_summary(conn),
             "recent_decision_traces": _enriched_traces(conn),
         }
@@ -138,6 +146,13 @@ def _rule_registry_context(conn, root: Path | str | None) -> tuple[dict[str, Any
         return registry_summary(conn), list_registry_issues(conn, limit=30)
     records = load_rule_registry(root)
     return summarize_rule_registry(records), top_rule_registry_issues(records, limit=30)
+
+
+def _safe_meta_rule_ops(conn) -> dict[str, Any]:
+    try:
+        return meta_rule_operations_summary(conn)
+    except Exception:
+        return {}
 
 
 def _enriched_traces(conn, limit: int = 30) -> list[dict[str, Any]]:

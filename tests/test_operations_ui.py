@@ -13,12 +13,14 @@ from engine.stores.jobs import record_job
 from engine.stores.outcomes import (
     improvement_pct,
     list_outcomes,
+    list_rule_outcome_rollups,
     outcome_summary,
     record_completion_outcome,
     record_outcome,
+    refresh_rule_outcome_rollups,
     update_due_outcome_measurements,
 )
-from engine.stores.rules import registry_summary, sync_rule_registry
+from engine.stores.rules import meta_rule_operations_summary, registry_summary, sync_rule_registry
 
 
 def test_rule_registry_summarizes_axis_and_mapping_coverage(tmp_path):
@@ -94,6 +96,8 @@ def test_operations_console_context_is_read_only_shape(tmp_path):
     assert ctx["outcomes"]["metrics"][0]["avg_change_pct"] == 20
     assert ctx["recent_outcomes"][0]["case_id"] == "case-1"
     assert ctx["rule_registry"]["total_rules"] == 2
+    assert "connections" in ctx
+    assert "incidents" in ctx
 
 
 def test_sync_rule_registry_persists_yaml_connectivity_audit(tmp_path):
@@ -113,6 +117,8 @@ def test_sync_rule_registry_persists_yaml_connectivity_audit(tmp_path):
     assert result["rules_synced"] == 2
     assert summary["messaging_mapped"] == 1
     assert summary["expected_impact_rules"] == 1
+    ops = conn.execute("SELECT lifecycle FROM rule_registry_operations WHERE rule_id = ?", ("F-MF-01",)).fetchone()
+    assert ops["lifecycle"] == "active"
     assert [row["issue_type"] for row in issue] == [
         "messaging_unmapped",
         "missing_applies_to",
@@ -158,6 +164,38 @@ def test_rule_registry_flags_high_severity_customer_visibility_gap(tmp_path):
     assert "high_severity_unmapped" in critical.issues
     assert "high_severity_unmapped" not in disabled.issues
     assert summary["high_critical_unmapped_rules"] == 1
+
+
+def test_meta_rule_operations_summary_counts_meta_readiness(tmp_path):
+    root = _rule_root(tmp_path)
+    (root / "config" / "rules" / "meta_rules.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "rules": [
+                    {
+                        "id": "M02",
+                        "name": "CAPI接続",
+                        "severity": "high",
+                        "enabled": True,
+                        "root_cause_group": "measurement_foundation",
+                        "axis_position": "TO-02",
+                        "data_source": [{"source": "meta_api", "fields": ["pixel_status"]}],
+                    }
+                ]
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    conn = connect(tmp_path / "zynect.db")
+    records = load_rule_registry(root)
+    sync_rule_registry(conn, records)
+    conn.commit()
+
+    summary = meta_rule_operations_summary(conn)
+
+    assert summary["meta_total"] >= 1
+    assert summary["meta_high_critical"] >= 1
 
 
 def test_decision_trace_store_and_ui_context(tmp_path):
@@ -277,6 +315,36 @@ def test_outcome_tracker_updates_due_baseline_measurements(tmp_path):
     assert row["change_pct"] == 20
     assert row["estimated_value_yen"] == 80000
     assert '"measurement_window_days": 7' in row["payload_json"]
+
+
+def test_rule_outcome_rollups_accumulate_win_rate(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    upsert_case_from_indication(conn, {
+        "indication_id": "case-1",
+        "client_id": "pilotton",
+        "rule_id": "M02",
+        "status": "open",
+        "severity": "high",
+        "first_detected_at": "2026-05-01T00:00:00+00:00",
+        "payload": {"title": "CAPI"},
+    })
+    record_outcome(
+        conn,
+        case_id="case-1",
+        client_id="pilotton",
+        metric="cpa",
+        baseline_value=10000,
+        measured_value=8000,
+        measurement_end="2026-05-08",
+        payload={"conversions": 10},
+    )
+    result = refresh_rule_outcome_rollups(conn)
+    conn.commit()
+    rows = list_rule_outcome_rollups(conn)
+
+    assert result["rules_updated"] == 1
+    assert rows[0]["rule_id"] == "M02"
+    assert rows[0]["win_rate"] == 1.0
 
 
 def test_improvement_pct_handles_metric_direction_and_zero_baseline():

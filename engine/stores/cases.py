@@ -8,6 +8,16 @@ from typing import Any, Optional
 from engine.stores.db import json_dumps, json_loads, row_to_dict, utc_now
 
 ACTIVE_STATUSES = {"open", "waiting_client", "waiting_zynect", "planned", "implemented", "monitoring"}
+ALLOWED_TRANSITIONS = {
+    "open": {"waiting_client", "waiting_zynect", "planned", "implemented", "monitoring", "resolved", "closed"},
+    "waiting_client": {"waiting_zynect", "planned", "implemented", "monitoring", "resolved", "closed", "open"},
+    "waiting_zynect": {"waiting_client", "planned", "implemented", "monitoring", "resolved", "closed", "open"},
+    "planned": {"implemented", "monitoring", "waiting_client", "waiting_zynect", "closed"},
+    "implemented": {"monitoring", "resolved", "waiting_client", "waiting_zynect", "closed"},
+    "monitoring": {"resolved", "implemented", "waiting_client", "waiting_zynect", "closed"},
+    "resolved": {"closed", "monitoring", "open"},
+    "closed": {"open"},
+}
 CASE_STATUS_FROM_INDICATION = {
     "open": "open",
     "resolved_pending": "monitoring",
@@ -112,6 +122,79 @@ def add_case_event(
         (event_id, case_id, client_id, event_type, actor_type, actor_id or None, event_at, message, json_dumps(payload or {})),
     )
     return event_id
+
+
+def transition_case(
+    conn,
+    *,
+    case_id: str,
+    to_status: str,
+    actor_type: str,
+    reason: str | None = None,
+    actor_id: str = "",
+    transitioned_at: str | None = None,
+    payload: dict | None = None,
+    allow_any: bool = False,
+) -> str:
+    """Move an operational case through an explicit state transition."""
+    row = conn.execute(
+        "SELECT client_id, status FROM operational_cases WHERE case_id = ?",
+        (case_id,),
+    ).fetchone()
+    if not row:
+        raise ValueError(f"case not found: {case_id}")
+    from_status = row["status"]
+    if not allow_any and to_status not in ALLOWED_TRANSITIONS.get(from_status, set()):
+        raise ValueError(f"invalid case transition: {from_status} -> {to_status}")
+
+    transitioned_at = transitioned_at or utc_now()
+    raw = f"{case_id}|{from_status}|{to_status}|{transitioned_at}|{actor_type}|{actor_id}"
+    transition_id = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO case_transitions (
+          transition_id, case_id, client_id, from_status, to_status,
+          actor_type, actor_id, reason, transitioned_at, payload_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            transition_id,
+            case_id,
+            row["client_id"],
+            from_status,
+            to_status,
+            actor_type,
+            actor_id or None,
+            reason,
+            transitioned_at,
+            json_dumps(payload or {}),
+        ),
+    )
+    update_fields = ["status = ?", "updated_at = ?"]
+    params: list[Any] = [to_status, transitioned_at]
+    if to_status == "resolved":
+        update_fields.extend(["resolved_at = ?", "resolved_date = ?"])
+        params.extend([transitioned_at, transitioned_at[:10]])
+    if to_status == "closed":
+        update_fields.append("closed_at = ?")
+        params.append(transitioned_at)
+    params.append(case_id)
+    conn.execute(
+        f"UPDATE operational_cases SET {', '.join(update_fields)} WHERE case_id = ?",
+        params,
+    )
+    add_case_event(
+        conn,
+        case_id=case_id,
+        client_id=row["client_id"],
+        event_type=f"transition:{from_status}->{to_status}",
+        actor_type=actor_type,
+        actor_id=actor_id,
+        event_at=transitioned_at,
+        message=reason,
+        payload=payload or {},
+    )
+    return transition_id
 
 
 def get_case(conn, case_id: str) -> Optional[dict]:

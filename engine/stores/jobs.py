@@ -45,6 +45,13 @@ def finish_job(
         """,
         (status, finished_at or utc_now(), json_dumps(errors or []), json_dumps(metrics or {}), job_run_id),
     )
+    row = conn.execute("SELECT job_name, client_id FROM job_runs WHERE job_run_id = ?", (job_run_id,)).fetchone()
+    if row:
+        try:
+            from engine.stores.monitoring import record_job_health
+            record_job_health(conn, job_name=row["job_name"], client_id=row["client_id"], status=status, errors=errors, metrics=metrics)
+        except Exception:
+            pass
 
 
 def record_job(
@@ -76,6 +83,11 @@ def record_job(
             json_dumps(metrics or {}),
         ),
     )
+    try:
+        from engine.stores.monitoring import record_job_health
+        record_job_health(conn, job_name=job_name, client_id=client_id, status=status, errors=errors, metrics=metrics)
+    except Exception:
+        pass
     return job_run_id
 
 
