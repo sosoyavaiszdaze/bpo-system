@@ -202,6 +202,25 @@ def test_meta_rule_operations_summary_counts_meta_readiness(tmp_path):
     assert summary["meta_high_critical"] >= 1
 
 
+def test_claude_ads_meta_source_is_mapped_to_customer_visible_meta_rules():
+    root = Path(__file__).resolve().parent.parent
+    source_path = root / "config" / "external_rule_sources" / "claude_ads_meta.yaml"
+    source = yaml.safe_load(source_path.read_text(encoding="utf-8"))
+    records = {record.rule_id: record for record in load_rule_registry(root)}
+
+    assert source["runtime_dependency"] is False
+    assert source["license"] == "MIT"
+    assert set(source["customer_visible_promotions"]["promoted_rules"]) == {"M24", "M25", "M28"}
+
+    for rule_id in ["M24", "M25", "M28"]:
+        record = records[rule_id]
+        assert record.messaging_mapped
+        assert record.customer_visible
+        assert record.has_expected_impact
+        assert "source_refs" in record.messaging_payload
+        assert any(str(ref).startswith("claude_ads_meta:") for ref in record.messaging_payload["source_refs"])
+
+
 def test_rule_family_operations_matrix_includes_non_meta(tmp_path):
     root = _rule_root(tmp_path)
     (root / "config" / "rules" / "google_rules.yaml").write_text(

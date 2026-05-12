@@ -1,0 +1,93 @@
+source_id: claude_ads_meta
+name: claude-ads Meta audit checklist
+repository: https://github.com/AgriciDaniel/claude-ads
+license: MIT
+imported_at: '2026-05-12'
+import_type: concept_mapping
+runtime_dependency: false
+notes: |
+  claude-ads のコードを実行時依存として取り込まず、Meta監査カテゴリ・閾値・
+  チェック観点だけを Zynect の Rule Registry / rule_messaging に接続する。
+  既存の Zynect Meta 原則(M-α〜M-λ)と重なる項目は既存rule_idへマップし、
+  重複ルール追加は避ける。
+
+category_weights:
+  pixel_capi_health: 0.30
+  creative: 0.30
+  account_structure: 0.20
+  audience_targeting: 0.20
+
+thresholds:
+  event_match_quality_purchase:
+    pass: ">= 8.0"
+    warn: "6.0-7.9"
+    fail: "< 6.0"
+    mapped_rules: [M03]
+  event_deduplication_rate:
+    pass: ">= 90%"
+    warn: "70-89%"
+    fail: "< 70%"
+    mapped_rules: [M06, PC-MS-01]
+  creative_format_count:
+    pass: ">= 3 formats"
+    warn: "2 formats"
+    fail: "1 format"
+    mapped_rules: [M24]
+  creative_fatigue:
+    fail: "CTR drop > 20% over 14 days or high frequency"
+    mapped_rules: [M57, M58]
+  learning_limited_ratio:
+    pass: "< 30% of ad sets"
+    warn: "30-50%"
+    fail: "> 50%"
+    mapped_rules: [M09, M10, M68]
+  budget_sufficiency_per_adset:
+    pass: "daily budget >= 5x target CPA"
+    warn: "2-5x target CPA"
+    fail: "< 2x target CPA"
+    mapped_rules: [M10, M12, M15]
+
+rule_mapping:
+  M01: [M01, X-PI1, F-MF-02]
+  M02: [M02, P-EF-02]
+  M03: [M06, PC-MS-01]
+  M04: [M03]
+  M05: [M04, F-AH-04]
+  M06: [M05, M56]
+  M09: [M62, F-MF-08]
+  M11: [M15]
+  M12: [M11]
+  M13: [M09, M10, M68]
+  M14: [M13]
+  M15: [M20, M44]
+  M16: [M15, M49]
+  M18: [M14]
+  M19: [M49]
+  M20: [M51, M61]
+  M21: [M50, M70]
+  M22: [M54]
+  M23: [M53, M69]
+  M24: [M61]
+  M25: [M24, M47]
+  M26: [M47]
+  M27: [M25]
+  M28: [M57, M58]
+  M31: [M28, M35]
+  M32: [M59]
+  M33: [M54]
+  M34: [M39]
+  M35: [M62, F-MF-08]
+  M-AN1: [M24, M47, M57]
+  M-AT1: [M02]
+  M-IA1: [M62]
+  M-TH1: [M24, M47]
+
+customer_visible_promotions:
+  promoted_rules:
+    - M24
+    - M25
+    - M28
+  reason: |
+    Zynect既存Metaルールでは計測・CAPI・学習系は既に顧客通知へ接続済み。
+    claude-ads 統合で新たに強化する価値が大きいのは、
+    Andromeda後の creative diversity / fatigue / native content 系。

@@ -17,6 +17,7 @@ MEASUREMENT_RULE_GROUPS: dict[str, list[str]] = {
     "meta_attribution_window": ["M62", "F-MF-08"],
     "meta_cpa_spike_diagnosis": ["C05", "ANO_CPA_SPIKE", "M09", "M10", "M12", "M13", "M45", "M68"],
     "meta_delivery_drop_diagnosis": ["ANO_IMPRESSION_DROP", "M14", "M16", "M18", "M20", "M44"],
+    "meta_creative_diversity_and_fatigue": ["M24", "M25", "M28", "M35", "M47", "M57", "M58", "M59"],
 }
 
 
@@ -174,7 +175,7 @@ def build_meta_rule_evidence(meta_data: dict[str, Any] | None) -> dict[str, dict
     performance_status = "resolved" if has_campaigns else "manual_required"
     for rid in [
         "M09", "M10", "M12", "M13", "M14", "M16", "M18", "M20",
-        "M44", "M45", "M47", "M49", "M52", "M57", "M58", "M59",
+        "M24", "M25", "M28", "M35", "M44", "M45", "M47", "M49", "M52", "M57", "M58", "M59",
         "M61", "M62", "M66", "M68", "M39",
     ]:
         evidence[rid] = _ev(

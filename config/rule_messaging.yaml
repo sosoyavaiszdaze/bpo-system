@@ -793,6 +793,72 @@ rules:
     outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: null
 
+  M24:
+    customer_title: "Meta クリエイティブ形式の偏り確認"
+    performance_category: [conversion_rate, cpa_diagnosis]
+    priority: A
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.004, realistic: 0.020, upper: 0.060 }
+      source_basis: "claude-ads Meta監査の Creative Format Diversity / Andromeda Creative Distinction をZynect運用に接続。単一フォーマット偏重は疲弊とCPA悪化を招くため、保守的な改善率で算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "Meta が探索できる訴求・面の幅を増やす"
+      - "勝ち素材を残したまま疲弊リスクを下げる"
+    today_action: "主要広告セットで静止画・動画・カルーセル・UGC風など、3系統以上の形式が並走しているか確認してください。"
+    yes_no_question: "主要広告セットに3系統以上のクリエイティブ形式がありますか?"
+    action_options: { A: "3系統以上あり", B: "1-2系統に偏り", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["既存の勝ち広告を止めず、追加検証枠で形式を増やす"] }
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    source_refs: [claude_ads_meta:M25, claude_ads_meta:M-AN1]
+    legal_note: null
+
+  M25:
+    customer_title: "Meta 面別アスペクト比の確認"
+    performance_category: [conversion_rate]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.002, realistic: 0.010, upper: 0.035 }
+      source_basis: "claude-ads Meta監査の Video aspect ratios を接続。面別比率の不足はCTR/CVR低下の補助要因として算定。"
+      measurement_window: { signal: "1-2週", verdict: "3-4週" }
+    expected_effect:
+      - "フィード/リール/ストーリーズで表示面積と視認性を改善"
+      - "同じ訴求を面ごとに最適化"
+    today_action: "勝ち訴求の素材がフィード用4:5/1:1、リール・ストーリーズ用9:16に展開されているか確認してください。"
+    yes_no_question: "主要素材は配信面に合ったアスペクト比で展開されていますか?"
+    action_options: { A: "展開済み", B: "不足あり", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: improve_cvr }
+    risk_control: { cv_loss_risk: low, do_not_do: ["訴求を変えず、まず比率違いの追加で検証する"] }
+    outcome: { primary_metric: ctr, guardrail_metric: conversions, measurement_window_days: 28 }
+    source_refs: [claude_ads_meta:M27]
+    legal_note: null
+
+  M28:
+    customer_title: "UGC風・ネイティブ素材の検証枠確認"
+    performance_category: [conversion_rate, cpa_diagnosis]
+    priority: B
+    goal_stage: cpa_diagnosis
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.003, realistic: 0.015, upper: 0.050 }
+      source_basis: "claude-ads Meta監査の UGC/social-native content を接続。広告感の強い素材に偏る場合のCVR改善余地として算定。"
+      measurement_window: { signal: "1-2週", verdict: "4週" }
+    expected_effect:
+      - "広告感の強い素材だけに依存しない検証幅を作る"
+      - "Hook / CVR 改善余地を見つける"
+    today_action: "既存勝ち訴求を残したまま、UGC風・レビュー風・日常利用風の素材検証枠があるか確認してください。"
+    yes_no_question: "UGC風またはネイティブ感のある素材検証枠はありますか?"
+    action_options: { A: "検証中", B: "未実施", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control: { cv_loss_risk: medium, do_not_do: ["ブランド素材を全停止せず、比較検証として追加する"] }
+    outcome: { primary_metric: cvr, guardrail_metric: conversions, measurement_window_days: 28 }
+    source_refs: [claude_ads_meta:M31]
+    legal_note: null
+
   M44:
     customer_title: "Advantage+ カタログ整合の確認"
     performance_category: [conversion_rate, learning_stability]

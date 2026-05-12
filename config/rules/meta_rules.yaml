@@ -4,6 +4,18 @@ version: '2.2'
 # severity 変更 7件: M58/M47/M59 (medium→high), M49/M44 (high→critical), M62/M61 (medium→high)
 # M64 (地域精度) を未分類→ M-ε 主紐付けに救済
 # 詳細: docs/principles/meta_principles.md, docs/principles/meta_rule_mapping.md
+external_sources:
+  claude_ads_meta:
+    repository: https://github.com/AgriciDaniel/claude-ads
+    license: MIT
+    imported_at: '2026-05-12'
+    scope: Meta audit concepts and thresholds only; no runtime dependency or vendored code.
+    mapped_concepts:
+    - "Pixel/CAPI Health: M01-M06, M08, PC-MS-01"
+    - "Learning / structure: M09-M15, M49, M68"
+    - "Creative diversity and fatigue: M24, M25, M35, M47, M57-M59"
+    - "Audience / targeting: M49-M53, M61"
+    - "Account quality and delivery risk: M16-M18"
 category_weights:
   クリエイティブ: 0.36
   構造_設定: 0.24
@@ -1022,7 +1034,7 @@ rules:
 - id: M24
   name: 動画/画像の使い分け
   category: クリエイティブ
-  severity: low
+  severity: high
   weight: 1.0
   platform: meta
   placement: FB フィード
@@ -1040,10 +1052,21 @@ rules:
   redesign_note: |
     主原則: M-ζ — フォーマット多様性 (動画/静止画/カルーセル/UGC の 4 系統以上)。
     業界常識: 「ベストパフォーマー 1 本」を見つけて回す、フォーマット別検証は実施せず。
-    当社の判断: 同一商品でも複数フォーマットを並走させて Meta に選ばせる。low 維持 (個別重要度は低いが網羅性として必要)。
+    当社の判断: 同一商品でも複数フォーマットを並走させて Meta に選ばせる。claude-ads の Meta audit では Creative Format Diversity を critical 扱いにしており、Andromeda 環境ではフォーマット不足が CPA 悪化に直結するため high に昇格。
     Andromeda 後の補正: フォーマット多様性は Andromeda 報酬対象。静止画/動画でユーザー層が異なる (X: 長橋真吾)。
     米満氏理論との関係: Google P7 派生 (Meta では強度大)。
+    claude-ads対応: M25 Creative format diversity / M-AN1 Andromeda creative distinction。
+  expected_impact:
+    primary_metric: cpa_change_pct
+    primary_value: -8
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: 主要広告セットが単一フォーマットに偏ると、Andromeda の候補探索が狭まり疲弊が早い。静止画・動画・カルーセル・UGC系の少なくとも3系統を並走させ、CVが出ている訴求を残したまま探索幅を増やす。
+  source_refs:
+  - claude_ads_meta:M25
+  - claude_ads_meta:M-AN1
   enabled: true
+  lifecycle: active
   meta_principle_alignment:
     primary: M-ζ
     secondary: []
@@ -1059,7 +1082,7 @@ rules:
 - id: M25
   name: 1:1と4:5のアスペクト比
   category: クリエイティブ
-  severity: low
+  severity: medium
   weight: 1.0
   platform: meta
   placement: FB フィード
@@ -1077,11 +1100,21 @@ rules:
   redesign_note: |
     主原則: M-ζ — 表示面積最大化。フィード内で目立つアスペクト比の選択。
     業界常識: 制作の都合で 1:1 のみ作成、4:5 の存在を意識せず。
-    当社の判断: 4:5 はフィード占有率が高く CTR 寄与。両方並走で配信最適化に委ねる。low 維持。
+    当社の判断: 4:5 はフィード占有率が高く CTR 寄与。claude-ads の動画/アスペクト比監査と接続し、単一素材の使い回しを防ぐ補助ルールとして medium に昇格。
     Andromeda 後の補正: なし。
     米満氏理論との関係: Google P7 派生。
+    claude-ads対応: M27 Video aspect ratios。
+  expected_impact:
+    primary_metric: ctr_change_pct
+    primary_value: 6
+    confidence: medium
+    impact_horizon_weeks: 3
+    rationale: フィード面で1:1のみ、または縦型面で9:16未対応だと表示面積と視認性を失う。勝ち訴求は残しつつ面別に最適比率を追加する。
+  source_refs:
+  - claude_ads_meta:M27
   # enabled 変更 (2026-05): false → true (10原則紐付けで有効化)
   enabled: true
+  lifecycle: active
   meta_principle_alignment:
     primary: M-ζ
     secondary: []
@@ -1195,7 +1228,17 @@ rules:
     当社の判断: UGC 風素材は Andromeda 環境で高評価。月次量産メニューに必ず含める。medium 維持。
     Andromeda 後の補正: 「ルーチン構築・生活最適化スタイル」が現状の高 CVR 系 (X: Sanchez 4/29)。
     米満氏理論との関係: Google P7 派生 (Meta では強度大)。
-  enabled: false
+    claude-ads対応: M31 UGC/social-native content。
+  expected_impact:
+    primary_metric: cvr_change_pct
+    primary_value: 7
+    confidence: medium
+    impact_horizon_weeks: 4
+    rationale: UGC風素材は広告感を下げ、Hook/視聴維持/CVRの改善余地を作る。既存勝ち素材を停止せず、検証枠として追加する。
+  source_refs:
+  - claude_ads_meta:M31
+  enabled: true
+  lifecycle: active
   meta_principle_alignment:
     primary: M-ζ
     secondary: []
