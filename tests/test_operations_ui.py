@@ -9,6 +9,8 @@ from engine.stores.clients import upsert_client
 from engine.stores.cases import upsert_case_from_indication
 from engine.stores.db import connect
 from engine.stores.decision_traces import list_traces, record_trace, trace_summary
+from engine.stores.executions import list_case_executions, record_case_execution
+from engine.stores.learning import get_learning_adjustments, list_rule_learning_stats, recompute_rule_learning_stats
 from engine.stores.jobs import record_job
 from engine.stores.outcomes import (
     improvement_pct,
@@ -97,6 +99,7 @@ def test_operations_console_context_is_read_only_shape(tmp_path):
     assert ctx["outcomes"]["metrics"][0]["metric"] == "cpa_change_pct"
     assert ctx["outcomes"]["metrics"][0]["avg_change_pct"] == 20
     assert ctx["recent_outcomes"][0]["case_id"] == "case-1"
+    assert "rule_learning_stats" in ctx
     assert ctx["rule_registry"]["total_rules"] == 2
     assert "connections" in ctx
     assert "incidents" in ctx
@@ -420,6 +423,91 @@ def test_rule_outcome_rollups_accumulate_win_rate(tmp_path):
     assert result["rules_updated"] == 1
     assert rows[0]["rule_id"] == "M02"
     assert rows[0]["win_rate"] == 1.0
+
+
+def test_client_done_response_records_execution_and_learning_stats(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    upsert_case_from_indication(conn, {
+        "indication_id": "case-1",
+        "client_id": "pilotton",
+        "rule_id": "M02",
+        "status": "open",
+        "severity": "high",
+        "first_detected_at": "2026-05-01T00:00:00+00:00",
+        "payload": {"title": "CAPI"},
+    })
+
+    from engine.stores.responses import upsert_client_response
+    upsert_client_response(
+        conn,
+        client_id="pilotton",
+        case_id="case-1",
+        record={
+            "rule_id": "M02",
+            "answer_code": "A",
+            "answer_label": "対応済み",
+            "status": "confirmed_done",
+            "raw_message": "M02 A",
+            "chatwork_message_id": "msg-1",
+            "answered_at": "2026-05-02T00:00:00+00:00",
+            "source": "chatwork_reply",
+        },
+    )
+    recompute_rule_learning_stats(conn)
+    conn.commit()
+
+    executions = list_case_executions(conn, "case-1")
+    learning = list_rule_learning_stats(conn)
+
+    assert executions[0]["execution_status"] == "client_reported"
+    assert executions[0]["rule_id"] == "M02"
+    assert learning[0]["rule_id"] == "M02"
+    assert learning[0]["execution_count"] == 1
+    assert learning[0]["execution_rate"] == 1.0
+
+
+def test_learning_stats_promote_rules_with_measured_wins(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    for i in range(3):
+        case_id = f"case-{i}"
+        upsert_case_from_indication(conn, {
+            "indication_id": case_id,
+            "client_id": "pilotton",
+            "rule_id": "M02",
+            "status": "open",
+            "severity": "high",
+            "first_detected_at": "2026-05-01T00:00:00+00:00",
+            "payload": {"title": "CAPI"},
+        })
+        record_case_execution(
+            conn,
+            case_id=case_id,
+            client_id="pilotton",
+            rule_id="M02",
+            execution_status="verified",
+            evidence_source="meta_api",
+            evidence_quality="high",
+            verified_at="2026-05-02T00:00:00+00:00",
+        )
+        record_outcome(
+            conn,
+            case_id=case_id,
+            client_id="pilotton",
+            metric="cpa",
+            baseline_value=10000,
+            measured_value=8000,
+            measurement_end="2026-05-08",
+            payload={"conversions": 10},
+        )
+
+    rollup = refresh_rule_outcome_rollups(conn)
+    stats = get_learning_adjustments(conn, ["M02"])["M02"]
+
+    assert rollup["learning_rules_updated"] == 1
+    assert stats["win_rate"] == 1.0
+    assert stats["execution_rate"] == 1.0
+    assert stats["priority_adjustment"] < 0
+    assert stats["recommendation"]
 
 
 def test_update_outcome_measurements_job_updates_due_rows(tmp_path):

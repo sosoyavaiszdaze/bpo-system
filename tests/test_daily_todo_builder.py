@@ -438,6 +438,35 @@ class TestSortScoreLogic:
             f"already_notified の penalty が逆順を引き起こしていない: " \
             f"F-AH-04={f_ah['sort_score']} F-DG-01={f_dg['sort_score']}"
 
+    def test_learning_adjustment_changes_priority_score(self):
+        """Learn層の priority_adjustment が Prioritize の sort_score に反映される"""
+        from engine.daily_todo_builder import build_daily_todo
+
+        ctx = build_daily_todo(
+            client_id="test", client_cfg={"company": {"name": "test"}},
+            layer_a_rule_ids=["F-AH-04", "F-DG-01"],
+            eligible_rules=[],
+            layer_a_rule_defs={
+                "F-AH-04": {"id": "F-AH-04", "severity": "high"},
+                "F-DG-01": {"id": "F-DG-01", "severity": "medium"},
+            },
+            today_str="2026-05-08",
+            already_notified_ids=set(),
+            learning_adjustments={
+                "F-AH-04": {"priority_adjustment": 25, "recommendation": "review_or_demote"},
+                "F-DG-01": {"priority_adjustment": -15, "recommendation": "promote"},
+            },
+        )
+
+        items = ctx["items_today"] + ctx["items_this_week"]
+        f_ah = next(i for i in items if i["rule_id"] == "F-AH-04")
+        f_dg = next(i for i in items if i["rule_id"] == "F-DG-01")
+
+        assert f_ah["sort_breakdown"]["learning"] == 25
+        assert f_dg["sort_breakdown"]["learning"] == -15
+        assert f_ah["learning_feedback"]["recommendation"] == "review_or_demote"
+        assert f_dg["learning_feedback"]["recommendation"] == "promote"
+
     def test_already_notified_collected_from_history(self, tmp_path, monkeypatch):
         """auto_proposal_history に当日 sent された rule_id が already_notified に集まる"""
         from engine import auto_proposal_engine

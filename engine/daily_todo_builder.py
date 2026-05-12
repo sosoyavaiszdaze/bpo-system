@@ -27,6 +27,8 @@
                            # 相性の良い goal_stage の rule は -50
     + today_action_w       # today_action 文字列を持つ rule は -5
     + already_notified_p   # 過去通知済 rule は +200 (fallback 抑止)
+    + learning_w           # rule_learning_stats 由来。実行/成果が良い rule は上げ、
+                           # 実行率/勝率/誤検知が悪い rule は下げる。
 
 設計意図:
   - **priority_w が間隔 100** で、他軸は 1〜50 の範囲。priority A は基本上位だが、
@@ -287,6 +289,7 @@ ANOMALY_TO_BOOSTED_GOALS = {
 def compute_sort_score(
     item: dict, anomaly_summary: Optional[dict], goal_order: dict,
     already_notified_ids: Optional[set] = None,
+    learning_adjustments: Optional[dict] = None,
 ) -> dict:
     """1 件の item の表示順スコアと内訳を返す
 
@@ -321,9 +324,11 @@ def compute_sort_score(
 
     breakdown["today_action"] = -5 if item.get("today_action") else 0
     breakdown["already_notified"] = +200 if item.get("rule_id") in already else 0
+    learning = (learning_adjustments or {}).get(item.get("rule_id")) or {}
+    breakdown["learning"] = int(float(learning.get("priority_adjustment") or 0))
 
     score = sum(breakdown.values())
-    return {"score": score, "breakdown": breakdown}
+    return {"score": score, "breakdown": breakdown, "learning": learning}
 
 
 def collect_already_notified_rule_ids(
@@ -366,6 +371,30 @@ def collect_already_notified_rule_ids(
     return out
 
 
+def _load_learning_adjustments(rule_ids: list[str]) -> dict:
+    """Load learned priority feedback if the operational DB is available.
+
+    This is a soft dependency: preview/test environments can run without a DB
+    and callers may pass `learning_adjustments={}` to make ordering fully
+    deterministic.
+    """
+    if not rule_ids:
+        return {}
+    try:
+        from engine.stores.db import DEFAULT_DB_PATH, connect
+        from engine.stores.learning import get_learning_adjustments
+        if not DEFAULT_DB_PATH.exists():
+            return {}
+        conn = connect(DEFAULT_DB_PATH)
+        try:
+            return get_learning_adjustments(conn, rule_ids=sorted(set(rule_ids)))
+        finally:
+            conn.close()
+    except Exception as e:
+        log.debug(f"rule_learning_stats load failed (no-op): {e}")
+        return {}
+
+
 def build_daily_todo(
     client_id: str,
     client_cfg: dict,
@@ -377,6 +406,7 @@ def build_daily_todo(
     already_notified_ids: Optional[set] = None,
     actual_monthly_spend: Optional[float] = None,   # 5/7 P1: 実績月額広告費連動の動的算出
     audit_results: Optional[dict] = None,           # Meta API evidence / answer resolver context
+    learning_adjustments: Optional[dict] = None,    # rule_id -> rule_learning_stats row
 ) -> dict:
     """統合 TODO の context を構築 (テンプレ render 直前まで)
 
@@ -514,14 +544,20 @@ def build_daily_todo(
     elif already_notified_ids is None:
         already_notified_ids = set()
 
+    if learning_adjustments is None:
+        learning_adjustments = _load_learning_adjustments([it["rule_id"] for it in all_items])
+
     # 各 item に sort_score / sort_breakdown を付与
     for it in all_items:
         scored = compute_sort_score(
             it, anomaly_summary, goal_order,
             already_notified_ids=already_notified_ids,
+            learning_adjustments=learning_adjustments,
         )
         it["sort_score"]     = scored["score"]
         it["sort_breakdown"] = scored["breakdown"]
+        if scored.get("learning"):
+            it["learning_feedback"] = scored["learning"]
 
     # スコア小さい順、タイブレーク = rule_id 辞書順
     all_items.sort(key=lambda it: (it["sort_score"], it["rule_id"]))
@@ -593,6 +629,7 @@ def build_daily_todo(
         "suppressed_by_resolver_ids":   sorted(suppressed_by_resolver),
         "resolver_reasons":             resolver_reasons,
         "response_status_map":          response_status_map,
+        "learning_adjustments":         learning_adjustments,
     }
 
 

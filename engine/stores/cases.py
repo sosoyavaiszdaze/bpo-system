@@ -239,6 +239,25 @@ def apply_client_response_to_case(
     )
 
     target_status = CASE_STATUS_FROM_RESPONSE.get(str(response.get("status") or ""))
+    if response.get("status") == "confirmed_done":
+        from engine.stores.executions import record_case_execution
+        record_case_execution(
+            conn,
+            case_id=case_id,
+            client_id=row["client_id"],
+            rule_id=str(response.get("rule_id") or ""),
+            execution_status="client_reported",
+            evidence_source=response.get("source") or "chatwork_reply",
+            evidence_quality="low",
+            actor_type=actor_type,
+            actor_id=str(response.get("chatwork_message_id") or ""),
+            executed_at=answered_at,
+            payload={
+                "answer_code": response.get("answer_code"),
+                "answer_label": response.get("answer_label"),
+                "raw_message": response.get("raw_message"),
+            },
+        )
     if not target_status or target_status == row["status"]:
         return None
     return transition_case(

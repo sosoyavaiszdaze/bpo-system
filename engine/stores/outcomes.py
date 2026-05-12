@@ -371,7 +371,15 @@ def refresh_rule_outcome_rollups(conn) -> dict[str, Any]:
             ),
         )
         updated += 1
-    return {"rules_updated": updated}
+    learning_updated = 0
+    try:
+        from engine.stores.learning import recompute_rule_learning_stats
+        learning_updated = recompute_rule_learning_stats(conn).get("rules_updated", 0)
+    except Exception:
+        # Outcome rollups must remain usable even if a future learning migration
+        # has not been applied yet in a read-only/partial environment.
+        learning_updated = 0
+    return {"rules_updated": updated, "learning_rules_updated": learning_updated}
 
 
 def list_rule_outcome_rollups(conn, limit: int = 50) -> list[dict[str, Any]]:

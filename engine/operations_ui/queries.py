@@ -9,6 +9,7 @@ from engine.stores.clients import list_client_ids
 from engine.stores.db import connect, json_loads
 from engine.stores.decision_traces import list_traces, trace_summary
 from engine.stores.jobs import client_health
+from engine.stores.learning import list_rule_learning_stats
 from engine.stores.monitoring import incident_summary, list_open_incidents
 from engine.stores.outcomes import list_outcomes, list_rule_outcome_rollups, outcome_summary
 from engine.stores.rule_drafts import list_rule_drafts
@@ -40,6 +41,7 @@ def build_console_context(db_path: Path | str | None = None, root: Path | str | 
             "outcomes": outcome_summary(conn),
             "recent_outcomes": list_outcomes(conn, limit=30),
             "rule_outcome_rollups": list_rule_outcome_rollups(conn, limit=30),
+            "rule_learning_stats": _safe_rule_learning_stats(conn),
             "connections": connection_summary(conn),
             "recent_connections": list_client_connections(conn)[:30],
             "incidents": incident_summary(conn),
@@ -168,6 +170,13 @@ def _safe_rule_family_ops(conn) -> list[dict[str, Any]]:
 def _safe_rule_drafts(conn) -> list[dict[str, Any]]:
     try:
         return list_rule_drafts(conn, status="review_required", limit=20)
+    except Exception:
+        return []
+
+
+def _safe_rule_learning_stats(conn) -> list[dict[str, Any]]:
+    try:
+        return list_rule_learning_stats(conn, limit=30)
     except Exception:
         return []
 
