@@ -107,6 +107,30 @@ rules:
   # ============================================================
   # Foundation - measurement_foundation / account_health
   # ============================================================
+  F-AH-03:
+    customer_title: "広告アカウントの支払い手段バックアップ確認"
+    performance_category: [delivery_continuity, account_health]
+    priority: B
+    goal_stage: delivery_diagnosis
+    owner: account_ops
+    answer_source_preference: [api, chatwork_reply]
+    non_financial_impact:
+      primary_metric: delivery_continuity
+      source_basis: "支払い手段が1つだけの場合、カード期限切れ・決済失敗で広告配信が停止し、CV機会損失が発生するため配信継続性の観点で評価。"
+      measurement_window: { signal: "即日", verdict: "1-2週" }
+    expected_effect:
+      - "決済失敗による広告停止リスクの低減"
+      - "CV獲得中キャンペーンの配信継続性確保"
+    today_action: "Meta / Google 等の広告アカウントで、予備の支払い手段が登録されているか確認してください。"
+    yes_no_question: "広告アカウントに予備の支払い手段は登録されていますか?"
+    action_options: { A: "登録済み", B: "未登録", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: prevent_delivery_stop }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["支払い手段確認中にCV獲得中キャンペーンを停止しない"]
+    outcome: { primary_metric: delivery_continuity, guardrail_metric: conversions, measurement_window_days: 14 }
+    legal_note: null
+
   F-AH-04:
     customer_title: "Meta ドメイン認証の状態確認"
     performance_category: [measurement_quality, learning_stability]
@@ -533,6 +557,57 @@ rules:
     outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "景品表示法 第5条 (不当表示の禁止)。"
 
+  F-LC-11:
+    customer_title: "広告・LPまわりの法務確認担当の整理"
+    performance_category: [review_risk, operating_readiness]
+    priority: C
+    goal_stage: legal_review
+    owner: compliance_ops
+    answer_source_preference: [chatwork_reply]
+    non_financial_impact:
+      primary_metric: review_risk_reduction
+      source_basis: "法務確認担当が未定義だと、広告審査落ち・LP差し戻し・表現修正の判断が遅れ、配信再開までのリードタイムが伸びるため運用体制リスクとして評価。"
+      measurement_window: { signal: "即日-1週", verdict: "4週" }
+    expected_effect:
+      - "広告表現・LP修正の判断ルート明確化"
+      - "審査落ちや差し戻し時の対応遅延を抑制"
+    today_action: "広告表現・LP・個人情報まわりを確認する担当者または相談先が決まっているか確認してください。"
+    yes_no_question: "広告表現・LP・個人情報まわりの確認担当は決まっていますか?"
+    action_options: { A: "決まっている", B: "未定", C: "相談したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_review_risk }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["担当整理のために配信中の広告を一括停止しない"]
+    outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: "法令そのものの判定ではなく、確認体制の有無を整理するための項目です。"
+
+  # ============================================================
+  # Foundation - security / continuity
+  # ============================================================
+  F-SC-01:
+    customer_title: "広告・EC管理画面の不要権限チェック"
+    performance_category: [operating_readiness, account_health]
+    priority: B
+    goal_stage: delivery_diagnosis
+    owner: account_ops
+    answer_source_preference: [chatwork_reply]
+    non_financial_impact:
+      primary_metric: account_takeover_risk_reduction
+      source_basis: "退職者・外部パートナー・不要な管理者権限が残ると、広告停止・設定改変・情報漏えいにつながるため、運用継続性と事故予防の観点で評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
+    expected_effect:
+      - "不要権限による広告アカウント事故の予防"
+      - "設定変更・支払い・計測タグの管理責任を明確化"
+    today_action: "Meta Business Manager / EC / 計測ツールの管理者権限に、不要なユーザーが残っていないか確認してください。"
+    yes_no_question: "主要管理画面の不要な管理者権限は棚卸し済みですか?"
+    action_options: { A: "棚卸し済み", B: "未実施", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: prevent_account_incident }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["権限整理時に現在の運用担当・API連携用アカウントを誤って削除しない"]
+    outcome: { primary_metric: account_incident_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
   # ============================================================
   # Vertical - 薬機法系
   # ============================================================
@@ -561,6 +636,30 @@ rules:
       do_not_do: ["効能表現確認中に勝ちクリエイティブを一括停止しない"]
     outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "薬機法 第66条 (誇大広告等の禁止) — 化粧品広告は厚労省告示の56効能の範囲のみ。"
+
+  V-EC-12:
+    customer_title: "レビュー表示のPR表記・ステマ規制対応確認"
+    performance_category: [review_risk, creative_quality]
+    priority: B
+    goal_stage: legal_review
+    owner: compliance_ops
+    answer_source_preference: [validator, chatwork_reply]
+    non_financial_impact:
+      primary_metric: review_risk_reduction
+      source_basis: "依頼レビュー・報酬付きレビューのPR表記不足は広告審査・LP差し戻し・ブランド毀損につながるため、配信継続性とCVR毀損予防の観点で評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
+    expected_effect:
+      - "レビュー訴求の審査落ち / 差し戻しリスク低減"
+      - "CVRに効くレビュー訴求を止めずに表示リスクを下げる"
+    today_action: "依頼・報酬・提供品に基づくレビュー表示に「PR」「広告」等の明示があるか確認してください。"
+    yes_no_question: "依頼・報酬・提供品に基づくレビューにはPR表記がありますか?"
+    action_options: { A: "表記済み", B: "未表記の可能性", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_review_risk }
+    risk_control:
+      cv_loss_risk: medium
+      do_not_do: ["レビュー訴求全体を止めず、PR表記と根拠整理でリスクを下げる"]
+    outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: "景品表示法のステマ規制 (2023年10月施行)。依頼・報酬付きレビューは広告であることの明示が必要です。"
 
   # ============================================================
   # EC Platform - ECフォース
