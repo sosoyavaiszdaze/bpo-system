@@ -7,16 +7,42 @@ from typing import Any, Optional
 
 from engine.stores.db import json_dumps, json_loads, row_to_dict, utc_now
 
-ACTIVE_STATUSES = {"open", "waiting_client", "waiting_zynect", "planned", "implemented", "monitoring"}
+ACTIVE_STATUSES = {
+    "detected", "notified", "acknowledged", "open",
+    "waiting_client", "waiting_zynect", "planned",
+    "executed", "implemented", "verified", "measuring", "monitoring",
+    "learned",
+}
+TERMINAL_STATUSES = {"closed"}
 ALLOWED_TRANSITIONS = {
-    "open": {"waiting_client", "waiting_zynect", "planned", "implemented", "monitoring", "resolved", "closed"},
-    "waiting_client": {"waiting_zynect", "planned", "implemented", "monitoring", "resolved", "closed", "open"},
-    "waiting_zynect": {"waiting_client", "planned", "implemented", "monitoring", "resolved", "closed", "open"},
-    "planned": {"implemented", "monitoring", "waiting_client", "waiting_zynect", "closed"},
-    "implemented": {"monitoring", "resolved", "waiting_client", "waiting_zynect", "closed"},
-    "monitoring": {"resolved", "implemented", "waiting_client", "waiting_zynect", "closed"},
-    "resolved": {"closed", "monitoring", "open"},
-    "closed": {"open"},
+    "detected": {"notified", "acknowledged", "planned", "waiting_client", "waiting_zynect", "executed", "verified", "measuring", "closed"},
+    "notified": {"acknowledged", "planned", "waiting_client", "waiting_zynect", "executed", "verified", "measuring", "closed"},
+    "acknowledged": {"planned", "executed", "verified", "measuring", "waiting_client", "waiting_zynect", "closed"},
+    "open": {"waiting_client", "waiting_zynect", "planned", "executed", "implemented", "verified", "measuring", "monitoring", "resolved", "closed"},
+    "waiting_client": {"waiting_zynect", "planned", "executed", "implemented", "verified", "measuring", "monitoring", "resolved", "closed", "open"},
+    "waiting_zynect": {"waiting_client", "planned", "executed", "implemented", "verified", "measuring", "monitoring", "resolved", "closed", "open"},
+    "planned": {"executed", "implemented", "verified", "measuring", "monitoring", "waiting_client", "waiting_zynect", "closed"},
+    "executed": {"verified", "measuring", "monitoring", "waiting_client", "waiting_zynect", "closed"},
+    "implemented": {"verified", "measuring", "monitoring", "resolved", "waiting_client", "waiting_zynect", "closed"},
+    "verified": {"measuring", "monitoring", "resolved", "closed"},
+    "measuring": {"learned", "resolved", "closed"},
+    "monitoring": {"learned", "resolved", "implemented", "waiting_client", "waiting_zynect", "closed"},
+    "learned": {"resolved", "closed", "monitoring"},
+    "resolved": {"closed", "monitoring", "learned"},
+    "closed": set(),
+}
+CANONICAL_CASE_FLOW = (
+    "detected", "notified", "acknowledged", "planned", "executed",
+    "verified", "measuring", "learned", "closed",
+)
+LEGACY_STATUS_TO_CANONICAL = {
+    "open": "detected",
+    "waiting_client": "acknowledged",
+    "waiting_zynect": "acknowledged",
+    "implemented": "executed",
+    "monitoring": "measuring",
+    "resolved": "learned",
+    "closed": "closed",
 }
 CASE_STATUS_FROM_INDICATION = {
     "open": "open",
@@ -25,7 +51,7 @@ CASE_STATUS_FROM_INDICATION = {
     "archived": "resolved",
 }
 CASE_STATUS_FROM_RESPONSE = {
-    "confirmed_done": "monitoring",
+    "confirmed_done": "executed",
     "not_done": "waiting_client",
     "wants_help": "waiting_zynect",
     "not_applicable": "closed",
@@ -150,6 +176,8 @@ def transition_case(
     if not row:
         raise ValueError(f"case not found: {case_id}")
     from_status = row["status"]
+    if from_status in TERMINAL_STATUSES and to_status != from_status:
+        raise ValueError(f"terminal case cannot transition: {from_status} -> {to_status}")
     if not allow_any and to_status not in ALLOWED_TRANSITIONS.get(from_status, set()):
         raise ValueError(f"invalid case transition: {from_status} -> {to_status}")
 
@@ -201,6 +229,15 @@ def transition_case(
         payload=payload or {},
     )
     return transition_id
+
+
+def canonical_case_status(status: str | None) -> str:
+    """Map legacy operational statuses onto the production case lifecycle."""
+    if not status:
+        return "detected"
+    if status in CANONICAL_CASE_FLOW:
+        return status
+    return LEGACY_STATUS_TO_CANONICAL.get(status, status)
 
 
 def apply_client_response_to_case(
@@ -274,8 +311,89 @@ def apply_client_response_to_case(
             "answer_label": response.get("answer_label"),
             "source": response.get("source"),
         },
-        allow_any=True,
+        allow_any=False,
     )
+
+
+def apply_api_evidence_to_cases(
+    conn,
+    *,
+    client_id: str,
+    evidence_map: dict[str, dict],
+    evidence_source: str = "meta_api",
+    verified_at: str | None = None,
+) -> dict[str, Any]:
+    """Turn API-resolved evidence into execution tracking for active cases.
+
+    This is the automatic Track bridge: if an API/validator proves a previously
+    open rule is already fixed, we record a high-quality execution evidence row
+    and move the case to measuring so Outcome Tracker can judge the result.
+    """
+    if not evidence_map:
+        return {"cases_checked": 0, "executions_recorded": 0, "transitions": 0}
+
+    active_rows = conn.execute(
+        f"""
+        SELECT case_id, client_id, rule_id, status
+        FROM operational_cases
+        WHERE client_id = ?
+          AND status IN ({",".join("?" for _ in ACTIVE_STATUSES)})
+        """,
+        (client_id, *sorted(ACTIVE_STATUSES)),
+    ).fetchall()
+
+    from engine.stores.executions import record_case_execution
+
+    executions = 0
+    transitions = 0
+    verified_at = verified_at or utc_now()
+    for row in active_rows:
+        rid = row["rule_id"]
+        evidence = evidence_map.get(rid) or {}
+        if evidence.get("status") != "resolved":
+            continue
+        source = evidence.get("source") or evidence_source
+        record_case_execution(
+            conn,
+            case_id=row["case_id"],
+            client_id=row["client_id"],
+            rule_id=rid,
+            execution_status="verified",
+            evidence_source=source,
+            evidence_quality="high" if str(source).startswith("meta_api") else "medium",
+            actor_type="system",
+            actor_id=evidence_source,
+            verified_at=verified_at,
+            payload={
+                "reason": evidence.get("reason"),
+                "value": evidence.get("value") or {},
+                "rule_group": evidence.get("rule_group"),
+            },
+        )
+        executions += 1
+        if row["status"] != "measuring":
+            transition_case(
+                conn,
+                case_id=row["case_id"],
+                to_status="measuring",
+                actor_type="system",
+                actor_id=evidence_source,
+                reason=f"api_evidence_resolved:{rid}",
+                transitioned_at=verified_at,
+                payload={
+                    "rule_id": rid,
+                    "source": source,
+                    "reason": evidence.get("reason"),
+                    "rule_group": evidence.get("rule_group"),
+                },
+                allow_any=False,
+            )
+            transitions += 1
+    return {
+        "cases_checked": len(active_rows),
+        "executions_recorded": executions,
+        "transitions": transitions,
+    }
 
 
 def get_case(conn, case_id: str) -> Optional[dict]:

@@ -27,6 +27,9 @@ def create_app(db_path: Path | str | None = None):
 
     from engine.operations_ui.queries import build_console_context
 
+    # With postponed annotations on Python 3.9, FastAPI resolves Request from
+    # module globals rather than this function's local import.
+    globals()["Request"] = Request
     templates = Jinja2Templates(directory=str(ROOT / "templates" / "operations_ui"))
     app = FastAPI(title="Zynect Operations Console", version="0.1.0")
     selected_db_path = Path(db_path) if db_path else DEFAULT_DB_PATH
@@ -34,7 +37,7 @@ def create_app(db_path: Path | str | None = None):
     @app.get("/", response_class=HTMLResponse)
     def dashboard(request: Request):
         context = build_console_context(selected_db_path, root=ROOT)
-        return templates.TemplateResponse("dashboard.html", {"request": request, **context})
+        return templates.TemplateResponse(request, "dashboard.html", context)
 
     @app.get("/healthz")
     def healthz():

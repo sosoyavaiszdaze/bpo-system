@@ -180,6 +180,74 @@ def list_rule_learning_stats(conn, limit: int = 100) -> list[dict[str, Any]]:
     return out
 
 
+def create_rule_improvement_drafts(
+    conn,
+    *,
+    min_cases: int = 3,
+    min_confidence: str = "medium",
+) -> dict[str, Any]:
+    """Create human-review rule drafts from weak learning signals.
+
+    This is the Learn layer's safe write path. It never changes active YAML or
+    production priority by itself. It opens a review-required draft when
+    execution/outcome/false-positive data says a rule should be rewritten,
+    demoted, split, or suppressed.
+    """
+    confidence_rank = {"low": 0, "medium": 1, "high": 2}
+    threshold = confidence_rank.get(min_confidence, 1)
+    rows = conn.execute(
+        """
+        SELECT *
+        FROM rule_learning_stats
+        WHERE recommendation = 'review_or_demote'
+           OR false_positive_rate >= 0.3
+           OR (measured_count >= ? AND win_rate <= 0.3)
+        ORDER BY confidence DESC, cases_count DESC, false_positive_rate DESC
+        """,
+        (min_cases,),
+    ).fetchall()
+
+    created = 0
+    skipped = 0
+    drafts: list[dict[str, Any]] = []
+    for row in rows:
+        confidence = row["confidence"] or "low"
+        if int(row["cases_count"] or 0) < min_cases or confidence_rank.get(confidence, 0) < threshold:
+            skipped += 1
+            continue
+        source_text = _improvement_source_text(dict(row))
+        family = _infer_family_from_rule_id(row["rule_id"])
+        try:
+            from engine.stores.rule_drafts import create_rule_draft_from_text
+            draft = create_rule_draft_from_text(
+                conn,
+                source_text=source_text,
+                target_family=family,
+                created_by="rule_learning_stats",
+            )
+        except Exception:
+            skipped += 1
+            continue
+        drafts.append({
+            "draft_id": draft.get("draft_id"),
+            "rule_id": row["rule_id"],
+            "confidence": confidence,
+            "recommendation": row["recommendation"],
+        })
+        _record_learning_event(
+            conn,
+            row["rule_id"],
+            "improvement_draft_created",
+            {
+                "draft_id": draft.get("draft_id"),
+                "confidence": confidence,
+                "recommendation": row["recommendation"],
+            },
+        )
+        created += 1
+    return {"drafts_created": created, "drafts_skipped": skipped, "drafts": drafts}
+
+
 def _learning_recommendation(
     *,
     cases_count: int,
@@ -228,6 +296,35 @@ def _learning_recommendation(
         recommendation = "keep_observing"
 
     return adjustment, confidence, ",".join(reasons) or recommendation
+
+
+def _improvement_source_text(row: dict[str, Any]) -> str:
+    return (
+        f"Rule {row['rule_id']} needs production review. "
+        f"cases={row.get('cases_count')}, execution_rate={row.get('execution_rate')}, "
+        f"measured_count={row.get('measured_count')}, win_rate={row.get('win_rate')}, "
+        f"avg_change_pct={row.get('avg_change_pct')}, "
+        f"false_positive_rate={row.get('false_positive_rate')}, "
+        f"recommendation={row.get('recommendation')}. "
+        "Draft a safer rule change that preserves CV volume, clarifies the firing condition, "
+        "adds stronger evidence requirements, and routes final approval to a human reviewer."
+    )
+
+
+def _infer_family_from_rule_id(rule_id: str) -> str:
+    if rule_id.startswith("M") or rule_id.startswith("X-PI") or rule_id.startswith("ANO_"):
+        return "meta"
+    if rule_id.startswith("G"):
+        return "google"
+    if rule_id.startswith("T"):
+        return "tiktok"
+    if rule_id.startswith("S"):
+        return "seo"
+    if rule_id.startswith("AT") or rule_id.startswith("F-AF"):
+        return "adtruth"
+    if rule_id.startswith("F-LC"):
+        return "legal"
+    return "general"
 
 
 def _record_learning_event(conn, rule_id: str, event_type: str, payload: dict[str, Any]) -> None:

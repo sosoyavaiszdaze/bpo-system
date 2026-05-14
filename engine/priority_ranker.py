@@ -46,6 +46,9 @@ def load_all_rules(rules_dir: Path | None = None) -> dict[str, dict]:
     for rule_file in sorted(target_dir.glob("*.yaml")):
         with open(rule_file, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            log.warning("rules yaml skipped because it is empty or invalid: %s", rule_file)
+            continue
         for r in data.get("rules", []) or []:
             rules[r["id"]] = r
     return rules

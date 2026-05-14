@@ -324,6 +324,34 @@ def _run_daily_check_impl(
             errors.append(f"meta_decision_trace: {e}")
 
         try:
+            from engine.stores.cases import apply_api_evidence_to_cases
+            from engine.stores.db import transaction
+            from engine.stores.learning import recompute_rule_learning_stats
+            evidence = (
+                audit.get("meta_rule_evidence")
+                or ((audit.get("platform_diagnostics") or {}).get("meta") or {}).get("rule_evidence")
+                or {}
+            )
+            with transaction(db_path) as conn:
+                applied = apply_api_evidence_to_cases(
+                    conn,
+                    client_id=client_id,
+                    evidence_map=evidence,
+                    evidence_source="meta_api",
+                )
+                learned = recompute_rule_learning_stats(conn)
+            log.info(
+                "api_evidence_track: "
+                f"checked={applied.get('cases_checked', 0)} "
+                f"executions={applied.get('executions_recorded', 0)} "
+                f"transitions={applied.get('transitions', 0)} "
+                f"learning_rules={learned.get('rules_updated', 0)}"
+            )
+        except Exception as e:
+            log.error(f"API evidence execution tracking 失敗: {e}")
+            errors.append(f"api_evidence_track: {e}")
+
+        try:
             from engine.stores.db import transaction
             from engine.stores.outcomes import refresh_rule_outcome_rollups, update_due_outcome_measurements
             current_kpis = _extract_current_outcome_kpis(audit, platform="meta")

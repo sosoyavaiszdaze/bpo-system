@@ -93,6 +93,11 @@ def test_build_current_todo_hypotheses_uses_meta_diagnostics_without_claude(monk
             }
         },
         ["ANO_CPA_SPIKE", "F-MF-02"],
+        client_config={
+            "vertical": "matching_app",
+            "ads": {"meta": {"enabled": True, "account_id": "act_1"}},
+            "app": {"mmp": {"enabled": True}},
+        },
     )
 
     assert set(out) == {"ANO_CPA_SPIKE", "F-MF-02"}
@@ -100,3 +105,5 @@ def test_build_current_todo_hypotheses_uses_meta_diagnostics_without_claude(monk
     assert "CV" in out["ANO_CPA_SPIKE"]["summary"]
     assert out["ANO_CPA_SPIKE"]["hypotheses"][0]["rule_id"] == "M39"
     assert "停止しない" in " ".join(out["ANO_CPA_SPIKE"]["do_not_do"])
+    assert out["ANO_CPA_SPIKE"]["vertical_context"]["vertical_id"] == "matching_app"
+    assert "required_events" in out["ANO_CPA_SPIKE"]["vertical_context"]

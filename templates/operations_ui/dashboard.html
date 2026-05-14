@@ -6,51 +6,62 @@
   <title>Zynect Operations Console</title>
   <style>
     :root {
-      --bg: #f7f8fa;
+      --bg: #f6f7f9;
       --panel: #ffffff;
+      --panel-soft: #fbfcfe;
       --line: #d9dee7;
-      --text: #1f2933;
-      --muted: #617083;
-      --bad: #b42318;
-      --warn: #b54708;
-      --ok: #027a48;
-      --accent: #155eef;
+      --text: #152033;
+      --muted: #68778c;
+      --bad: #c02b20;
+      --bad-bg: #fff4f2;
+      --warn: #b65f00;
+      --warn-bg: #fff8e8;
+      --ok: #067647;
+      --ok-bg: #eefaf3;
+      --info: #155eef;
+      --info-bg: #eff5ff;
+      --client: #7047eb;
+      --client-bg: #f5f1ff;
+      --shadow: 0 1px 2px rgba(15, 23, 42, .05);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif;
       font-size: 14px;
       letter-spacing: 0;
     }
     header {
-      padding: 18px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 16px 28px;
       border-bottom: 1px solid var(--line);
-      background: var(--panel);
+      background: rgba(255,255,255,.96);
+      backdrop-filter: blur(8px);
     }
     h1 { margin: 0; font-size: 22px; }
     h2 { margin: 0 0 12px; font-size: 16px; }
+    h3 { margin: 0 0 8px; font-size: 14px; }
     main {
       display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(360px, .8fr);
-      gap: 16px;
-      padding: 16px 24px 32px;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 18px;
+      padding: 18px 28px 36px;
     }
     section {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+    table { width: 100%; border-collapse: collapse; }
     th, td {
-      padding: 9px 8px;
+      padding: 10px 8px;
       border-bottom: 1px solid #edf0f4;
       text-align: left;
       vertical-align: top;
@@ -60,91 +71,179 @@
       font-size: 12px;
       font-weight: 650;
     }
-    .kpis {
+    tbody tr:hover { background: #fafbfc; }
+    .muted { color: var(--muted); }
+    .subtle { color: #8b99aa; font-size: 12px; }
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .nav a {
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: #fff;
+      font-size: 12px;
+    }
+    .grid-5 {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
     }
     .kpi {
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 12px;
-      background: #fbfcfe;
+      background: var(--panel-soft);
+      min-height: 92px;
     }
-    .kpi strong { display: block; font-size: 20px; margin-top: 4px; }
-    .muted { color: var(--muted); }
-    .status-failed, .sev-critical { color: var(--bad); font-weight: 650; }
+    .kpi strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1.1;
+      margin: 6px 0 5px;
+    }
+    .status-ready, .status-success, .sev-low { color: var(--ok); font-weight: 650; }
+    .status-blocked, .status-failed, .sev-critical { color: var(--bad); font-weight: 650; }
     .status-partial_failure, .sev-high { color: var(--warn); font-weight: 650; }
-    .status-success { color: var(--ok); font-weight: 650; }
     .pill {
       display: inline-block;
-      padding: 2px 7px;
+      padding: 2px 8px;
       border: 1px solid var(--line);
       border-radius: 999px;
       background: #fff;
-      margin: 1px 2px 1px 0;
+      margin: 1px 4px 1px 0;
       white-space: nowrap;
+      font-size: 12px;
     }
-    .rule-issues {
-      max-height: 520px;
-      overflow: auto;
+    .pill.bad { color: var(--bad); background: var(--bad-bg); border-color: #ffd1cc; }
+    .pill.warn { color: var(--warn); background: var(--warn-bg); border-color: #ffe3a4; }
+    .pill.ok { color: var(--ok); background: var(--ok-bg); border-color: #bfe9cf; }
+    .pill.info { color: var(--info); background: var(--info-bg); border-color: #c8d8ff; }
+    .pill.client { color: var(--client); background: var(--client-bg); border-color: #ded2ff; }
+    .stack {
+      display: grid;
+      gap: 10px;
     }
-    @media (max-width: 980px) {
-      main { grid-template-columns: 1fr; padding: 12px; }
-      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .row-card {
+      border: 1px solid #edf0f4;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+    }
+    .rail {
+      border-left: 4px solid var(--line);
+      padding-left: 12px;
+    }
+    .rail.bad { border-left-color: var(--bad); }
+    .rail.warn { border-left-color: var(--warn); }
+    .rail.info { border-left-color: var(--info); }
+    .rule-issues { max-height: 520px; overflow: auto; }
+    @media (max-width: 1180px) {
+      main { grid-template-columns: 1fr; padding: 14px; }
+      .grid-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3, .two-col { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Zynect Operations Console</h1>
-    <div class="muted">Read-only Phase B console: client health, cases, jobs, rule registry, outcomes.</div>
+    <div class="header-row">
+      <div>
+        <h1>Zynect Operations Console</h1>
+        <div class="muted">接続状態・Case状態・Outcome・Rule品質・Incidentを毎朝確認するための read-only 運用画面</div>
+      </div>
+      <div class="muted">Readiness: <span class="status-{{ daily_ops.readiness_status }}">{{ daily_ops.readiness_status }}</span></div>
+    </div>
+    <nav class="nav">
+      <a href="#readiness">Readiness</a>
+      <a href="#connections">Connections</a>
+      <a href="#cases">Cases</a>
+      <a href="#outcomes">Outcomes</a>
+      <a href="#rules">Rule Quality</a>
+      <a href="#incidents">Incidents</a>
+    </nav>
   </header>
+
   <main>
     <div>
-      <section>
-        <h2>Client Health</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Client</th>
-              <th>Vertical</th>
-              <th>Latest Job</th>
-              <th>Open</th>
-              <th>Waiting</th>
-              <th>Stale</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for c in clients %}
-            <tr>
-              <td><strong>{{ c.display_name }}</strong><br><span class="muted">{{ c.client_id }}</span></td>
-              <td>
-                {{ c.kpi_readiness.display_name or c.vertical or "-" }}<br>
-                <span class="muted">{{ c.vertical or "-" }} / {{ c.ec_platform or "-" }}</span><br>
-                {% if c.kpi_readiness.required_missing %}
-                  <span class="status-failed">Missing: {{ c.kpi_readiness.required_missing|join(", ") }}</span>
-                {% elif c.kpi_readiness.recommended_missing %}
-                  <span class="status-partial_failure">Recommended: {{ c.kpi_readiness.recommended_missing|join(", ") }}</span>
-                {% else %}
-                  <span class="status-success">KPI sources ready</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if c.latest_job %}
-                  <span class="status-{{ c.latest_job.status }}">{{ c.latest_job.status }}</span><br>
-                  <span class="muted">{{ c.latest_job.job_name }} / {{ c.latest_job.started_at }}</span>
-                {% else %}
-                  <span class="muted">No job</span>
-                {% endif %}
-              </td>
-              <td>{{ c.open_cases_count }}</td>
-              <td>{{ c.waiting_client_count }} / {{ c.waiting_zynect_count }}</td>
-              <td>{{ c.stale_cases_count }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <section id="readiness">
+        <div class="header-row">
+          <div>
+            <h2>Daily Operations</h2>
+            <div class="muted">朝はここから見ます。blocked / missing / open が残っていたら、顧客通知より先に運用対応です。</div>
+          </div>
+          <span class="pill {% if daily_ops.readiness_status == 'ready' %}ok{% elif daily_ops.readiness_status == 'blocked' %}bad{% else %}warn{% endif %}">
+            {{ daily_ops.readiness_status }}
+          </span>
+        </div>
+        <div class="grid-5">
+          <div class="kpi">
+            <span class="muted">Open Cases</span>
+            <strong>{{ daily_ops.open_cases }}</strong>
+            <span class="subtle">critical {{ daily_ops.critical_cases }}</span>
+          </div>
+          <div class="kpi">
+            <span class="muted">Connections</span>
+            <strong>{{ daily_ops.missing_required_connections }}</strong>
+            <span class="subtle">required missing / secrets {{ daily_ops.missing_secrets }}</span>
+          </div>
+          <div class="kpi">
+            <span class="muted">Outcomes</span>
+            <strong>¥{{ "{:,.0f}".format(daily_ops.outcome_value_yen or 0) }}</strong>
+            <span class="subtle">measured value</span>
+          </div>
+          <div class="kpi">
+            <span class="muted">Rule Registry</span>
+            <strong>{{ daily_ops.rule_total }}</strong>
+            <span class="subtle">messaging {{ daily_ops.rule_messaging_coverage_pct }}%</span>
+          </div>
+          <div class="kpi">
+            <span class="muted">Incidents</span>
+            <strong>{{ daily_ops.open_incidents }}</strong>
+            <span class="subtle">readiness blockers {{ daily_ops.readiness_blockers }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="cases">
+        <div class="header-row">
+          <div>
+            <h2>Case State Board</h2>
+            <div class="muted">detected → notified → acknowledged → planned → executed → verified → measuring → learned → closed の詰まりを見ます。</div>
+          </div>
+          <span class="pill info">Zynect {{ daily_ops.waiting_zynect }} / Client {{ daily_ops.waiting_client }}</span>
+        </div>
+        <div class="grid-5">
+          {% for s in case_status_board %}
+          <div class="kpi">
+            <span class="muted">{{ s.label }}</span>
+            <strong>{{ s.count }}</strong>
+            <span class="subtle">critical {{ s.critical }} / high {{ s.high }}</span>
+          </div>
+          {% endfor %}
+        </div>
       </section>
 
       <section>
@@ -165,7 +264,7 @@
               <td>{{ case.client_id }}</td>
               <td>{{ case.rule_id }}</td>
               <td>{{ case.title }}</td>
-              <td>{{ case.status }}</td>
+              <td><span class="pill info">{{ case.status }}</span></td>
               <td class="sev-{{ case.severity }}">{{ case.severity or "-" }}</td>
             </tr>
             {% endfor %}
@@ -173,21 +272,202 @@
         </table>
       </section>
 
+      <section id="connections">
+        <div class="header-row">
+          <div>
+            <h2>Connection Readiness</h2>
+            <div class="muted">クライアントごとに「見えているデータ / 見えていないデータ」を管理します。</div>
+          </div>
+          <span class="pill {% if connection_matrix.missing_required %}bad{% else %}ok{% endif %}">
+            required missing {{ connection_matrix.missing_required }}
+          </span>
+        </div>
+        <table>
+          <thead><tr><th>Client</th><th>Ready</th><th>Required Missing</th><th>Recommended Missing</th><th>Attention</th></tr></thead>
+          <tbody>
+            {% for c in connection_matrix.clients %}
+            <tr>
+              <td><strong>{{ c.client_id }}</strong></td>
+              <td>{{ c.configured }} / {{ c.total }}</td>
+              <td class="{% if c.missing_required %}sev-critical{% endif %}">{{ c.missing_required }}</td>
+              <td class="{% if c.missing_recommended %}sev-high{% endif %}">{{ c.missing_recommended }}</td>
+              <td>
+                {% for item in c.connection_items[:4] %}
+                  <span class="pill {% if item.required and item.status != 'configured' %}bad{% elif item.status != 'configured' %}warn{% else %}ok{% endif %}">
+                    {{ item.provider }}: {{ item.status }}
+                  </span>
+                {% endfor %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section id="outcomes">
+        <div class="header-row">
+          <div>
+            <h2>Outcome Tracker</h2>
+            <div class="muted">通知後に 7/14/28 日で測定し、勝率と改善額を Rule に戻します。</div>
+          </div>
+          <span class="pill ok">win rate {{ outcome_workbench.win_rate_pct }}%</span>
+        </div>
+        <div class="grid-3">
+          <div class="kpi"><span class="muted">Pending Baselines</span><strong>{{ outcome_workbench.pending_baselines }}</strong><span class="subtle">future 7/14/28d checks</span></div>
+          <div class="kpi"><span class="muted">Measured</span><strong>{{ outcome_workbench.measured }}</strong><span class="subtle">improved {{ outcome_workbench.improved }}</span></div>
+          <div class="kpi"><span class="muted">Value</span><strong>¥{{ "{:,.0f}".format(outcome_workbench.estimated_value_yen or 0) }}</strong><span class="subtle">estimated, measured rows</span></div>
+        </div>
+        <div class="two-col" style="margin-top: 14px;">
+          <div>
+            <h3>Recent Outcomes</h3>
+            <table>
+              <thead><tr><th>Client</th><th>Metric</th><th>Change</th><th>Value</th></tr></thead>
+              <tbody>
+                {% for o in outcome_workbench.recent %}
+                <tr>
+                  <td>{{ o.client_id }}<br><span class="subtle">{{ o.case_id }}</span></td>
+                  <td>{{ o.metric }}<br><span class="subtle">{{ o.confidence or "-" }}</span></td>
+                  <td>{% if o.change_pct is not none %}{{ "%.1f"|format(o.change_pct) }}%{% else %}-{% endif %}</td>
+                  <td>¥{{ "{:,.0f}".format(o.estimated_value_yen or 0) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h3>Rule Wins</h3>
+            <table>
+              <thead><tr><th>Rule</th><th>Measured</th><th>Win</th><th>Value</th></tr></thead>
+              <tbody>
+                {% for r in outcome_workbench.rollups %}
+                <tr>
+                  <td>{{ r.rule_id }}</td>
+                  <td>{{ r.measured_count }}</td>
+                  <td>{% if r.win_rate is not none %}{{ "%.0f"|format(r.win_rate * 100) }}%{% else %}-{% endif %}</td>
+                  <td>¥{{ "{:,.0f}".format(r.estimated_value_yen or 0) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="rules">
+        <div class="header-row">
+          <div>
+            <h2>Rule Quality Board</h2>
+            <div class="muted">顧客に出してよいルールか、効果測定できるルールかを毎日確認します。</div>
+          </div>
+          <span class="pill {% if rule_quality_board.blocker_count %}bad{% else %}ok{% endif %}">blockers {{ rule_quality_board.blocker_count }}</span>
+        </div>
+        <div class="grid-5">
+          <div class="kpi"><span class="muted">Messaging</span><strong>{{ rule_quality_board.coverage.messaging }}%</strong><span class="subtle">customer visible</span></div>
+          <div class="kpi"><span class="muted">Impact</span><strong>{{ rule_quality_board.coverage.impact }}%</strong><span class="subtle">expected effect</span></div>
+          <div class="kpi"><span class="muted">Root Cause</span><strong>{{ rule_quality_board.coverage.root_cause }}%</strong><span class="subtle">dedupe basis</span></div>
+          <div class="kpi"><span class="muted">Decision Axis</span><strong>{{ rule_quality_board.coverage.decision_axis }}%</strong><span class="subtle">tradeoff aware</span></div>
+          <div class="kpi"><span class="muted">Drafts</span><strong>{{ rule_change_drafts|length }}</strong><span class="subtle">review required</span></div>
+        </div>
+        <div class="two-col" style="margin-top: 14px;">
+          <div>
+            <h3>Family Readiness</h3>
+            <table>
+              <thead><tr><th>Family</th><th>Total</th><th>Visible</th><th>HC Unmapped</th><th>Sources</th></tr></thead>
+              <tbody>
+                {% for f in rule_quality_board.family_operations %}
+                <tr>
+                  <td>{{ f.family }}</td>
+                  <td>{{ f.total }}</td>
+                  <td>{{ f.customer_visible }}</td>
+                  <td class="{% if f.high_critical_unmapped %}sev-critical{% endif %}">{{ f.high_critical_unmapped }}</td>
+                  <td>{{ f.required_data_sources }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="rule-issues">
+            <h3>Top Issues</h3>
+            {% for issue, n in rule_quality_board.top_issues %}
+              <span class="pill {% if 'missing_trigger' in issue or 'unmapped' in issue %}bad{% else %}warn{% endif %}">{{ issue }} {{ n }}</span>
+            {% endfor %}
+            <table style="margin-top: 10px;">
+              <thead><tr><th>Rule</th><th>Issues</th></tr></thead>
+              <tbody>
+                {% for r in rule_quality_board.sample_issues %}
+                <tr>
+                  <td><strong>{{ r.rule_id }}</strong><br><span class="subtle">{{ r.layer }}</span></td>
+                  <td>{% for issue in r.issues[:3] %}<span class="pill">{{ issue }}</span>{% endfor %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside>
+      <section id="incidents">
+        <div class="header-row">
+          <div>
+            <h2>Incidents</h2>
+            <div class="muted">失敗に気づけるかを見る場所です。</div>
+          </div>
+          <span class="pill {% if incidents.open_incidents %}bad{% else %}ok{% endif %}">open {{ incidents.open_incidents }}</span>
+        </div>
+        <div class="stack">
+          {% for i in open_incidents %}
+          <div class="row-card rail {% if i.severity == 'critical' %}bad{% elif i.severity == 'high' %}warn{% else %}info{% endif %}">
+            <strong>{{ i.title }}</strong><br>
+            <span class="muted">{{ i.client_id or "system" }} · {{ i.component }} · {{ i.last_seen_at }}</span><br>
+            <span class="sev-{{ i.severity }}">{{ i.severity }}</span>
+            {% if i.detail %}<div class="subtle">{{ i.detail }}</div>{% endif %}
+          </div>
+          {% endfor %}
+          {% if not open_incidents %}
+          <div class="row-card"><span class="status-success">No open incidents</span></div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section>
+        <h2>Operational Readiness</h2>
+        {% if operational_readiness %}
+          <div class="kpi">
+            <span class="muted">Latest Snapshot</span>
+            <strong class="status-{{ operational_readiness.status }}">{{ operational_readiness.status }}</strong>
+            <span class="subtle">{{ operational_readiness.checked_at }}</span>
+          </div>
+          <div style="margin-top: 10px;">
+            {% for issue in operational_readiness.issues[:6] %}
+              <div class="row-card rail {% if issue.severity == 'blocker' %}bad{% else %}warn{% endif %}">
+                <strong>{{ issue.title }}</strong><br>
+                <span class="muted">{{ issue.component }}{% if issue.client_id %} · {{ issue.client_id }}{% endif %}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="row-card">
+            <strong>Snapshot not found</strong><br>
+            <span class="muted">scripts/operational_readiness_check.py を実行するとここに表示されます。</span>
+          </div>
+        {% endif %}
+      </section>
+
       <section>
         <h2>Response Loop</h2>
-        <div class="kpis">
+        <div class="grid-3">
           <div class="kpi"><span class="muted">Total</span><strong>{{ response_summary.total }}</strong></div>
           <div class="kpi"><span class="muted">Done</span><strong>{{ response_summary.confirmed_done }}</strong></div>
           <div class="kpi"><span class="muted">Help</span><strong>{{ response_summary.wants_help }}</strong></div>
-          <div class="kpi"><span class="muted">Not Done</span><strong>{{ response_summary.not_done }}</strong></div>
         </div>
-        <table>
-          <thead><tr><th>Client</th><th>Rule</th><th>Answer</th><th>Status</th></tr></thead>
+        <table style="margin-top: 12px;">
+          <thead><tr><th>Rule</th><th>Answer</th><th>Status</th></tr></thead>
           <tbody>
-            {% for r in recent_responses %}
+            {% for r in recent_responses[:8] %}
             <tr>
-              <td>{{ r.client_id }}</td>
-              <td>{{ r.rule_id }}<br><span class="muted">{{ r.answered_at or "-" }}</span></td>
+              <td>{{ r.rule_id }}<br><span class="subtle">{{ r.client_id }}</span></td>
               <td>{{ r.answer_code or "-" }} {{ r.answer_label or "" }}</td>
               <td>{{ r.status }}</td>
             </tr>
@@ -199,23 +479,13 @@
       <section>
         <h2>Recent Jobs</h2>
         <table>
-          <thead>
-            <tr>
-              <th>Started</th>
-              <th>Client</th>
-              <th>Job</th>
-              <th>Status</th>
-              <th>Metrics</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Client</th><th>Job</th><th>Status</th></tr></thead>
           <tbody>
-            {% for job in recent_jobs %}
+            {% for job in recent_jobs[:10] %}
             <tr>
-              <td>{{ job.started_at }}</td>
-              <td>{{ job.client_id or "-" }}</td>
+              <td>{{ job.client_id or "-" }}<br><span class="subtle">{{ job.started_at }}</span></td>
               <td>{{ job.job_name }}</td>
               <td class="status-{{ job.status }}">{{ job.status }}</td>
-              <td class="muted">{{ job.metrics }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -226,104 +496,19 @@
         <h2>Decision Traces</h2>
         <p class="muted">{{ decision_trace_summary }}</p>
         <table>
-          <thead>
-            <tr>
-              <th>Client</th>
-              <th>Rule</th>
-              <th>Stage</th>
-              <th>Status</th>
-              <th>Reason / Evidence</th>
-              <th>Group</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Rule</th><th>Stage</th><th>Evidence</th></tr></thead>
           <tbody>
-            {% for trace in recent_decision_traces %}
+            {% for trace in recent_decision_traces[:8] %}
             <tr>
-              <td>{{ trace.client_id }}</td>
-              <td>{{ trace.rule_id }}</td>
-              <td>{{ trace.stage }}</td>
-              <td>{{ trace.status }}</td>
-              <td class="muted">{{ trace.reason or "-" }}<br>{{ trace.evidence_summary or "-" }}</td>
-              <td>
-                {{ trace.rule_group or "-" }}
-                {% if trace.duplicate_group_members %}
-                  <br><span class="muted">{{ trace.duplicate_group_members|join(", ") }}</span>
-                {% endif %}
-              </td>
+              <td>{{ trace.rule_id }}<br><span class="subtle">{{ trace.client_id }}</span></td>
+              <td>{{ trace.stage }}<br><span class="subtle">{{ trace.status }}</span></td>
+              <td class="subtle">{{ trace.evidence_summary or "-" }}</td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </section>
-    </div>
-
-    <div>
-      <section>
-        <h2>Rule Registry Coverage</h2>
-        <div class="kpis">
-          <div class="kpi"><span class="muted">Rules</span><strong>{{ rule_registry.total_rules }}</strong></div>
-          <div class="kpi"><span class="muted">Messaging</span><strong>{{ rule_registry.messaging_coverage_pct }}%</strong></div>
-          <div class="kpi"><span class="muted">Impact</span><strong>{{ rule_registry.expected_impact_coverage_pct }}%</strong></div>
-          <div class="kpi"><span class="muted">Axis</span><strong>{{ rule_registry.decision_axis_coverage_pct }}%</strong></div>
-        </div>
-        <p class="muted">Layer counts: {{ rule_registry.layer_counts }}</p>
-        <p class="muted">Issue counts: {{ rule_registry.issue_counts }}</p>
-      </section>
-
-      <section>
-        <h2>Outcome Summary</h2>
-        <div class="kpis">
-          <div class="kpi"><span class="muted">Measured Value</span><strong>¥{{ "{:,.0f}".format(outcomes.total_estimated_value_yen or 0) }}</strong></div>
-        </div>
-        <table>
-          <thead><tr><th>Metric</th><th>N</th><th>Avg Change</th><th>Value</th></tr></thead>
-          <tbody>
-            {% for m in outcomes.metrics %}
-            <tr>
-              <td>{{ m.metric }}</td>
-              <td>{{ m.n }}</td>
-              <td>{% if m.avg_change_pct is not none %}{{ "%.1f"|format(m.avg_change_pct) }}%{% else %}-{% endif %}</td>
-              <td>¥{{ "{:,.0f}".format(m.estimated_value_yen or 0) }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </section>
-
-      <section>
-        <h2>Recent Outcomes</h2>
-        <table>
-          <thead><tr><th>Client</th><th>Case</th><th>Metric</th><th>Change</th><th>Value</th></tr></thead>
-          <tbody>
-            {% for o in recent_outcomes %}
-            <tr>
-              <td>{{ o.client_id }}</td>
-              <td><span class="muted">{{ o.case_id }}</span></td>
-              <td>{{ o.metric }}<br><span class="muted">{{ o.confidence or "-" }}</span></td>
-              <td>{% if o.change_pct is not none %}{{ "%.1f"|format(o.change_pct) }}%{% else %}-{% endif %}</td>
-              <td>¥{{ "{:,.0f}".format(o.estimated_value_yen or 0) }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </section>
-
-      <section class="rule-issues">
-        <h2>Rule Registry Issues</h2>
-        <table>
-          <thead><tr><th>Rule</th><th>Layer</th><th>Issues</th></tr></thead>
-          <tbody>
-            {% for r in rule_registry_issues %}
-            <tr>
-              <td><strong>{{ r.rule_id }}</strong><br><span class="muted">{{ r.name }}</span></td>
-              <td>{{ r.layer }}<br><span class="muted">{{ r.source_path }}</span></td>
-              <td>{% for issue in r.issues %}<span class="pill">{{ issue }}</span>{% endfor %}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </section>
-    </div>
+    </aside>
   </main>
 </body>
 </html>

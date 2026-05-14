@@ -50,7 +50,12 @@ rules:
     performance_category: [measurement_quality]
     priority: A
     goal_stage: measurement_recovery
+    owner: measurement_ops
     answer_source_preference: [api, validator, chatwork_reply]   # Meta API: pixel.last_fired_time
+    impact_estimate:
+      lift_rate: { minimum: 0.015, realistic: 0.050, upper: 0.120 }
+      source_basis: "Pixel/CVタグの実装不備はCV欠損と学習不安定を同時に起こすため、Meta計測復旧系ルールの保守レンジで算定。"
+      measurement_window: { signal: "1-3日", verdict: "2-4週" }
     expected_effect:
       - "CV 計測欠損の即時解消"
       - "Meta 学習データの正常化、CPA 悪化要因の切り分け"
@@ -60,6 +65,11 @@ rules:
       A: "アクティブ確認済み"
       B: "未確認、これから確認する"
       C: "Pixel 不在の可能性あり"
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["Pixel未確認のままCV獲得キャンペーンを停止しない"]
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: null
 
   ANO_CPA_SPIKE:
@@ -102,6 +112,7 @@ rules:
     performance_category: [measurement_quality, learning_stability]
     priority: A
     goal_stage: measurement_recovery
+    owner: measurement_ops
     # Meta Business Manager API でドメイン認証 status を直接取得可 (Phase B 接続)
     answer_source_preference: [api, validator, chatwork_reply]
     # 5/7 fix: 実績広告費連動の lift_rate ベース動的算出。
@@ -123,6 +134,11 @@ rules:
       minimum_fallback:   30000
       realistic_fallback: 80000
       upper_fallback:     200000
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["ドメイン未認証だけを理由に、CV獲得中の配信を停止しない"]
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
     expected_effect:
       - "AEM (集計イベント測定) / iOS 配信最適化の土台整備"
       - "CV 計測と配信学習の安定化"
@@ -139,6 +155,11 @@ rules:
     performance_category: [measurement_quality, learning_stability]
     priority: A
     goal_stage: measurement_recovery
+    owner: measurement_ops
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.025, upper: 0.070 }
+      source_basis: "Pixel/タグ重複はCV二重計上によりCPA判断を歪めるため、計測精度改善による予算誤配分抑制効果として算定。"
+      measurement_window: { signal: "1週", verdict: "2-4週" }
     expected_effect:
       - "CV 二重計上の解消 (CPA 過小算出による予算誤配分の防止)"
       - "Meta 学習データ品質の改善"
@@ -148,6 +169,11 @@ rules:
       A: "重複なし"
       B: "重複している可能性あり"
       C: "確認したい"
+    optimization_goal: { primary: preserve_cv, secondary: improve_cpa_accuracy }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["重複疑いの段階で成果の出ている広告セットを止めない"]
+    outcome: { primary_metric: cpa_accuracy, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: null
 
   F-MF-02:
@@ -155,6 +181,7 @@ rules:
     performance_category: [measurement_quality]
     priority: A
     goal_stage: measurement_recovery
+    owner: measurement_ops
     # Meta Pixel API で event_match_quality / 直近 event count を確認可
     answer_source_preference: [api, chatwork_reply]
     impact_estimate:
@@ -172,6 +199,11 @@ rules:
       minimum_fallback:   40000
       realistic_fallback: 120000
       upper_fallback:     300000
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["CVイベント未確認のまま入札戦略や予算を大きく変更しない"]
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 42 }
     expected_effect:
       - "CV 計測の正常動作確認、計測欠損の早期発見"
       - "Meta 学習シグナルの品質保証"
@@ -188,6 +220,11 @@ rules:
     performance_category: [measurement_quality, cpa_diagnosis]
     priority: A
     goal_stage: measurement_recovery
+    owner: measurement_ops
+    impact_estimate:
+      lift_rate: { minimum: 0.004, realistic: 0.015, upper: 0.040 }
+      source_basis: "アトリビューション不整合はCPA/CV判断を誤らせるため、数値解釈の正常化と誤った予算移動の抑制効果として算定。"
+      measurement_window: { signal: "1週", verdict: "2-4週" }
     expected_effect:
       - "アトリビューションウィンドウ (7d-click / 1d-view 等) の妥当性検証"
       - "CV 過大/過小評価の防止、CPA 数値の正確化"
@@ -197,6 +234,11 @@ rules:
       A: "整合済み"
       B: "見直したい"
       C: "現状未確認"
+    optimization_goal: { primary: preserve_cv, secondary: improve_cpa_accuracy }
+    risk_control:
+      cv_loss_risk: medium
+      do_not_do: ["アトリビューション変更直後の短期CPAだけで配信停止判断をしない"]
+    outcome: { primary_metric: cpa_accuracy, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: null
 
   # ============================================================
@@ -207,6 +249,7 @@ rules:
     performance_category: [first_party_data]
     priority: B
     goal_stage: first_party_data
+    owner: data_ops
     answer_source_preference: [chatwork_reply]
     impact_estimate:
       lift_rate:
@@ -223,6 +266,11 @@ rules:
       minimum_fallback:   10000
       realistic_fallback: 40000
       upper_fallback:     150000
+    optimization_goal: { primary: preserve_cv, secondary: improve_ltv_cpa }
+    risk_control:
+      cv_loss_risk: medium
+      do_not_do: ["1st Party Data未整備を理由に既存のCV獲得導線を止めない"]
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 56 }
     expected_effect:
       - "Cookie 制限後 (iOS / Privacy Sandbox) の広告配信安定化"
       - "既存顧客データを使った類似配信 / 除外配信の精度改善"
@@ -239,6 +287,7 @@ rules:
     performance_category: [first_party_data, measurement_quality]
     priority: B
     goal_stage: first_party_data
+    owner: data_ops
     impact_estimate:
       lift_rate:
         minimum:   0.009     # 0.9%  Customer Audience マッチ率 30% 達成
@@ -254,6 +303,11 @@ rules:
       minimum_fallback:   15000
       realistic_fallback: 50000
       upper_fallback:     180000
+    optimization_goal: { primary: preserve_cv, secondary: improve_match_quality }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["ハッシュ化確認前に顧客データ連携や類似配信を停止しない"]
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 42 }
     expected_effect:
       - "Customer Audience のマッチ率改善 (= 配信精度向上)"
       - "CV 計測データの品質向上"
@@ -271,6 +325,11 @@ rules:
     performance_category: [review_risk]
     priority: B
     goal_stage: legal_review
+    owner: compliance_ops
+    non_financial_impact:
+      primary_metric: review_risk_reduction
+      source_basis: "外部送信規律の表記不足は広告審査・LP修正・タグ停止判断につながるため、配信停止/改修遅延の予防効果として評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
     expected_effect:
       - "外部送信規律 (2023/6 改正) 準拠による配信停止リスクの低減"
     today_action: "プライバシーポリシーに広告タグの送信先と目的が明記されているか確認してください。"
@@ -279,6 +338,11 @@ rules:
       A: "明記済"
       B: "未対応"
       C: "確認したい"
+    optimization_goal: { primary: preserve_cv, secondary: reduce_review_risk }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["表記確認中に広告タグやCV計測を停止しない"]
+    outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "電気通信事業法の外部送信規律。違反は配信プラットフォームの審査リスクに繋がります。"
 
   # ============================================================
@@ -289,6 +353,11 @@ rules:
     performance_category: [review_risk, first_party_data]
     priority: B
     goal_stage: legal_review
+    owner: compliance_ops
+    non_financial_impact:
+      primary_metric: data_activation_readiness
+      source_basis: "利用目的の明示はCustomer File/CAPI/CRM連携を継続可能にする前提であり、データ活用停止リスクの予防効果として評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
     expected_effect:
       - "Customer File / CAPI 連携時の法的リスク低減"
       - "外部送信規律と整合した運用基盤"
@@ -298,6 +367,11 @@ rules:
       A: "明示済"
       B: "一部のみ"
       C: "確認したい"
+    optimization_goal: { primary: preserve_cv, secondary: improve_data_readiness }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["利用目的確認中に既存のCV取得フォームを停止しない"]
+    outcome: { primary_metric: data_activation_readiness, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "個人情報保護法 第18条 (取得時の利用目的通知)。"
 
   F-PP-02:
@@ -305,6 +379,11 @@ rules:
     performance_category: [review_risk, first_party_data]
     priority: B
     goal_stage: legal_review
+    owner: compliance_ops
+    non_financial_impact:
+      primary_metric: data_activation_readiness
+      source_basis: "第三者提供同意はCustomer File/CAPI/外部媒体連携の継続性に関わるため、配信学習データの利用停止リスク予防として評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
     expected_effect:
       - "Customer File / CAPI 連携時の法的リスク低減"
     today_action: "顧客データを Meta / Google 等に提供する際の同意取得フローを確認してください。"
@@ -313,6 +392,11 @@ rules:
       A: "取得済"
       B: "一部のみ"
       C: "確認したい"
+    optimization_goal: { primary: preserve_cv, secondary: improve_data_readiness }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["同意フロー確認中に既存のCV獲得施策を停止しない"]
+    outcome: { primary_metric: data_activation_readiness, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "個人情報保護法 第27条 (第三者提供の制限)。"
 
   # ============================================================
@@ -323,8 +407,13 @@ rules:
     performance_category: [review_risk]
     priority: B
     goal_stage: legal_review
+    owner: compliance_ops
     # LP 文言確認は validator で部分自動化可 (Claude API による誇大表現チェック想定)
     answer_source_preference: [validator, chatwork_reply]
+    non_financial_impact:
+      primary_metric: review_risk_reduction
+      source_basis: "優良誤認リスクは広告審査落ち・LP差し戻し・配信停止に直結するため、成果広告の継続性と改修遅延の予防効果として評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
     expected_effect:
       - "広告審査落ち / 配信停止リスクの低減"
       - "LP 改修による配信遅延の予防"
@@ -334,6 +423,11 @@ rules:
       A: "全て根拠あり"
       B: "一部根拠不足"
       C: "確認したい"
+    optimization_goal: { primary: preserve_cv, secondary: reduce_review_risk }
+    risk_control:
+      cv_loss_risk: medium
+      do_not_do: ["審査リスク対応として、CVが出ている訴求を根拠なく全停止しない"]
+    outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "景品表示法 第5条第1号 (優良誤認表示) — Meta / Google の広告審査でも頻出の落とし穴。"
 
   F-LC-04:
@@ -341,6 +435,11 @@ rules:
     performance_category: [review_risk]
     priority: B
     goal_stage: legal_review
+    owner: compliance_ops
+    non_financial_impact:
+      primary_metric: review_risk_reduction
+      source_basis: "特商法表記不足はEC/D2C広告の審査落ち・LP差し戻し要因になりやすく、配信継続とCVR毀損予防の効果として評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
     expected_effect:
       - "ECフォース系 LP の審査通過率向上"
       - "顧客信頼性 (返品ポリシー透明化) による CVR 改善余地"
@@ -350,6 +449,11 @@ rules:
       A: "全項目表示済"
       B: "一部不足"
       C: "確認したい"
+    optimization_goal: { primary: preserve_cv, secondary: reduce_review_risk }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["表記修正中にCV導線や購入導線を止めない"]
+    outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "特定商取引法 (通信販売の法定表記)。Meta は審査時に厳格に確認します。"
 
   F-LC-06:
@@ -357,6 +461,11 @@ rules:
     performance_category: [review_risk, first_party_data]
     priority: B
     goal_stage: legal_review
+    owner: compliance_ops
+    non_financial_impact:
+      primary_metric: data_activation_readiness
+      source_basis: "同意取得フローはCAPI/Customer File/CRM連携を安全に継続するための前提で、データ活用停止リスクの予防効果として評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
     expected_effect:
       - "Customer File / CAPI 連携時のリスク低減"
       - "外部送信規律と整合した運用基盤"
@@ -366,6 +475,11 @@ rules:
       A: "取得済"
       B: "一部のみ"
       C: "確認したい"
+    optimization_goal: { primary: preserve_cv, secondary: improve_data_readiness }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["同意取得の確認中に既存のCVフォームやタグを停止しない"]
+    outcome: { primary_metric: data_activation_readiness, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "個人情報保護法 第18条 (取得時の利用目的通知)。"
 
   F-LC-08:
@@ -373,6 +487,11 @@ rules:
     performance_category: [review_risk]
     priority: B
     goal_stage: legal_review
+    owner: compliance_ops
+    non_financial_impact:
+      primary_metric: review_risk_reduction
+      source_basis: "権利侵害申立は広告停止・素材差し替え・配信学習リセットにつながるため、配信継続性の保全効果として評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
     expected_effect:
       - "Meta / Google の権利侵害申し立てによる配信停止リスクの予防"
       - "ブランドセーフティの維持"
@@ -382,6 +501,11 @@ rules:
       A: "全て確認済"
       B: "一部未確認"
       C: "確認したい"
+    optimization_goal: { primary: preserve_cv, secondary: reduce_review_risk }
+    risk_control:
+      cv_loss_risk: medium
+      do_not_do: ["素材権利確認中に勝ちクリエイティブを一括停止しない"]
+    outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "著作権法 / 商標法。配信プラットフォーム側で第三者から申し立てがあると即停止のリスクがあります。"
 
   F-LC-10:
@@ -389,6 +513,11 @@ rules:
     performance_category: [review_risk]
     priority: B
     goal_stage: legal_review
+    owner: compliance_ops
+    non_financial_impact:
+      primary_metric: review_risk_reduction
+      source_basis: "誇大表現は広告審査落ち・配信停止・LP修正遅延の原因になるため、配信継続性の保全効果として評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
     expected_effect:
       - "広告審査落ち / 措置命令リスクの予防"
     today_action: "クリエイティブと LP の文言を改めて誇大表現の観点で確認してください。"
@@ -397,6 +526,11 @@ rules:
       A: "問題なし"
       B: "一部該当"
       C: "確認したい"
+    optimization_goal: { primary: preserve_cv, secondary: reduce_review_risk }
+    risk_control:
+      cv_loss_risk: medium
+      do_not_do: ["誇大表現の確認中に成果の出ている広告群を一括停止しない"]
+    outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "景品表示法 第5条 (不当表示の禁止)。"
 
   # ============================================================
@@ -407,6 +541,11 @@ rules:
     performance_category: [review_risk]
     priority: A
     goal_stage: legal_review
+    owner: compliance_ops
+    non_financial_impact:
+      primary_metric: review_risk_reduction
+      source_basis: "薬機法領域の効能表現違反は広告停止・素材差し替え・LP改修遅延の影響が大きいため、配信継続性の保全効果として評価。"
+      measurement_window: { signal: "1週", verdict: "4週" }
     expected_effect:
       - "薬機法措置命令 / 広告停止リスクの即時低減"
       - "Meta 審査落ちの予防 (化粧品 D2C 系の審査は厳格)"
@@ -416,6 +555,11 @@ rules:
       A: "範囲内のみ"
       B: "確認したい"
       C: "一部範囲外の可能性あり"
+    optimization_goal: { primary: preserve_cv, secondary: reduce_review_risk }
+    risk_control:
+      cv_loss_risk: medium
+      do_not_do: ["効能表現確認中に勝ちクリエイティブを一括停止しない"]
+    outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: "薬機法 第66条 (誇大広告等の禁止) — 化粧品広告は厚労省告示の56効能の範囲のみ。"
 
   # ============================================================
@@ -426,6 +570,11 @@ rules:
     performance_category: [measurement_quality, first_party_data]
     priority: A
     goal_stage: measurement_recovery
+    owner: commerce_ops
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.020, upper: 0.060 }
+      source_basis: "注文API連携はAOV/LTV/CV実績の突合精度を上げ、媒体別CPA判断とCRM活用の土台になるため広告費連動で算定。"
+      measurement_window: { signal: "1-2週", verdict: "4-6週" }
     expected_effect:
       - "受注データ自動取得による AOV / LTV 算出の自動化"
       - "顧客リスト同期の精度向上"
@@ -435,6 +584,11 @@ rules:
       A: "有効"
       B: "未設定"
       C: "確認したい"
+    optimization_goal: { primary: preserve_cv, secondary: improve_ltv_cpa }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["注文API未接続を理由に既存の購入導線や広告配信を止めない"]
+    outcome: { primary_metric: ltv_cpa, guardrail_metric: conversions, measurement_window_days: 42 }
     legal_note: null
 
   P-EF-02:
@@ -442,6 +596,7 @@ rules:
     performance_category: [measurement_quality, learning_stability]
     priority: A
     goal_stage: measurement_recovery
+    owner: commerce_ops
     impact_estimate:
       lift_rate:
         minimum:   0.031     # 3.1%  ブラウザ計測欠損の半分補完
@@ -458,6 +613,11 @@ rules:
       minimum_fallback:   50000
       realistic_fallback: 150000
       upper_fallback:     285000
+    optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
+    risk_control:
+      cv_loss_risk: low
+      do_not_do: ["ECフォースCAPI確認前にCV獲得中のMetaキャンペーンを停止しない"]
+    outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 42 }
     expected_effect:
       - "ブラウザ計測欠損の補完 (iOS / 広告ブロッカー対策)"
       - "Meta 学習シグナル品質の向上、CPA 改善余地"
@@ -1263,6 +1423,7 @@ rules:
     performance_category: [cpa_diagnosis, budget_allocation]
     priority: A
     goal_stage: cpa_diagnosis
+    owner: growth_ops
     answer_source_preference: [api, chatwork_reply]
     impact_estimate:
       lift_rate: { minimum: 0.006, realistic: 0.030, upper: 0.100 }
@@ -1284,6 +1445,7 @@ rules:
     performance_category: [cpa_diagnosis, budget_allocation]
     priority: B
     goal_stage: cpa_diagnosis
+    owner: growth_ops
     answer_source_preference: [api, chatwork_reply]
     impact_estimate:
       lift_rate: { minimum: 0.004, realistic: 0.020, upper: 0.070 }
@@ -1305,6 +1467,7 @@ rules:
     performance_category: [cpa_diagnosis]
     priority: A
     goal_stage: cpa_diagnosis
+    owner: growth_ops
     answer_source_preference: [api, chatwork_reply]
     impact_estimate:
       lift_rate: { minimum: 0.006, realistic: 0.030, upper: 0.090 }
@@ -1326,6 +1489,7 @@ rules:
     performance_category: [conversion_rate, cpa_diagnosis]
     priority: A
     goal_stage: cpa_diagnosis
+    owner: growth_ops
     answer_source_preference: [api, validator, chatwork_reply]
     impact_estimate:
       lift_rate: { minimum: 0.006, realistic: 0.030, upper: 0.100 }
@@ -1347,6 +1511,7 @@ rules:
     performance_category: [ad_fraud, measurement_quality]
     priority: A
     goal_stage: measurement_recovery
+    owner: fraud_ops
     answer_source_preference: [api, chatwork_reply]
     impact_estimate:
       lift_rate: { minimum: 0.003, realistic: 0.015, upper: 0.060 }
@@ -1368,6 +1533,7 @@ rules:
     performance_category: [measurement_quality, learning_stability]
     priority: A
     goal_stage: measurement_recovery
+    owner: measurement_ops
     answer_source_preference: [api, validator, chatwork_reply]
     impact_estimate:
       lift_rate: { minimum: 0.006, realistic: 0.025, upper: 0.080 }

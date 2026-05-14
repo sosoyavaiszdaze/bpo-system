@@ -45,6 +45,12 @@ def main() -> int:
     print(f"root cause coverage: {summary['root_cause_group_coverage_pct']}% ({summary['root_cause_group_rules']})")
     print(f"decision axis coverage: {summary['decision_axis_coverage_pct']}% ({summary['decision_axis_rules']})")
     print(f"layer counts: {summary['layer_counts']}")
+    print("family counts:")
+    for family, counts in sorted((summary.get("family_counts") or {}).items()):
+        print(
+            f"  - {family}: total={counts['total']} visible={counts['customer_visible']} "
+            f"high/critical={counts['high_critical']} unmapped={counts['high_critical_unmapped']}"
+        )
     print(f"issue counts: {summary['issue_counts']}")
     print()
     print("Top issues")

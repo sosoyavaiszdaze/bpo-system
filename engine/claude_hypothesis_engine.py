@@ -124,6 +124,7 @@ def build_current_todo_hypotheses(
     client_id: str,
     audit_results: dict,
     rule_ids: list[str],
+    client_config: dict | None = None,
 ) -> dict[str, dict]:
     """Build hypotheses for today's TODO items from current Meta diagnostics.
 
@@ -153,6 +154,7 @@ def build_current_todo_hypotheses(
         return {}
 
     rule_defs = _load_rule_defs([rid for rid in rule_ids if rid.startswith("M")])
+    vertical_context = _vertical_context(client_id, client_config)
     payload = {
         "client_id": client_id,
         "goal": "CV数を落とさずCPAを改善する",
@@ -163,6 +165,7 @@ def build_current_todo_hypotheses(
         ],
         "rule_ids": rule_ids,
         "candidate_yaml_rules": rule_defs,
+        "vertical_context": vertical_context,
         "performance_diagnostics": diagnostics,
         "anomaly_summary": audit_results.get("anomalies") or {},
     }
@@ -178,9 +181,43 @@ def build_current_todo_hypotheses(
             "check_order": claude_result.get("check_order") or [],
             "hypotheses": claude_result.get("hypotheses") or [],
             "do_not_do": claude_result.get("do_not_do") or [],
+            "vertical_context": vertical_context,
             "source": claude_result.get("source", "fallback"),
         }
     return by_rule
+
+
+def _vertical_context(client_id: str, client_config: dict | None) -> dict:
+    """Attach industry KPI semantics so hypotheses do not optimize the wrong CV."""
+    try:
+        from engine.vertical_kpi_registry import build_client_kpi_readiness
+        if client_config is None:
+            client_config = _load_client_config(client_id)
+        readiness = build_client_kpi_readiness(client_id, client_config or {})
+        return {
+            "vertical_id": readiness.get("vertical_id"),
+            "primary_goal": readiness.get("primary_goal"),
+            "required_events": readiness.get("required_events") or [],
+            "economic_metrics": readiness.get("economic_metrics") or {},
+            "quality_dimensions": readiness.get("quality_dimensions") or [],
+            "notification_focus": readiness.get("notification_focus") or [],
+            "rule_focus": readiness.get("rule_focus") or {},
+            "ready_for_high_confidence_recommendations": readiness.get("ready_for_high_confidence_recommendations"),
+            "required_missing": readiness.get("required_missing") or [],
+            "recommended_missing": readiness.get("recommended_missing") or [],
+        }
+    except Exception:
+        return {"vertical_id": "unknown", "client_id": client_id}
+
+
+def _load_client_config(client_id: str) -> dict:
+    path = ROOT / "config" / "clients.yaml"
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except OSError:
+        return {}
+    clients = raw.get("clients") if isinstance(raw.get("clients"), dict) else {}
+    return clients.get(client_id) or {}
 
 
 def _metric_type(rule_id: str, payload: dict) -> str:

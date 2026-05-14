@@ -71,8 +71,21 @@ def summarize_rule_registry(records: list[RuleRecord]) -> dict[str, Any]:
     total = len(records)
     issue_counts: dict[str, int] = {}
     layer_counts: dict[str, int] = {}
+    family_counts: dict[str, dict[str, int]] = {}
     for record in records:
         layer_counts[record.layer] = layer_counts.get(record.layer, 0) + 1
+        family = _record_family(record)
+        fam = family_counts.setdefault(
+            family,
+            {"total": 0, "customer_visible": 0, "high_critical": 0, "high_critical_unmapped": 0},
+        )
+        fam["total"] += 1
+        if record.customer_visible:
+            fam["customer_visible"] += 1
+        if _severity(record.severity) in HIGH_SEVERITIES and record.enabled and record.lifecycle == "active":
+            fam["high_critical"] += 1
+        if "high_severity_unmapped" in record.issues:
+            fam["high_critical_unmapped"] += 1
         for issue in record.issues:
             issue_counts[issue] = issue_counts.get(issue, 0) + 1
 
@@ -81,7 +94,10 @@ def summarize_rule_registry(records: list[RuleRecord]) -> dict[str, Any]:
     with_root = sum(1 for r in records if r.root_cause_group)
     with_axis = sum(1 for r in records if r.decision_axis and r.decision_axis not in {"neutral", "null"})
     enabled = sum(1 for r in records if r.enabled)
-    high_critical = sum(1 for r in records if _severity(r.severity) in HIGH_SEVERITIES and r.enabled)
+    high_critical = sum(
+        1 for r in records
+        if _severity(r.severity) in HIGH_SEVERITIES and r.enabled and r.lifecycle == "active"
+    )
     high_critical_unmapped = sum(1 for r in records if "high_severity_unmapped" in r.issues)
     customer_visible = sum(1 for r in records if r.customer_visible)
     return {
@@ -100,6 +116,7 @@ def summarize_rule_registry(records: list[RuleRecord]) -> dict[str, Any]:
         "decision_axis_rules": with_axis,
         "decision_axis_coverage_pct": _pct(with_axis, total),
         "layer_counts": dict(sorted(layer_counts.items())),
+        "family_counts": dict(sorted(family_counts.items())),
         "issue_counts": dict(sorted(issue_counts.items())),
     }
 
@@ -208,7 +225,7 @@ def _issues_for(
         issues.append("missing_expected_impact")
     if not messaging_mapped:
         issues.append("messaging_unmapped")
-    if enabled and severity in HIGH_SEVERITIES and not messaging_mapped:
+    if enabled and lifecycle == "active" and severity in HIGH_SEVERITIES and not messaging_mapped:
         issues.append("high_severity_unmapped")
     if messaging_mapped:
         missing = [field for field in REQUIRED_MESSAGING_FIELDS if not messaging_payload.get(field)]
@@ -216,7 +233,9 @@ def _issues_for(
             issues.append("incomplete_customer_message_schema")
         if not messaging_payload.get("answer_source_preference"):
             issues.append("missing_answer_source_preference")
-        impact = messaging_payload.get("impact_estimate") if isinstance(messaging_payload, dict) else None
+        impact = None
+        if isinstance(messaging_payload, dict):
+            impact = messaging_payload.get("impact_estimate") or messaging_payload.get("non_financial_impact")
         if not isinstance(impact, dict):
             issues.append("missing_impact_estimate")
         elif not isinstance(impact.get("measurement_window"), dict):
@@ -338,6 +357,8 @@ def _expected_impact(rule: dict, messaging_payload: dict[str, Any]) -> dict[str,
         return rule["expected_impact"]
     if isinstance(messaging_payload.get("impact_estimate"), dict):
         return messaging_payload["impact_estimate"]
+    if isinstance(messaging_payload.get("non_financial_impact"), dict):
+        return messaging_payload["non_financial_impact"]
     return None
 
 
@@ -382,3 +403,32 @@ def _issue_rank(issues: list[str]) -> int:
         "unsafe_eval_trigger": 6,
     }
     return min((priority.get(issue, 50) for issue in issues), default=50)
+
+
+def _record_family(record: RuleRecord) -> str:
+    source = record.source_path.lower()
+    rid = record.rule_id
+    category = str(record.category or "").lower()
+    if "meta_rules" in source or rid.startswith("M"):
+        return "meta"
+    if "google_rules" in source or rid.startswith("G"):
+        return "google"
+    if "tiktok_rules" in source or rid.startswith("T"):
+        return "tiktok"
+    if "seo_rules" in source or rid.startswith("S"):
+        return "seo"
+    if "adtruth_rules" in source or "ad_fraud" in source or category in {"ad_fraud", "不正検知"}:
+        return "adtruth"
+    if "ec_platforms" in source or rid.startswith("P-"):
+        return "ec_platform"
+    if "legal" in source or rid.startswith(("F-LC", "F-PP", "V-EC")):
+        return "legal"
+    if "foundation" in source or rid.startswith("F-"):
+        return "foundation"
+    if "verticals" in source or rid.startswith("V-"):
+        return "vertical"
+    if "precision_categories" in source or rid.startswith("PC-"):
+        return "precision"
+    if rid.startswith("C"):
+        return "common"
+    return "other"

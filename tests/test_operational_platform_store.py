@@ -7,10 +7,12 @@ from engine.stores.cases import get_case, transition_case, upsert_case_from_indi
 from engine.stores.connections import connection_summary, list_client_connections
 from engine.stores.db import connect
 from engine.stores.jobs import client_health, record_job
-from engine.stores.monitoring import incident_summary, list_open_incidents, open_incident, record_health_check
+from engine.stores.monitoring import incident_summary, list_open_incidents, open_incident, record_health_check, resolve_incident
+from engine.stores.readiness import evaluate_operational_readiness, latest_readiness_snapshot
 from engine.stores.responses import upsert_client_response
 from scripts.client_health import build_health_report
 from scripts.migrate_state_to_db import migrate
+from scripts.production_ops_check import run_production_ops_check
 
 
 def test_schema_initializes_and_case_upsert(tmp_path):
@@ -106,6 +108,52 @@ def test_client_response_updates_case_status(tmp_path):
     assert case["status"] == "waiting_zynect"
     assert "client_response" in event_types
     assert "transition:open->waiting_zynect" in event_types
+
+
+def test_closed_case_cannot_be_reopened(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    case_id = upsert_case_from_indication(conn, {
+        "indication_id": "case-closed",
+        "client_id": "pilotton",
+        "rule_id": "F-MF-01",
+        "status": "open",
+        "first_detected_at": "2026-05-09T00:00:00+00:00",
+        "payload": {"title": "CVイベント確認"},
+    })
+    transition_case(conn, case_id=case_id, to_status="closed", actor_type="operator")
+
+    try:
+        transition_case(conn, case_id=case_id, to_status="open", actor_type="operator")
+    except ValueError as exc:
+        assert "terminal case cannot transition" in str(exc)
+    else:
+        raise AssertionError("closed case should not reopen")
+
+
+def test_production_ops_check_runs_non_chatwork_loop(tmp_path):
+    root = _sample_root(tmp_path)
+    db_path = tmp_path / "state" / "zynect.db"
+    migrate(root=root, db_path=db_path)
+
+    result = run_production_ops_check(
+        db_path=db_path,
+        root=root,
+        today="2026-05-10",
+        kpi_json='{"pilotton":{"cpa":8000,"cv_count":40,"roas":2.2}}',
+        fail_on="none",
+    )
+
+    conn = connect(db_path)
+    job = conn.execute(
+        "SELECT status FROM job_runs WHERE job_name = 'production_ops_check' ORDER BY started_at DESC LIMIT 1"
+    ).fetchone()
+
+    assert result["ok"] is True
+    assert result["rule_registry"]["rules_synced"] >= 1
+    assert "blocker_count" in result["quality_gate"]
+    assert "updated_measurements" in result["outcomes"]
+    assert "blocker_count" in result["readiness"]
+    assert job["status"] == "success"
 
 
 def test_migrate_state_to_db_imports_clients_cases_and_responses(tmp_path):
@@ -236,9 +284,112 @@ def test_monitoring_store_records_health_and_incidents(tmp_path):
     assert incidents[0]["title"] == "Meta token expired"
 
 
+def test_monitoring_store_reopens_resolved_incident(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    open_incident(conn, component="meta_api", client_id="pilotton", title="Meta token expired", severity="critical")
+    resolve_incident(conn, component="meta_api", client_id="pilotton", title="Meta token expired")
+    open_incident(conn, component="meta_api", client_id="pilotton", title="Meta token expired", severity="critical", detail="401 again")
+    conn.commit()
+
+    incidents = list_open_incidents(conn, "pilotton")
+    assert len(incidents) == 1
+    assert incidents[0]["status"] == "open"
+    assert incidents[0]["resolved_at"] is None
+    assert incidents[0]["detail"] == "401 again"
+
+
+def test_operational_readiness_blocks_on_missing_success_job_and_records_snapshot(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    conn.execute(
+        """
+        INSERT INTO clients (client_id, display_name, status, payload_json)
+        VALUES ('pilotton', 'Pilotton', 'active', '{}')
+        """
+    )
+
+    result = evaluate_operational_readiness(
+        conn,
+        checked_at="2026-05-12T00:00:00+00:00",
+        records=[],
+    )
+    snapshot = latest_readiness_snapshot(conn)
+    incidents = list_open_incidents(conn)
+
+    assert result["status"] == "blocked"
+    assert result["blocker_count"] == 1
+    assert result["issues"][0]["component"] == "job_freshness"
+    assert snapshot["status"] == "blocked"
+    assert incidents[0]["component"] == "operational_readiness"
+
+
+def test_operational_readiness_ready_when_slos_are_clean(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    conn.execute(
+        """
+        INSERT INTO clients (client_id, display_name, status, payload_json)
+        VALUES ('pilotton', 'Pilotton', 'active', '{}')
+        """
+    )
+    record_job(
+        conn,
+        "daily_chatwork_check",
+        "pilotton",
+        "success",
+        finished_at="2026-05-12T00:00:00+00:00",
+    )
+
+    result = evaluate_operational_readiness(
+        conn,
+        checked_at="2026-05-12T01:00:00+00:00",
+        records=[],
+    )
+
+    assert result["status"] == "ready"
+    assert result["blocker_count"] == 0
+
+
+def test_operational_readiness_ignores_stale_self_monitoring_incidents(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    conn.execute(
+        """
+        INSERT INTO clients (client_id, display_name, status, payload_json)
+        VALUES ('pilotton', 'Pilotton', 'active', '{}')
+        """
+    )
+    record_job(
+        conn,
+        "daily_chatwork_check",
+        "pilotton",
+        "success",
+        finished_at="2026-05-12T00:00:00+00:00",
+    )
+    open_incident(
+        conn,
+        component="operational_readiness",
+        title="Operational readiness blocked",
+        severity="critical",
+    )
+    open_incident(
+        conn,
+        component="job:production_ops_check",
+        title="production_ops_check failed",
+        severity="critical",
+    )
+
+    result = evaluate_operational_readiness(
+        conn,
+        checked_at="2026-05-12T01:00:00+00:00",
+        records=[],
+    )
+
+    assert result["status"] == "ready"
+    assert result["blocker_count"] == 0
+
+
 def _sample_root(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
+    (root / "config" / "rules").mkdir(parents=True)
     (root / "outputs" / "chatwork_state").mkdir(parents=True)
     (root / "outputs" / "chatwork_responses").mkdir(parents=True)
     (root / "outputs" / "auto_proposal_history").mkdir(parents=True)
@@ -262,6 +413,33 @@ def _sample_root(tmp_path: Path) -> Path:
                 }
             }
         }, allow_unicode=True),
+        encoding="utf-8",
+    )
+    (root / "config" / "rules" / "meta_rules.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "rules": [
+                    {
+                        "id": "M02",
+                        "name": "Meta CAPI Purchase event check",
+                        "severity": "high",
+                        "enabled": True,
+                        "lifecycle": "active",
+                        "root_cause_group": "measurement_foundation",
+                        "decision_axis": "TO-02",
+                        "applies_to": {"ad_platforms": ["meta"]},
+                        "data_source": [{"source": "meta_api"}],
+                        "trigger": {"type": "api_evidence"},
+                        "expected_impact": {
+                            "primary_metric": "cpa",
+                            "source_basis": "test",
+                            "measurement_window": "7/14/28d",
+                        },
+                    }
+                ]
+            },
+            allow_unicode=True,
+        ),
         encoding="utf-8",
     )
     indication = {

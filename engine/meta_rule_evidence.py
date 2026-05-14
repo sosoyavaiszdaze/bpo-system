@@ -27,6 +27,16 @@ RULE_TO_GROUP = {
     for rule_id in rules
 }
 
+GROUP_REQUIRED_DATA_SOURCES: dict[str, list[str]] = {
+    "meta_pixel_foundation": ["meta_api.pixel"],
+    "meta_capi_and_dedup": ["meta_api.pixel", "capi_event_log"],
+    "meta_domain_and_aem": ["meta_api.domain"],
+    "meta_attribution_window": ["meta_api.insights"],
+    "meta_cpa_spike_diagnosis": ["meta_api.insights"],
+    "meta_delivery_drop_diagnosis": ["meta_api.insights"],
+    "meta_creative_diversity_and_fatigue": ["meta_api.insights", "creative_asset_audit"],
+}
+
 
 def build_meta_connection_audit(meta_cfg: dict[str, Any] | None, meta_data: dict[str, Any] | None) -> dict[str, Any]:
     """Return a capability-level audit for Meta API integration.
@@ -217,10 +227,23 @@ def rule_group_for(rule_id: str) -> str | None:
     return RULE_TO_GROUP.get(rule_id)
 
 
+def required_data_sources_for_rule(rule_id: str) -> list[str]:
+    """Return the evidence sources needed to evaluate one Meta rule.
+
+    Rule YAML is still being migrated, so this provides a canonical Meta-first
+    fallback for Rule Registry operations and UI readiness checks.
+    """
+    group = rule_group_for(rule_id)
+    if not group:
+        return []
+    return list(GROUP_REQUIRED_DATA_SOURCES.get(group, []))
+
+
 def build_rule_group_index() -> dict[str, Any]:
     return {
         "groups": MEASUREMENT_RULE_GROUPS,
         "rule_to_group": RULE_TO_GROUP,
+        "group_required_data_sources": GROUP_REQUIRED_DATA_SOURCES,
     }
 
 

@@ -66,6 +66,12 @@ def sync_rule_registry(conn, records: list[RuleRecord]) -> dict[str, Any]:
                 synced_at,
             ),
         )
+        required_sources = _required_data_sources(record.payload, record.rule_id)
+        duplicate_group = (
+            record.payload.get("dedupe_group")
+            or record.payload.get("duplicate_group")
+            or _duplicate_group_for_rule(record.rule_id)
+        )
         conn.execute(
             """
             INSERT OR REPLACE INTO rule_registry_operations (
@@ -78,8 +84,8 @@ def sync_rule_registry(conn, records: list[RuleRecord]) -> dict[str, Any]:
                 record.rule_id,
                 record.lifecycle,
                 record.payload.get("owner"),
-                json_dumps(_required_data_sources(record.payload)),
-                record.payload.get("dedupe_group") or record.payload.get("duplicate_group"),
+                json_dumps(required_sources),
+                duplicate_group,
                 json_dumps(_rule_refs(record.payload, "prerequisite", "dependencies", "extends", "replaces")),
                 json_dumps(_rule_refs(record.payload, "conflicts")),
                 record.root_cause_group or record.category,
@@ -267,14 +273,28 @@ def _pct(value: int | float, total: int) -> float:
     return round((float(value) / total * 100), 1) if total else 0.0
 
 
-def _required_data_sources(rule: dict) -> list[str]:
+def _required_data_sources(rule: dict, rule_id: str | None = None) -> list[str]:
     out = []
     for item in rule.get("data_source") or rule.get("data_sources") or []:
         if isinstance(item, dict) and item.get("source"):
             out.append(str(item["source"]))
         elif isinstance(item, str):
             out.append(item)
+    if rule_id:
+        try:
+            from engine.meta_rule_evidence import required_data_sources_for_rule
+            out.extend(required_data_sources_for_rule(rule_id))
+        except Exception:
+            pass
     return sorted(set(out))
+
+
+def _duplicate_group_for_rule(rule_id: str) -> str | None:
+    try:
+        from engine.meta_rule_evidence import rule_group_for
+        return rule_group_for(rule_id)
+    except Exception:
+        return None
 
 
 def _rule_refs(rule: dict, *keys: str) -> list[str]:

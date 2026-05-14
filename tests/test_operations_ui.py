@@ -10,7 +10,12 @@ from engine.stores.cases import upsert_case_from_indication
 from engine.stores.db import connect
 from engine.stores.decision_traces import list_traces, record_trace, trace_summary
 from engine.stores.executions import list_case_executions, record_case_execution
-from engine.stores.learning import get_learning_adjustments, list_rule_learning_stats, recompute_rule_learning_stats
+from engine.stores.learning import (
+    create_rule_improvement_drafts,
+    get_learning_adjustments,
+    list_rule_learning_stats,
+    recompute_rule_learning_stats,
+)
 from engine.stores.jobs import record_job
 from engine.stores.outcomes import (
     improvement_pct,
@@ -24,6 +29,7 @@ from engine.stores.outcomes import (
 )
 from engine.stores.rule_drafts import create_rule_draft_from_text, list_rule_drafts, review_rule_draft
 from engine.stores.rules import family_operations_matrix, meta_rule_operations_summary, registry_summary, sync_rule_registry
+from scripts.operations_ui import create_app
 from scripts.update_outcome_measurements import update_outcomes
 
 
@@ -40,12 +46,50 @@ def test_rule_registry_summarizes_axis_and_mapping_coverage(tmp_path):
     assert summary["enabled_rules"] == 2
     assert summary["customer_visible_rules"] == 1
     assert summary["high_critical_unmapped_rules"] == 0
+    assert summary["family_counts"]["foundation"]["total"] == 2
+    assert summary["family_counts"]["foundation"]["customer_visible"] == 1
     missing = next(r for r in records if r.rule_id == "F-MF-02")
     assert "missing_root_cause_group" in missing.issues
     assert "messaging_unmapped" in missing.issues
     connected = next(r for r in records if r.rule_id == "F-MF-01")
     assert "incomplete_customer_message_schema" in connected.issues
     assert "unsafe_eval_trigger" in connected.issues
+
+
+def test_rule_registry_accepts_non_financial_impact_for_review_rules(tmp_path):
+    root = _rule_root(tmp_path)
+    (root / "config" / "rule_messaging.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "rules": {
+                    "F-MF-02": {
+                        "customer_title": "審査リスク確認",
+                        "priority": "B",
+                        "goal_stage": "legal_review",
+                        "today_action": "確認してください",
+                        "yes_no_question": "確認できましたか?",
+                        "action_options": {"A": "はい", "B": "いいえ"},
+                        "answer_source_preference": ["validator", "chatwork_reply"],
+                        "non_financial_impact": {
+                            "primary_metric": "review_risk_reduction",
+                            "source_basis": "審査落ちと配信停止リスクの予防。",
+                            "measurement_window": {"signal": "1週", "verdict": "4週"},
+                        },
+                    }
+                }
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+
+    records = load_rule_registry(root)
+    record = next(r for r in records if r.rule_id == "F-MF-02")
+
+    assert record.has_expected_impact
+    assert record.expected_impact["primary_metric"] == "review_risk_reduction"
+    assert "missing_expected_impact" not in record.issues
+    assert "missing_impact_estimate" not in record.issues
 
 
 def test_operations_console_context_is_read_only_shape(tmp_path):
@@ -101,10 +145,46 @@ def test_operations_console_context_is_read_only_shape(tmp_path):
     assert ctx["recent_outcomes"][0]["case_id"] == "case-1"
     assert "rule_learning_stats" in ctx
     assert ctx["rule_registry"]["total_rules"] == 2
+    assert ctx["daily_ops"]["open_cases"] == 1
+    assert ctx["daily_ops"]["rule_total"] == 2
+    assert ctx["case_status_board"][0]["status"] == "open"
+    assert ctx["case_status_board"][0]["count"] == 1
+    assert ctx["connection_matrix"]["missing_required"] >= 0
+    assert ctx["outcome_workbench"]["measured"] == 1
+    assert ctx["outcome_workbench"]["improved"] == 1
+    assert "rule_quality_board" in ctx
     assert "connections" in ctx
     assert "incidents" in ctx
     assert "rule_family_operations" in ctx
     assert "rule_change_drafts" in ctx
+
+
+def test_operations_console_dashboard_renders_daily_ops_sections(tmp_path):
+    db_path = tmp_path / "zynect.db"
+    conn = connect(db_path)
+    upsert_client(
+        conn,
+        "pilotton",
+        {
+            "display_name": "株式会社パイロットン",
+            "vertical": "ec_d2c",
+            "ec_platform": "ecforce",
+        },
+    )
+    conn.commit()
+    conn.close()
+
+    from fastapi.testclient import TestClient
+
+    response = TestClient(create_app(db_path)).get("/")
+
+    assert response.status_code == 200
+    assert "Daily Operations" in response.text
+    assert "Connection Readiness" in response.text
+    assert "Case State Board" in response.text
+    assert "Outcome Tracker" in response.text
+    assert "Rule Quality Board" in response.text
+    assert "Incidents" in response.text
 
 
 def test_sync_rule_registry_persists_yaml_connectivity_audit(tmp_path):
@@ -171,6 +251,37 @@ def test_rule_registry_flags_high_severity_customer_visibility_gap(tmp_path):
     assert "high_severity_unmapped" in critical.issues
     assert "high_severity_unmapped" not in disabled.issues
     assert summary["high_critical_unmapped_rules"] == 1
+
+
+def test_rule_registry_does_not_count_draft_as_high_severity_unmapped(tmp_path):
+    root = _rule_root(tmp_path)
+    path = root / "config" / "rules" / "meta_rules.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "rules": [
+                    {
+                        "id": "M90",
+                        "name": "Phase Bで詳細記述する予定",
+                        "severity": "critical",
+                        "enabled": True,
+                        "lifecycle": "draft",
+                    }
+                ]
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+
+    records = load_rule_registry(root)
+    summary = summarize_rule_registry(records)
+    record = next(r for r in records if r.rule_id == "M90")
+
+    assert record.lifecycle == "draft"
+    assert "draft_or_placeholder" in record.issues
+    assert "high_severity_unmapped" not in record.issues
+    assert summary["high_critical_unmapped_rules"] == 0
 
 
 def test_meta_rule_operations_summary_counts_meta_readiness(tmp_path):
@@ -383,8 +494,8 @@ def test_outcome_tracker_updates_due_baseline_measurements(tmp_path):
     conn.commit()
     row = conn.execute(
         "SELECT measured_value, measurement_end, change_pct, estimated_value_yen, payload_json "
-        "FROM outcome_measurements WHERE outcome_id = ?",
-        (baseline["outcome_id"],),
+        "FROM outcome_measurements WHERE case_id = ? AND measured_value IS NOT NULL",
+        ("case-cpa",),
     ).fetchone()
 
     assert updated == 1
@@ -510,6 +621,39 @@ def test_learning_stats_promote_rules_with_measured_wins(tmp_path):
     assert stats["recommendation"]
 
 
+def test_learning_stats_create_review_draft_for_bad_rule(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    for i in range(3):
+        case_id = f"case-bad-{i}"
+        upsert_case_from_indication(conn, {
+            "indication_id": case_id,
+            "client_id": "pilotton",
+            "rule_id": "M99",
+            "status": "open",
+            "severity": "high",
+            "first_detected_at": "2026-05-01T00:00:00+00:00",
+            "payload": {"title": "Bad rule"},
+        })
+        record_outcome(
+            conn,
+            case_id=case_id,
+            client_id="pilotton",
+            metric="cpa",
+            baseline_value=10000,
+            measured_value=13000,
+            measurement_end="2026-05-08",
+            payload={"conversions": 10},
+        )
+    recompute_rule_learning_stats(conn)
+
+    result = create_rule_improvement_drafts(conn, min_cases=3, min_confidence="medium")
+    drafts = list_rule_drafts(conn, status="review_required")
+
+    assert result["drafts_created"] == 1
+    assert drafts[0]["target_family"] == "meta"
+    assert "Rule M99 needs production review" in drafts[0]["source_text"]
+
+
 def test_update_outcome_measurements_job_updates_due_rows(tmp_path):
     db_path = tmp_path / "zynect.db"
     conn = connect(db_path)
@@ -546,7 +690,10 @@ def test_update_outcome_measurements_job_updates_due_rows(tmp_path):
 
     conn = connect(db_path)
     try:
-        outcome = conn.execute("SELECT measured_value, change_pct FROM outcome_measurements WHERE case_id = 'case-1'").fetchone()
+        outcome = conn.execute(
+            "SELECT measured_value, change_pct FROM outcome_measurements "
+            "WHERE case_id = 'case-1' AND measured_value IS NOT NULL"
+        ).fetchone()
         job = conn.execute("SELECT status FROM job_runs WHERE job_name = 'update_outcome_measurements'").fetchone()
     finally:
         conn.close()
@@ -555,6 +702,53 @@ def test_update_outcome_measurements_job_updates_due_rows(tmp_path):
     assert outcome["measured_value"] == 8000
     assert outcome["change_pct"] == 20
     assert job["status"] == "success"
+
+
+def test_due_outcome_measurements_create_separate_7_14_28_rows(tmp_path):
+    conn = connect(tmp_path / "zynect.db")
+    upsert_case_from_indication(conn, {
+        "indication_id": "case-1",
+        "client_id": "pilotton",
+        "rule_id": "M02",
+        "status": "open",
+        "severity": "high",
+        "first_detected_at": "2026-05-01T00:00:00+00:00",
+        "payload": {"title": "CAPI"},
+    })
+    record_outcome(
+        conn,
+        case_id="case-1",
+        client_id="pilotton",
+        metric="cpa",
+        baseline_value=10000,
+        measured_value=None,
+        baseline_start="2026-05-01",
+        measurement_start="2026-05-01",
+        payload={"conversions": 10},
+    )
+
+    updated = update_due_outcome_measurements(
+        conn,
+        client_id="pilotton",
+        current_kpis={"cpa": 8500},
+        today="2026-05-29",
+    )
+    rerun = update_due_outcome_measurements(
+        conn,
+        client_id="pilotton",
+        current_kpis={"cpa": 8500},
+        today="2026-05-29",
+    )
+    rows = list_outcomes(conn, client_id="pilotton", limit=10)
+    measured_windows = sorted(
+        row["measurement_end"]
+        for row in rows
+        if row["measured_value"] is not None
+    )
+
+    assert updated == 3
+    assert rerun == 0
+    assert measured_windows == ["2026-05-08", "2026-05-15", "2026-05-29"]
 
 
 def test_improvement_pct_handles_metric_direction_and_zero_baseline():

@@ -47,3 +47,16 @@ jobs:
       - name: Config validation
         run: |
           python pipeline.py test
+
+      - name: Rule quality gate audit
+        run: |
+          # Surface production-readiness debt on every PR. The current
+          # migration path still allows known blockers, so this is advisory
+          # until customer-visible rules are fully backfilled.
+          python scripts/rule_quality_gate.py --fail-on none
+
+      - name: Operational readiness audit
+        run: |
+          # Exercise the production operations gate without requiring real
+          # client credentials or ChatWork delivery in CI.
+          python scripts/operational_readiness_check.py --db /tmp/zynect-ci-readiness.db --fail-on none

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Optional
 
 from engine.stores.db import json_dumps, json_loads, row_to_dict
@@ -258,7 +258,12 @@ def update_due_outcome_measurements(
     today: str,
     windows: tuple[int, ...] = (7, 14, 28),
 ) -> int:
-    """Fill measured_value for baseline rows whose measurement window is due."""
+    """Create 7/14/28d measured rows for due baseline rows.
+
+    Baseline rows remain immutable evidence. Each due window is written as a
+    separate outcome row, so a case can be judged at D+7, D+14, and D+28
+    instead of being overwritten after the first measurement.
+    """
     today_date = date.fromisoformat(today)
     rows = conn.execute(
         """
@@ -279,36 +284,34 @@ def update_due_outcome_measurements(
             continue
         baseline_start = date.fromisoformat(row["baseline_start"])
         age_days = (today_date - baseline_start).days
-        due_window = next((w for w in windows if age_days >= w), None)
-        if due_window is None:
-            continue
-        payload = json_loads(row["payload_json"], {})
-        payload["measurement_window_days"] = due_window
-        payload["measurement_source"] = "daily_chatwork_check"
-        change_pct = improvement_pct(metric, row["baseline_value"], float(measured))
-        value_yen = estimate_value_yen(metric, row["baseline_value"], float(measured), payload)
-        conn.execute(
-            """
-            UPDATE outcome_measurements
-            SET measured_value = ?,
-                measurement_end = ?,
-                change_pct = ?,
-                estimated_value_yen = COALESCE(?, estimated_value_yen),
-                notes = ?,
-                payload_json = ?
-            WHERE outcome_id = ?
-            """,
-            (
-                float(measured),
-                today,
-                change_pct,
-                value_yen,
-                f"{due_window}d measured outcome",
-                json_dumps(payload),
-                row["outcome_id"],
-            ),
-        )
-        updated += 1
+        due_windows = [w for w in windows if age_days >= w]
+        for due_window in due_windows:
+            window_end = (baseline_start + timedelta(days=due_window)).isoformat()
+            outcome_id = outcome_id_for(row["case_id"], metric, row["baseline_start"], window_end)
+            exists = conn.execute(
+                "SELECT 1 FROM outcome_measurements WHERE outcome_id = ?",
+                (outcome_id,),
+            ).fetchone()
+            if exists:
+                continue
+            payload = json_loads(row["payload_json"], {})
+            payload["measurement_window_days"] = due_window
+            payload["measurement_source"] = "daily_chatwork_check"
+            payload["measured_at"] = today
+            record_outcome(
+                conn,
+                case_id=row["case_id"],
+                client_id=client_id,
+                metric=metric,
+                baseline_value=row["baseline_value"],
+                measured_value=float(measured),
+                baseline_start=row["baseline_start"],
+                measurement_start=row["baseline_start"],
+                measurement_end=window_end,
+                notes=f"{due_window}d measured outcome",
+                payload=payload,
+            )
+            updated += 1
     return updated
 
 
@@ -373,13 +376,20 @@ def refresh_rule_outcome_rollups(conn) -> dict[str, Any]:
         updated += 1
     learning_updated = 0
     try:
-        from engine.stores.learning import recompute_rule_learning_stats
+        from engine.stores.learning import create_rule_improvement_drafts, recompute_rule_learning_stats
         learning_updated = recompute_rule_learning_stats(conn).get("rules_updated", 0)
+        improvement_drafts = create_rule_improvement_drafts(conn)
     except Exception:
         # Outcome rollups must remain usable even if a future learning migration
         # has not been applied yet in a read-only/partial environment.
         learning_updated = 0
-    return {"rules_updated": updated, "learning_rules_updated": learning_updated}
+        improvement_drafts = {"drafts_created": 0, "drafts_skipped": 0}
+    return {
+        "rules_updated": updated,
+        "learning_rules_updated": learning_updated,
+        "improvement_drafts_created": improvement_drafts.get("drafts_created", 0),
+        "improvement_drafts_skipped": improvement_drafts.get("drafts_skipped", 0),
+    }
 
 
 def list_rule_outcome_rollups(conn, limit: int = 50) -> list[dict[str, Any]]:

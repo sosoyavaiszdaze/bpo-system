@@ -85,6 +85,8 @@ def test_meta_rule_group_index_unifies_duplicate_measurement_rules():
     assert index["rule_to_group"]["X-PI1"] == "meta_pixel_foundation"
     assert index["rule_to_group"]["PC-MS-01"] == "meta_capi_and_dedup"
     assert "M02" in index["groups"]["meta_capi_and_dedup"]
+    assert "meta_api.pixel" in index["group_required_data_sources"]["meta_pixel_foundation"]
+    assert "creative_asset_audit" in index["group_required_data_sources"]["meta_creative_diversity_and_fatigue"]
 
 
 def test_meta_api_evidence_decision_traces_include_values_and_group():
@@ -108,3 +110,21 @@ def test_meta_api_evidence_decision_traces_include_values_and_group():
     assert m02["status"] == "resolved"
     assert m02["evidence"]["rule_group"] == "meta_capi_and_dedup"
     assert m02["evidence"]["value"]["capi_enabled"] is True
+
+
+def test_rule_registry_uses_meta_groups_as_dedupe_and_data_sources(tmp_path):
+    from engine.rules.registry import load_rule_registry
+    from engine.stores.db import connect
+    from engine.stores.rules import meta_rule_operations_summary, sync_rule_registry
+
+    db = tmp_path / "ops.sqlite"
+    conn = connect(db)
+    try:
+        sync_rule_registry(conn, load_rule_registry())
+        summary = meta_rule_operations_summary(conn)
+    finally:
+        conn.close()
+
+    assert summary["meta_high_critical_unmapped"] == 0
+    assert summary["meta_required_data_sources"] > 0
+    assert summary["meta_duplicate_group_defined"] > 0

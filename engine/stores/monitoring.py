@@ -70,6 +70,13 @@ def open_incident(
           incident_id, client_id, severity, status, component, title, detail,
           first_seen_at, last_seen_at, payload_json
         ) VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(incident_id) DO UPDATE SET
+          severity=excluded.severity,
+          status='open',
+          detail=excluded.detail,
+          last_seen_at=excluded.last_seen_at,
+          resolved_at=NULL,
+          payload_json=excluded.payload_json
         ON CONFLICT(client_id, component, title, status) DO UPDATE SET
           severity=excluded.severity,
           detail=excluded.detail,
