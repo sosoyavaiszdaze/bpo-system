@@ -42,6 +42,7 @@ def fetch_meta_ads(config):
     # 3. Ad / Placement レベルの切り分けデータ取得
     ad_data = _fetch_ad_insights(account_id, access_token, since, today)
     placement_data = _fetch_placement_insights(account_id, access_token, since, today)
+    ad_delivery_statuses = _fetch_ad_delivery_statuses(account_id, access_token)
 
     # 4. Pixel / CAPI / domain / account health ステータス取得
     pixel_data = _fetch_pixel_status(account_id, access_token)
@@ -66,6 +67,7 @@ def fetch_meta_ads(config):
         "pixel_status": pixel_data,
         "ad_insights": ad_data,
         "placement_insights": placement_data,
+        "ad_delivery_statuses": ad_delivery_statuses,
         "account_status": account_status,
         "domain_verification": domain_verification,
         "capi_dedup": capi_dedup,
@@ -97,6 +99,44 @@ def _api_get(path, access_token, params=None, timeout=30):
     req = urllib.request.Request(url)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read())
+
+
+def _meta_api_error_payload(exc, *, capability):
+    """Normalize Graph API errors so ops can distinguish outage vs permission."""
+    body = ""
+    http_status = None
+    if isinstance(exc, urllib.error.HTTPError):
+        http_status = exc.code
+        body = exc.read().decode(errors="replace")[:1000]
+    else:
+        body = str(exc)
+
+    parsed = {}
+    try:
+        parsed = json.loads(body).get("error") or {}
+    except Exception:
+        parsed = {}
+
+    message = str(parsed.get("message") or body)
+    lower = message.lower()
+    status = "permission_missing" if "permission" in lower or "requires" in lower else "error"
+    required_permissions = []
+    if capability in {"account_quality", "domain_verification"}:
+        required_permissions.append("business_management")
+    if capability in {"ad_account", "insights", "pixel", "ad_review"}:
+        required_permissions.append("ads_read")
+
+    return {
+        "status": status,
+        "capability": capability,
+        "message": message,
+        "error": body,
+        "http_status": http_status,
+        "error_code": parsed.get("code"),
+        "error_subcode": parsed.get("error_subcode"),
+        "fbtrace_id": parsed.get("fbtrace_id"),
+        "required_permissions": required_permissions,
+    }
 
 
 def _fetch_campaign_insights(account_id, access_token, since, until):
@@ -181,16 +221,22 @@ def _fetch_adset_insights(account_id, access_token, since, until):
             camp_id = row.get("campaign_id", "")
             if camp_id not in adsets_by_campaign:
                 adsets_by_campaign[camp_id] = []
-            adsets_by_campaign[camp_id].append({
+            parsed = _parse_metric_row(row)
+            parsed.update({
                 "name": row.get("adset_name", ""),
                 "id": row.get("adset_id", ""),
-                "impressions": float(row.get("impressions", 0)),
-                "spend": float(row.get("spend", 0)),
-                "frequency": float(row.get("frequency", 0)),
+                "adset_name": row.get("adset_name", ""),
+                "adset_id": row.get("adset_id", ""),
+                "campaign_id": camp_id,
                 "optimization_goal": row.get("optimization_goal", ""),
             })
+            adsets_by_campaign[camp_id].append(parsed)
         return adsets_by_campaign
 
+    except urllib.error.HTTPError as e:
+        err = _meta_api_error_payload(e, capability="insights")
+        log.warning(f"Meta AdSet Insights Error {err.get('http_status')}: {err.get('message')}")
+        return {}
     except Exception as e:
         log.warning(f"Meta AdSet Insights Error: {e}")
         return {}
@@ -212,6 +258,10 @@ def _fetch_ad_insights(account_id, access_token, since, until):
     try:
         data = _api_get(f"{account_id}/insights", access_token, params=params, timeout=30)
         return [_parse_ad(row) for row in data.get("data", [])]
+    except urllib.error.HTTPError as e:
+        err = _meta_api_error_payload(e, capability="insights")
+        log.warning(f"Meta Ad Insights Error {err.get('http_status')}: {err.get('message')}")
+        return []
     except Exception as e:
         log.warning(f"Meta Ad Insights Error: {e}")
         return []
@@ -242,12 +292,61 @@ def _fetch_placement_insights(account_id, access_token, since, until):
                 "adset_id": row.get("adset_id", ""),
                 "publisher_platform": row.get("publisher_platform", ""),
                 "platform_position": row.get("platform_position", ""),
+                "name": _placement_name(row),
             })
             rows.append(parsed)
         return rows
+    except urllib.error.HTTPError as e:
+        err = _meta_api_error_payload(e, capability="insights")
+        log.warning(f"Meta Placement Insights Error {err.get('http_status')}: {err.get('message')}")
+        return []
     except Exception as e:
         log.warning(f"Meta Placement Insights Error: {e}")
         return []
+
+
+def _fetch_ad_delivery_statuses(account_id, access_token):
+    """Fetch ad-level delivery/review status for policy and restriction checks."""
+    fields = ",".join([
+        "id", "name", "campaign_id", "adset_id",
+        "effective_status", "configured_status", "ad_review_feedback",
+    ])
+    try:
+        data = _api_get(f"{account_id}/ads", access_token, params={"fields": fields, "limit": 500}, timeout=30)
+        ads = data.get("data", [])
+        problem_statuses = {"DISAPPROVED", "WITH_ISSUES", "PENDING_REVIEW", "PAUSED"}
+        problematic = [
+            {
+                "ad_id": ad.get("id"),
+                "ad_name": ad.get("name"),
+                "campaign_id": ad.get("campaign_id"),
+                "adset_id": ad.get("adset_id"),
+                "effective_status": ad.get("effective_status"),
+                "configured_status": ad.get("configured_status"),
+                "ad_review_feedback": ad.get("ad_review_feedback"),
+            }
+            for ad in ads
+            if str(ad.get("effective_status") or "").upper() in problem_statuses
+               or ad.get("ad_review_feedback")
+        ]
+        disapproved = [
+            ad for ad in problematic
+            if str(ad.get("effective_status") or "").upper() == "DISAPPROVED"
+        ]
+        return {
+            "status": "ok",
+            "ad_count": len(ads),
+            "problem_count": len(problematic),
+            "disapproved_count": len(disapproved),
+            "problem_ads": problematic[:20],
+        }
+    except urllib.error.HTTPError as e:
+        err = _meta_api_error_payload(e, capability="ad_review")
+        log.warning(f"Meta Ad Review Status Error {err.get('http_status')}: {err.get('message')}")
+        return err
+    except Exception as e:
+        log.warning(f"Meta Ad Review Status Error: {e}")
+        return {"status": "unknown", "capability": "ad_review", "error": str(e)}
 
 
 def _fetch_account_status(account_id, access_token):
@@ -264,6 +363,7 @@ def _fetch_account_status(account_id, access_token):
         data = _api_get(account_id, access_token, params={"fields": fields}, timeout=15)
         return {
             "status": "ok",
+            "capability": "account_quality",
             "account_id": data.get("account_id"),
             "name": data.get("name"),
             "account_status": data.get("account_status"),
@@ -271,14 +371,15 @@ def _fetch_account_status(account_id, access_token):
             "currency": data.get("currency"),
             "timezone_name": data.get("timezone_name"),
             "business": data.get("business"),
+            "is_restricted": str(data.get("account_status")) not in {"1", "ACTIVE", "active"} or bool(data.get("disable_reason")),
         }
     except urllib.error.HTTPError as e:
-        body = e.read().decode(errors="replace")[:500]
-        log.warning(f"Meta Account Status Error {e.code}: {body}")
-        return {"status": "error", "error": body, "http_status": e.code}
+        err = _meta_api_error_payload(e, capability="account_quality")
+        log.warning(f"Meta Account Status Error {err.get('http_status')}: {err.get('message')}")
+        return err
     except Exception as e:
         log.warning(f"Meta Account Status Error: {e}")
-        return {"status": "unknown", "error": str(e)}
+        return {"status": "unknown", "capability": "account_quality", "error": str(e)}
 
 
 def _fetch_domain_verification(config, access_token):
@@ -301,13 +402,44 @@ def _fetch_domain_verification(config, access_token):
             d for d in domains
             if str(d.get("verification_status", "")).lower() in {"verified", "confirmed"}
         ]
+        domain_by_name = {
+            _normalize_domain(d.get("domain")): d
+            for d in domains
+            if d.get("domain")
+        }
+        expected_norm = [_normalize_domain(d) for d in expected_domains if d]
+        missing_expected = []
+        verified_expected = []
+        for expected in expected_norm:
+            rec = domain_by_name.get(expected)
+            if rec and str(rec.get("verification_status", "")).lower() in {"verified", "confirmed"}:
+                verified_expected.append(expected)
+            else:
+                missing_expected.append(expected)
+        if expected_norm:
+            status = "ok" if not missing_expected else "manual_required"
+        else:
+            status = "ok" if verified else "manual_required"
         return {
-            "status": "ok" if verified else "manual_required",
+            "status": status,
             "business_id": business_id,
             "expected_domains": expected_domains,
             "domains": domains,
+            "verified_domains": [d.get("domain") for d in verified if d.get("domain")],
+            "verified_expected_domains": verified_expected,
+            "missing_expected_domains": missing_expected,
             "verified_count": len(verified),
         }
+    except urllib.error.HTTPError as e:
+        err = _meta_api_error_payload(e, capability="domain_verification")
+        log.warning(f"Meta Domain Verification Error {err.get('http_status')}: {err.get('message')}")
+        err.update({
+            "business_id": business_id,
+            "expected_domains": expected_domains,
+            "domains": [],
+            "verified_count": 0,
+        })
+        return err
     except Exception as e:
         log.warning(f"Meta Domain Verification Error: {e}")
         return {
@@ -383,6 +515,10 @@ def _fetch_pixel_status(account_id, access_token):
         "last_fired_time": None,
         "capi_enabled": False,
         "event_match_quality": None,
+        "event_match_quality_by_event": {},
+        "purchase_event_match_quality": None,
+        "events_seen": [],
+        "emq_status": "unknown",
         "server_events": False,
         # 未接続の確認項目を False にすると「未完了」と誤検知する。
         # Business/domain verification API を接続するまでは unknown(None) として扱う。
@@ -440,11 +576,28 @@ def _fetch_pixel_status(account_id, access_token):
                         emq_data = json.loads(resp3.read())
                         stats = emq_data.get("data", [])
                         if stats:
-                            emq_scores = [s.get("event_match_quality", 0) for s in stats if s.get("event_match_quality")]
+                            by_event = {}
+                            for stat in stats:
+                                event_name = stat.get("event_name")
+                                score = stat.get("event_match_quality")
+                                if not event_name or score in {None, ""}:
+                                    continue
+                                by_event[str(event_name)] = float(score)
+                            pixel_data["event_match_quality_by_event"] = by_event
+                            pixel_data["events_seen"] = sorted(by_event.keys())
+                            purchase_scores = [
+                                score for event, score in by_event.items()
+                                if "purchase" in event.lower()
+                            ]
+                            if purchase_scores:
+                                pixel_data["purchase_event_match_quality"] = round(sum(purchase_scores) / len(purchase_scores), 1)
+                            emq_scores = list(by_event.values())
                             if emq_scores:
                                 pixel_data["event_match_quality"] = round(sum(emq_scores) / len(emq_scores), 1)
                                 pixel_data["capi_enabled"] = any(s > 0 for s in emq_scores)
+                                pixel_data["emq_status"] = "ok"
                 except Exception:
+                    pixel_data["emq_status"] = "unknown"
                     pass
 
     except Exception as e:
@@ -533,6 +686,8 @@ def _parse_metric_row(row):
     impressions = float(row.get("impressions", 0) or 0)
     clicks = float(row.get("clicks", 0) or 0)
     return {
+        "date_start": row.get("date_start"),
+        "date_stop": row.get("date_stop"),
         "impressions": impressions,
         "clicks": clicks,
         "cost": cost,
@@ -540,7 +695,9 @@ def _parse_metric_row(row):
         "cpm": float(row.get("cpm", 0) or 0),
         "frequency": float(row.get("frequency", 0) or 0),
         "conversions": conversions,
+        "canonical_conversions": cv_aggregated,
         "conversion_value": revenue,
+        "canonical_revenue": rev_aggregated,
         "revenue": revenue,
         "cpa": round(cost / conversions, 2) if conversions else 0,
         "roas": round(revenue / cost, 2) if cost and revenue else 0,
@@ -549,19 +706,31 @@ def _parse_metric_row(row):
 
 def _build_performance_diagnostics(campaigns, adsets_by_campaign, ads, placements):
     """Rank where CPA is high or CV is weak without making stop/go decisions."""
+    ranked_campaigns = _rank_segments(campaigns, "campaign", "campaign_id", segment_level="campaign")
+    ranked_adsets = _rank_segments(
+        [a | {"campaign_id": cid} for cid, rows in (adsets_by_campaign or {}).items() for a in rows],
+        "name",
+        "id",
+        segment_level="adset",
+    )
+    ranked_ads = _rank_segments(ads, "ad", "ad_id", segment_level="ad")
+    ranked_placements = _rank_segments(placements, "name", "adset_id", segment_level="placement")
     return {
-        "campaigns": _rank_segments(campaigns, "campaign", "campaign_id"),
-        "adsets": _rank_segments(
-            [a | {"campaign_id": cid} for cid, rows in (adsets_by_campaign or {}).items() for a in rows],
-            "name",
-            "id",
-        ),
-        "ads": _rank_segments(ads, "ad", "ad_id"),
-        "placements": _rank_segments(placements, "platform_position", "adset_id"),
+        "summary": {
+            "campaign_count": len(campaigns or []),
+            "adset_count": sum(len(rows) for rows in (adsets_by_campaign or {}).values()),
+            "ad_count": len(ads or []),
+            "placement_count": len(placements or []),
+            "diagnostic_levels": ["campaign", "adset", "ad", "placement"],
+        },
+        "campaigns": ranked_campaigns,
+        "adsets": ranked_adsets,
+        "ads": ranked_ads,
+        "placements": ranked_placements,
     }
 
 
-def _rank_segments(rows, name_key, id_key, limit=10):
+def _rank_segments(rows, name_key, id_key, limit=10, segment_level=None):
     ranked = []
     for row in rows or []:
         cost = float(row.get("cost") or row.get("spend") or 0)
@@ -570,8 +739,10 @@ def _rank_segments(rows, name_key, id_key, limit=10):
         cpa = float(row.get("cpa") or (cost / cv if cv else 0) or 0)
         if cost <= 0 and impressions <= 0:
             continue
+        diagnosis_flags = _diagnosis_flags(row, cost, cv, cpa)
         risk_score = (cpa if cv else cost * 2) + max(0, 1000 - impressions) / 100
         ranked.append({
+            "segment_level": segment_level,
             "name": row.get(name_key) or row.get("campaign") or row.get("publisher_platform") or "unknown",
             "id": row.get(id_key) or "",
             "campaign_id": row.get("campaign_id", ""),
@@ -584,18 +755,54 @@ def _rank_segments(rows, name_key, id_key, limit=10):
             "publisher_platform": row.get("publisher_platform"),
             "platform_position": row.get("platform_position"),
             "risk_score": round(risk_score, 2),
-            "diagnosis_hint": _diagnosis_hint(cost, cv, cpa),
+            "diagnosis_hint": _diagnosis_hint(cost, cv, cpa, diagnosis_flags),
+            "diagnosis_flags": diagnosis_flags,
         })
     ranked.sort(key=lambda r: r["risk_score"], reverse=True)
     return ranked[:limit]
 
 
-def _diagnosis_hint(cost, conversions, cpa):
+def _diagnosis_flags(row, cost, conversions, cpa):
+    flags = []
+    impressions = float(row.get("impressions") or 0)
+    ctr = float(row.get("ctr") or 0)
+    frequency = float(row.get("frequency") or 0)
+    if cost > 0 and conversions == 0:
+        flags.append("spend_without_cv")
+    if cpa and cpa > 0:
+        flags.append("high_cpa_segment")
+    if frequency >= 3.0:
+        flags.append("high_frequency")
+    if impressions >= 1000 and ctr and ctr < 0.5:
+        flags.append("low_ctr")
+    return flags or ["monitor"]
+
+
+def _diagnosis_hint(cost, conversions, cpa, flags=None):
+    flags = flags or []
     if cost > 0 and conversions == 0:
         return "spend_without_cv"
+    if "high_frequency" in flags:
+        return "frequency_or_fatigue_check"
+    if "low_ctr" in flags:
+        return "creative_or_placement_quality_check"
     if cpa and cpa > 0:
         return "high_cpa_segment"
     return "monitor"
+
+
+def _placement_name(row):
+    publisher = row.get("publisher_platform") or "unknown_platform"
+    position = row.get("platform_position") or "unknown_position"
+    return f"{publisher}:{position}"
+
+
+def _normalize_domain(value):
+    value = str(value or "").strip().lower()
+    for prefix in ("https://", "http://"):
+        if value.startswith(prefix):
+            value = value[len(prefix):]
+    return value.strip("/")
 
 
 def _iter_json_records(path):
