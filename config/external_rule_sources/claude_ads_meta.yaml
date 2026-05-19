@@ -2,7 +2,8 @@ source_id: claude_ads_meta
 name: claude-ads Meta audit checklist
 repository: https://github.com/AgriciDaniel/claude-ads
 license: MIT
-imported_at: '2026-05-12'
+imported_at: '2026-05-19'
+source_version: v1.7.1
 import_type: concept_mapping
 runtime_dependency: false
 notes: |
@@ -35,6 +36,21 @@ thresholds:
     mapped_rules: [M24]
   creative_fatigue:
     fail: "CTR drop > 20% over 14 days or high frequency"
+    mapped_rules: [M57, M58]
+  creative_freshness:
+    pass: "new creative tested within 14-21 days"
+    warn: "new creative 21-45 days ago"
+    fail: "no new creative in >45 days"
+    mapped_rules: [M58]
+  prospecting_frequency:
+    pass: "< 3.0 in last 7 days"
+    warn: "3.0-5.0"
+    fail: "> 5.0"
+    mapped_rules: [M57]
+  ctr_benchmark:
+    pass: ">= 1.0%"
+    warn: "0.5-1.0%"
+    fail: "< 0.5%"
     mapped_rules: [M57, M58]
   learning_limited_ratio:
     pass: "< 30% of ad sets"
@@ -77,9 +93,19 @@ rule_mapping:
   M33: [M54]
   M34: [M39]
   M35: [M62, F-MF-08]
+  M37: [M57]
+  M38: [M39]
+  M39: [M39]
+  M40: [M40]
   M-AN1: [M24, M47, M57]
   M-AT1: [M02]
+  M-CR1: [M58]
+  M-CR2: [M57]
+  M-CR3: [M57]
+  M-CR4: [M57, M58]
   M-IA1: [M62]
+  M-ST1: [M10, M12]
+  M-ST2: [M10, M12]
   M-TH1: [M24, M47]
 
 customer_visible_promotions:
@@ -87,6 +113,9 @@ customer_visible_promotions:
     - M24
     - M25
     - M28
+    - M57
+    - M58
+    - M39
   reason: |
     Zynect既存Metaルールでは計測・CAPI・学習系は既に顧客通知へ接続済み。
     claude-ads 統合で新たに強化する価値が大きいのは、

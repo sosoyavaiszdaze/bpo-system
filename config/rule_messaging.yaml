@@ -1242,6 +1242,7 @@ rules:
     optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
     risk_control: { cv_loss_risk: medium, do_not_do: ["疲弊疑いだけで勝ち広告を全停止しない"] }
     outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    source_refs: [claude_ads_meta:M28, claude_ads_meta:M-CR2, claude_ads_meta:M-CR3, claude_ads_meta:M-CR4]
     legal_note: null
 
   M58:
@@ -1263,6 +1264,7 @@ rules:
     optimization_goal: { primary: preserve_cv, secondary: reduce_cpa }
     risk_control: { cv_loss_risk: medium, do_not_do: ["新規素材だけに急激に予算を寄せない"] }
     outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    source_refs: [claude_ads_meta:M28, claude_ads_meta:M-CR1, claude_ads_meta:M-CR4]
     legal_note: null
 
   M59:
@@ -1800,6 +1802,7 @@ rules:
     optimization_goal: { primary: reduce_cpa, secondary: preserve_cv }
     risk_control: { cv_loss_risk: medium, do_not_do: ["CVが取れている配置を根拠なく一括停止しない"] }
     outcome: { primary_metric: cpa, guardrail_metric: conversions, measurement_window_days: 28 }
+    source_refs: [claude_ads_meta:M38, claude_ads_meta:M39]
     legal_note: null
 
 

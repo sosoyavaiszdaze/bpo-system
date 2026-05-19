@@ -324,9 +324,9 @@ def test_claude_ads_meta_source_is_mapped_to_customer_visible_meta_rules():
 
     assert source["runtime_dependency"] is False
     assert source["license"] == "MIT"
-    assert set(source["customer_visible_promotions"]["promoted_rules"]) == {"M24", "M25", "M28"}
+    assert set(source["customer_visible_promotions"]["promoted_rules"]) == {"M24", "M25", "M28", "M57", "M58", "M39"}
 
-    for rule_id in ["M24", "M25", "M28"]:
+    for rule_id in ["M24", "M25", "M28", "M57", "M58", "M39"]:
         record = records[rule_id]
         assert record.messaging_mapped
         assert record.customer_visible
