@@ -26,7 +26,7 @@ ALLOWED_TRANSITIONS = {
     "implemented": {"verified", "measuring", "monitoring", "resolved", "waiting_client", "waiting_zynect", "closed"},
     "verified": {"measuring", "monitoring", "resolved", "closed"},
     "measuring": {"learned", "resolved", "closed"},
-    "monitoring": {"learned", "resolved", "implemented", "waiting_client", "waiting_zynect", "closed"},
+    "monitoring": {"measuring", "learned", "resolved", "implemented", "waiting_client", "waiting_zynect", "closed"},
     "learned": {"resolved", "closed", "monitoring"},
     "resolved": {"closed", "monitoring", "learned"},
     "closed": set(),
