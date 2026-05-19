@@ -1605,6 +1605,138 @@ rules:
     outcome: { primary_metric: cvr, guardrail_metric: conversions, measurement_window_days: 28 }
     legal_note: null
 
+  C10:
+    customer_title: "赤字配信単位の原因切り分け"
+    performance_category: [profitability, budget_allocation]
+    priority: A
+    goal_stage: cpa_diagnosis
+    owner: growth_ops
+    answer_source_preference: [api, chatwork_reply]
+    impact_estimate:
+      lift_rate: { minimum: 0.006, realistic: 0.025, upper: 0.080 }
+      source_basis: "広告費に対して売上/粗利が見合わない配信単位を早期に切り分け、CVを残しながら予算配分を直す改善余地として算定。"
+      measurement_window: { signal: "即日-1週", verdict: "2-4週" }
+    expected_effect:
+      - "赤字配信の主要因を CPA / CVR / AOV / ROAS に分解"
+      - "CVを落とさず、収益性の高い配信へ予算を寄せる"
+    today_action: "赤字になっている campaign / adset の CV数・CPA・売上・粗利を確認してください。"
+    yes_no_question: "赤字の主因が CPA / CVR / AOV / ROAS のどこにあるか確認できましたか?"
+    action_options: { A: "確認済み", B: "未確認", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: improve_profitability }
+    risk_control: { cv_loss_risk: high, do_not_do: ["赤字判定だけでCV供給源を一括停止しない"] }
+    outcome: { primary_metric: profitability, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: null
+
+  F-AH-06:
+    customer_title: "広告アカウント所有権・引き継ぎ条件の確認"
+    performance_category: [account_health, operational_foundation]
+    priority: B
+    goal_stage: delivery_diagnosis
+    owner: account_ops
+    answer_source_preference: [chatwork_reply]
+    non_financial_impact:
+      primary_metric: account_continuity
+      source_basis: "代理店切替・担当者変更時にアカウント所有権が曖昧だと、広告停止・移管遅延・データ継続性喪失が起きるため、運用継続性の観点で評価。"
+      measurement_window: { signal: "即日", verdict: "1-2週" }
+    expected_effect:
+      - "代理店切替時のアカウント停止/移管遅延リスクを低減"
+      - "広告データと計測資産の継続管理"
+    today_action: "広告アカウント・Pixel・BM の所有者と、代理店変更時の引き継ぎ条件を確認してください。"
+    yes_no_question: "広告アカウント所有権と引き継ぎ条件は書面または運用資料で確認できますか?"
+    action_options: { A: "確認済み", B: "未整理", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: prevent_delivery_stop }
+    risk_control: { cv_loss_risk: low, do_not_do: ["所有権確認前にBMやPixelを新規作成して計測資産を分断しない"] }
+    outcome: { primary_metric: account_continuity, guardrail_metric: conversions, measurement_window_days: 14 }
+    legal_note: null
+
+  F-AH-07:
+    customer_title: "広告アカウント停止時の復旧手順の確認"
+    performance_category: [account_health, delivery_continuity]
+    priority: B
+    goal_stage: delivery_diagnosis
+    owner: account_ops
+    answer_source_preference: [chatwork_reply]
+    non_financial_impact:
+      primary_metric: recovery_readiness
+      source_basis: "広告アカウント停止・審査停止時の復旧手順がないと、配信停止期間が延びCV機会損失が増えるため、復旧時間短縮の観点で評価。"
+      measurement_window: { signal: "即日", verdict: "1-2週" }
+    expected_effect:
+      - "アカウント停止時の初動遅れを防止"
+      - "問い合わせ先・必要資料・代替配信手段の事前整理"
+    today_action: "アカウント停止時の問い合わせ先・必要資料・復旧担当者がまとまっているか確認してください。"
+    yes_no_question: "広告アカウント停止時の復旧手順は社内で確認できますか?"
+    action_options: { A: "整備済み", B: "未整備", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_downtime }
+    risk_control: { cv_loss_risk: low, do_not_do: ["復旧手順未整備のまま単一アカウント依存を強めない"] }
+    outcome: { primary_metric: recovery_readiness, guardrail_metric: conversions, measurement_window_days: 14 }
+    legal_note: null
+
+  F-DG-05:
+    customer_title: "広告・顧客データの保管期限の確認"
+    performance_category: [data_governance, operational_foundation]
+    priority: B
+    goal_stage: first_party_data
+    owner: data_ops
+    answer_source_preference: [chatwork_reply]
+    non_financial_impact:
+      primary_metric: data_governance_readiness
+      source_basis: "顧客データや広告連携データの保管期限が未整理だと、1st Party Data活用・監査対応・削除依頼対応で運用リスクが高まるため評価。"
+      measurement_window: { signal: "1週", verdict: "2-4週" }
+    expected_effect:
+      - "顧客データ活用時の運用ルール明確化"
+      - "削除依頼・監査対応の遅延防止"
+    today_action: "広告連携に使う顧客データの保管期限・削除条件・管理責任者を確認してください。"
+    yes_no_question: "広告連携に使う顧客データの保管期限は明文化されていますか?"
+    action_options: { A: "明文化済み", B: "未整理", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: improve_data_governance }
+    risk_control: { cv_loss_risk: low, do_not_do: ["保管期限未整理のまま顧客リスト連携範囲を拡大しない"] }
+    outcome: { primary_metric: data_governance_readiness, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: "個人情報・顧客データの保管期限は、社内規程や委託契約の確認も必要です。"
+
+  F-LC-12:
+    customer_title: "過去の広告・表示指摘履歴の確認"
+    performance_category: [review_risk, operational_foundation]
+    priority: B
+    goal_stage: legal_review
+    owner: compliance_ops
+    answer_source_preference: [chatwork_reply]
+    non_financial_impact:
+      primary_metric: review_risk_reduction
+      source_basis: "過去の行政指導・媒体審査指摘・表示修正履歴を把握すると、同じ論点の再発と審査落ちを避けやすくなるため評価。"
+      measurement_window: { signal: "1週", verdict: "2-4週" }
+    expected_effect:
+      - "過去指摘の再発防止"
+      - "広告審査・LP修正時の確認観点の明確化"
+    today_action: "過去に広告表現・LP表示・行政指導などで指摘された履歴があるか確認してください。"
+    yes_no_question: "過去の広告/表示に関する指摘履歴は共有可能な形で整理されていますか?"
+    action_options: { A: "整理済み", B: "未整理", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: reduce_review_risk }
+    risk_control: { cv_loss_risk: low, do_not_do: ["過去指摘の確認前に類似表現を再利用しない"] }
+    outcome: { primary_metric: review_risk_reduction, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: "本項目は法令違反の断定ではなく、過去指摘の再発防止を目的とした運用確認です。"
+
+  V-EC-11:
+    customer_title: "税込価格・送料表示の整合確認"
+    performance_category: [review_risk, conversion_rate]
+    priority: B
+    goal_stage: legal_review
+    owner: compliance_ops
+    answer_source_preference: [validator, chatwork_reply]
+    non_financial_impact:
+      primary_metric: lp_trust_and_review_risk
+      source_basis: "税込価格・送料条件の不明瞭さは、LP離脱・問い合わせ増・審査/表示リスクにつながるため、CVRと表示リスクの両面で評価。"
+      measurement_window: { signal: "1週", verdict: "2-4週" }
+    expected_effect:
+      - "購入前の不安要素を減らし、LP/ECの離脱を抑制"
+      - "価格表示・送料条件の表示リスクを低減"
+    today_action: "LP/ECサイトで税込価格・送料・送料無料条件が購入前に分かる表示になっているか確認してください。"
+    yes_no_question: "税込価格・送料・送料無料条件は、購入前に明確に確認できますか?"
+    action_options: { A: "確認できる", B: "一部不足", C: "確認したい" }
+    optimization_goal: { primary: preserve_cv, secondary: improve_cvr }
+    risk_control: { cv_loss_risk: low, do_not_do: ["価格/送料表示の確認前にLP訴求だけを強めない"] }
+    outcome: { primary_metric: cvr, guardrail_metric: conversions, measurement_window_days: 28 }
+    legal_note: "税込価格・送料表示は、特商法・総額表示・景表法観点で確認が必要になる場合があります。"
+
   F-AF-03:
     customer_title: "不正CVパターンの確認"
     performance_category: [ad_fraud, measurement_quality]
@@ -1685,6 +1817,10 @@ category_labels:
   delivery_diagnosis:     "配信量低下の切り分け"
   budget_allocation:      "予算配分改善"
   ad_fraud:               "不正/低品質流入対策"
+  profitability:          "収益性改善"
+  account_health:         "広告アカウント健全性"
+  delivery_continuity:    "配信継続性"
+  data_governance:        "データ管理体制"
 
 
 # ============================================================
