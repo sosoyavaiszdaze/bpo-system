@@ -339,13 +339,44 @@ def _extract_code_sequence(text: str) -> list[str]:
     """`C、C` / `A B C` / `Ａ\nＢ` のようなコード列だけを抽出する。"""
     if not text:
         return []
-    normalized = text.translate(str.maketrans("ＡＢＣＤＥＦ", "ABCDEF")).strip()
+    normalized = _strip_chatwork_reply_scaffold(text)
+    normalized = normalized.translate(str.maketrans("ＡＢＣＤＥＦ", "ABCDEF")).strip()
+
+    # 実際の ChatWork 返信では、通知文の選択肢をコピペして
+    #   [A] アクティブ確認済み
+    #   [A] 確認済み
+    # のように返ってくることがある。行頭の bracket code は、後続の説明文を
+    # 無視して表示順に割り当てる。
+    has_bracketed_code = bool(re.search(r"(?m)^[\s　]*[\[【(（][A-F][\]】)）]", normalized))
+    if "\n" in normalized or has_bracketed_code:
+        line_codes = []
+        for line in normalized.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            m = re.match(r"^[\s　]*[\[【(（]?([A-F])[\]】)）]?(?:[\s　:：、,，]|$)", line)
+            if m:
+                line_codes.append(m.group(1))
+        if line_codes:
+            return line_codes
+
+    normalized = normalized.replace("[", " ").replace("]", " ")
+    normalized = normalized.replace("【", " ").replace("】", " ")
+    normalized = normalized.replace("(", " ").replace(")", " ")
+    normalized = normalized.replace("（", " ").replace("）", " ")
     tokens = [t for t in re.split(r"[\s,，、/／]+", normalized) if t]
     if not tokens:
         return []
     if any(not re.fullmatch(r"[A-F]", t) for t in tokens):
         return []
     return tokens
+
+
+def _strip_chatwork_reply_scaffold(text: str) -> str:
+    """Remove ChatWork reply/mention tags without removing answer codes."""
+    text = re.sub(r"\[To:\d+\][^\n]*", " ", text or "")
+    text = re.sub(r"\[(?:返信|rp)\s+[^\]]+\][^\n]*", " ", text)
+    return text
 
 
 def _message_is_after_context(msg: dict, reply_context: Optional[dict]) -> bool:

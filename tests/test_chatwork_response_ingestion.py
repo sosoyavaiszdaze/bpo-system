@@ -78,6 +78,15 @@ def sample_messaging():
                     "C": "状況不明、確認したい",
                 },
             },
+            "C10": {
+                "customer_title": "赤字配信単位の原因切り分け",
+                "priority": "A",
+                "goal_stage": "cpa_diagnosis",
+                "performance_category": ["profitability"],
+                "today_action": "赤字配信単位を確認。",
+                "yes_no_question": "赤字の主因は確認できましたか?",
+                "action_options": {"A": "確認済み", "B": "未確認", "C": "確認したい"},
+            },
             "F-MF-02": {
                 "customer_title": "CV イベントの動作確認",
                 "priority": "A",
@@ -824,6 +833,52 @@ class TestContextualOneLetterReplies:
         assert [(r.rule_id, r.answer_code, r.answer_label) for r in results] == [
             ("F-MF-02", "C", "未確認"),
             ("F-MF-08", "C", "現状未確認"),
+        ]
+
+    def test_bracketed_option_lines_map_in_display_order(self, sample_messaging):
+        from engine.chatwork_response_parser import parse_messages_bulk
+
+        context = {
+            "message_id": "100",
+            "displayed_rule_ids": ["X-PI1", "C10", "F-AH-04"],
+        }
+        msg = {
+            "message_id": "103",
+            "send_time": 1715000003,
+            "body": "[A] アクティブ確認済み\n[A] 確認済み\n[A] 認証済み",
+            "account": {"account_id": 9},
+        }
+        results = parse_messages_bulk([msg], sample_messaging, reply_context=context)
+
+        assert [(r.rule_id, r.answer_code, r.status) for r in results] == [
+            ("X-PI1", "A", "confirmed_done"),
+            ("C10", "A", "confirmed_done"),
+            ("F-AH-04", "A", "confirmed_done"),
+        ]
+
+    def test_bracketed_option_lines_ignore_chatwork_reply_tags(self, sample_messaging):
+        from engine.chatwork_response_parser import parse_messages_bulk
+
+        context = {
+            "message_id": "100",
+            "displayed_rule_ids": ["X-PI1", "C10", "F-AH-04"],
+        }
+        msg = {
+            "message_id": "104",
+            "send_time": 1715000004,
+            "body": (
+                "[返信 aid=4078171 to=435851481-2108760497070542848]太田 浩嗣さん\n"
+                "[To:4078171]山本宗一郎さん\n"
+                "[A] アクティブ確認済み\n[A] 確認済み\n[A] 認証済み"
+            ),
+            "account": {"account_id": 9},
+        }
+        results = parse_messages_bulk([msg], sample_messaging, reply_context=context)
+
+        assert [(r.rule_id, r.answer_code, r.status) for r in results] == [
+            ("X-PI1", "A", "confirmed_done"),
+            ("C10", "A", "confirmed_done"),
+            ("F-AH-04", "A", "confirmed_done"),
         ]
 
     def test_code_only_before_context_message_is_ignored(self, sample_messaging):
