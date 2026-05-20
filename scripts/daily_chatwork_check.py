@@ -40,6 +40,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -106,6 +108,79 @@ def fetch_audit_results(client_id: str) -> dict:
         "ads_audit": run_ads_audit(client_id, data, thr),
         "anomalies": run_anomaly_detection(client_id, data, thr),
         "fraud_audit": run_fraud_audit(client_id, data, thr),
+    }
+
+
+def sync_client_state_from_api_evidence(
+    client_id: str,
+    audit_results: dict,
+    *,
+    today_str: str,
+    dry_run: bool = False,
+) -> dict:
+    """APIで確認できた設定状態を legacy client_state YAML に反映する。
+
+    ChatWork回答は「顧客の自己申告」だが、Meta API evidence は「システム証拠」。
+    APIで resolved と判断できた項目は次回以降の手動質問を抑制できるよう、
+    client_state 側にも同期しておく。
+    """
+    evidence = (
+        (audit_results or {}).get("meta_rule_evidence")
+        or ((audit_results or {}).get("platform_diagnostics") or {}).get("meta", {}).get("rule_evidence")
+        or {}
+    )
+    updates: dict = {}
+    sources: dict = {}
+
+    domain_ev = evidence.get("F-AH-04") or evidence.get("M04")
+    if (domain_ev or {}).get("status") == "resolved":
+        value = domain_ev.get("value") or {}
+        verified_domains = value.get("verified_domains") or value.get("verified_expected_domains") or []
+        updates.update({
+            "domain_verification_status": "completed",
+            "domain_verification_checked_at": today_str,
+            "domain_verification_source": "meta_api.domain",
+            "verified_domains": verified_domains,
+        })
+        sources["domain_verification_status"] = domain_ev.get("reason") or "Meta APIでDomain Verificationを確認"
+
+    pixel_ev = evidence.get("X-PI1") or evidence.get("M01")
+    if (pixel_ev or {}).get("status") == "resolved":
+        value = pixel_ev.get("value") or {}
+        updates.update({
+            "pixel_dormant_days": 0,
+            "pixel_api_active": True,
+            "pixel_api_checked_at": today_str,
+            "pixel_last_fired_time": value.get("last_fired_time"),
+        })
+        sources["pixel_api_active"] = pixel_ev.get("reason") or "Meta APIでPixel接続を確認"
+
+    if not updates:
+        return {"updated": False, "fields": [], "reason": "no resolved API evidence"}
+
+    path = ROOT / "outputs" / "client_state" / f"{client_id}.yaml"
+    state = {}
+    if path.exists():
+        state = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    before = {k: state.get(k) for k in updates}
+    changed = {k: v for k, v in updates.items() if state.get(k) != v}
+    if not changed:
+        return {"updated": False, "fields": [], "reason": "already synced"}
+
+    state.update(changed)
+    state.setdefault("api_verified_sources", {}).update(sources)
+    if dry_run:
+        return {"updated": False, "fields": sorted(changed), "dry_run": True}
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".yaml.tmp")
+    tmp.write_text(yaml.safe_dump(state, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    tmp.replace(path)
+    return {
+        "updated": True,
+        "fields": sorted(changed),
+        "before": before,
+        "after": {k: state.get(k) for k in changed},
     }
 
 
@@ -282,6 +357,18 @@ def _run_daily_check_impl(
     data_available = audit.get("data_available", False)
     if not data_available:
         log.warning("データ未取得につき clean カウントは進めません (data_available=False)")
+
+    try:
+        synced = sync_client_state_from_api_evidence(
+            client_id,
+            audit,
+            today_str=today_str,
+            dry_run=dry_run,
+        )
+        if synced.get("updated") or synced.get("fields"):
+            log.info(f"client_state api sync: {synced}")
+    except Exception as e:
+        log.error(f"client_state API同期失敗: {e}")
 
     # 2-3. detect & upsert
     upserted, clean_candidates = detect_and_upsert(audit, state, today=today_str)

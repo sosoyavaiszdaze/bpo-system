@@ -252,6 +252,77 @@ def test_meta_adapter_domain_verification_matches_expected_domains(monkeypatch):
     assert result["missing_expected_domains"] == ["lp.example.com"]
 
 
+def test_client_state_sync_updates_domain_from_meta_api(tmp_path, monkeypatch):
+    from scripts import daily_chatwork_check as daily
+
+    monkeypatch.setattr(daily, "ROOT", tmp_path)
+    state_dir = tmp_path / "outputs" / "client_state"
+    state_dir.mkdir(parents=True)
+    (state_dir / "pilotton.yaml").write_text(
+        "client_id: pilotton\n"
+        "domain_verification_status: unverified\n",
+        encoding="utf-8",
+    )
+
+    result = daily.sync_client_state_from_api_evidence(
+        "pilotton",
+        {
+            "meta_rule_evidence": {
+                "F-AH-04": {
+                    "status": "resolved",
+                    "reason": "Meta Business APIでDomain Verificationを確認",
+                    "value": {
+                        "domain_verified": True,
+                        "verified_domains": ["titanistlab.jp", "mynailplex.jp"],
+                    },
+                }
+            }
+        },
+        today_str="2026-05-20",
+    )
+
+    assert result["updated"] is True
+    saved = __import__("yaml").safe_load((state_dir / "pilotton.yaml").read_text(encoding="utf-8"))
+    assert saved["domain_verification_status"] == "completed"
+    assert saved["domain_verification_source"] == "meta_api.domain"
+    assert saved["verified_domains"] == ["titanistlab.jp", "mynailplex.jp"]
+
+
+def test_fetch_data_keeps_meta_diagnostics_when_csv_fallback(monkeypatch, tmp_path):
+    import pipeline
+
+    csv_file = tmp_path / "pilotton.csv"
+    csv_file.write_text("campaign,cost,conversions\nA,100,1\n", encoding="utf-8")
+    monkeypatch.setattr(pipeline, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(pipeline, "_validate", lambda data: data)
+
+    def fake_fetch_meta_ads(_cfg):
+        return {
+            "campaigns": [],
+            "pixel_status": {"pixel_installed": True},
+            "meta_connection_audit": {"domain_verification": {"status": "ok"}},
+            "meta_rule_evidence": {"F-AH-04": {"status": "resolved"}},
+            "meta_rule_groups": {"groups": {}},
+            "performance_diagnostics": {},
+            "account_id": "act_1",
+            "date_range": {"since": "2026-05-01", "until": "2026-05-20"},
+        }
+
+    monkeypatch.setattr("adapters.meta_adapter.fetch_meta_ads", fake_fetch_meta_ads)
+    monkeypatch.setattr(
+        "adapters.csv_adapter.load_csv",
+        lambda _path: {"source": "csv", "campaigns": [{"campaign": "A"}]},
+    )
+
+    data = pipeline.fetch_data(
+        "pilotton",
+        {"ads": {"meta": {"account_id": "act_1", "access_token": "token"}}},
+    )
+
+    assert data["source"] == "csv"
+    assert data["platform_diagnostics"]["meta"]["rule_evidence"]["F-AH-04"]["status"] == "resolved"
+
+
 def test_meta_adapter_adset_and_placement_diagnostics_keep_cv_metrics():
     from adapters import meta_adapter
 

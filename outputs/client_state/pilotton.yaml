@@ -27,7 +27,12 @@ has_mobile_app: false
 # Pixel/CAPI/タグ周り (5/3 ヒアリング: CAPI 未実装、ECフォース 経由連携を検討中)
 duplicate_pixel_count: 0           # F-MF-01 trigger 入力 (ad_platform_data 経由でも参照)
 pixel_dormant_days: 0
-domain_verification_status: "unverified"   # F-MF-02 系
+domain_verification_status: "completed"   # F-MF-02 系 / 2026-05-20 Meta Business Settings screenshot verified
+domain_verification_checked_at: "2026-05-20"
+domain_verification_source: "manual_screenshot"
+verified_domains:
+  - titanistlab.jp
+  - mynailplex.jp
 gtm_debug_mode_active: false       # F-MF-03 (本番環境で debug が ON だと CV 計上が壊れる)
 event_naming_convention_followed: false   # F-MF-04 (kickoff 後に整備)
 cv_dedupe_key_implemented: false           # F-MF-05 (CAPI と Pixel の dedup_key)

@@ -166,8 +166,12 @@ clients:
       meta:
         enabled: true
         account_id: act_566972639374407
+        business_id: '1523097655015973'
         access_token_env: META_ACCESS_TOKEN_PILOTTON  # BANDAL 共用→PILOTTON 専用に切替
         lookback_days: 30  # v3.1: PDF カバー「直近30日」表示と整合（旧 90 から変更）
+        domains:
+        - titanistlab.jp
+        - mynailplex.jp
         pixels:
         - id: '1678979499646915'
           name: CLOCKING Pixel

@@ -181,7 +181,14 @@ def fetch_data(client_id, client_cfg):
         from adapters.csv_adapter import load_csv
         latest = csv_files[-1]
         log.info(f"[{client_id}] CSV読込: {latest}")
-        return _validate(load_csv(latest))
+        csv_data = load_csv(latest)
+        if platform_diagnostics:
+            csv_data["platform_diagnostics"] = platform_diagnostics
+        if pixel_statuses:
+            csv_data["pixel_statuses"] = pixel_statuses
+        if sources:
+            csv_data["api_sources"] = sources
+        return _validate(csv_data)
 
     log.warning(f"[{client_id}] データなし")
     return None
